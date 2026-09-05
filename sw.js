@@ -2,30 +2,37 @@
 // 【智能缓存策略】- 根据资源类型使用不同的缓存策略，优化加载速度
 
 // 缓存版本号（智能缓存策略）
-const CACHE_VERSION = 'v0.0.36-public-music';
+const CACHE_VERSION = 'v0.0.36-install-fix-1';
 const CACHE_NAME = `ephone-cache-${CACHE_VERSION}`;
 
-const CORE_URLS_TO_CACHE = ['./index.html', './manifest.json', './asset-manifest.json'];
+// 安装阶段只缓存最小启动外壳。其余资源由 fetch 事件按需缓存，
+// 避免移动端因为某一个资源请求挂起而一直无法完成 PWA 安装。
+const CORE_URLS_TO_CACHE = [
+  './index.html',
+  './manifest.json',
+  './modules/bootstrap/html-fragment-manifest.js',
+  './modules/bootstrap/document-loader.js'
+];
 
 // 1. 安装事件：当 Service Worker 首次被注册时触发
 self.addEventListener('install', event => {
   console.log('[SW] 正在安装 Service Worker (智能缓存策略)...');
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('[SW] 缓存已打开，正在读取本地资源清单...');
-        return fetch('./asset-manifest.json', { cache: 'no-store' })
-          .then(response => {
-            if (!response.ok) throw new Error(`资源清单读取失败: ${response.status}`);
-            return response.json();
-          })
-          .then(files => {
-            const localFiles = files.map(file => `./${String(file).replace(/^\.\//, '')}`);
-            return cache.addAll(Array.from(new Set([...CORE_URLS_TO_CACHE, ...localFiles])));
-          });
+      .then(async cache => {
+        console.log('[SW] 缓存已打开，正在缓存最小启动外壳...');
+        const results = await Promise.allSettled(
+          CORE_URLS_TO_CACHE.map(url => cache.add(url))
+        );
+        const failedUrls = results
+          .map((result, index) => result.status === 'rejected' ? CORE_URLS_TO_CACHE[index] : null)
+          .filter(Boolean);
+        if (failedUrls.length > 0) {
+          console.warn('[SW] 部分启动文件缓存失败，不阻塞安装:', failedUrls);
+        }
       })
       .then(() => {
-        console.log('[SW] 所有核心文件已缓存成功！');
+        console.log('[SW] Service Worker 安装阶段已完成。');
         return self.skipWaiting();
       })
   );
