@@ -2,7 +2,7 @@
 // 【智能缓存策略】- 根据资源类型使用不同的缓存策略，优化加载速度
 
 // 缓存版本号（智能缓存策略）
-const CACHE_VERSION = 'v0.0.36-install-fix-1';
+const CACHE_VERSION = 'v0.0.36-pwa-install-2';
 const CACHE_NAME = `ephone-cache-${CACHE_VERSION}`;
 
 // 安装阶段只缓存最小启动外壳。其余资源由 fetch 事件按需缓存，
@@ -10,8 +10,32 @@ const CACHE_NAME = `ephone-cache-${CACHE_VERSION}`;
 const CORE_URLS_TO_CACHE = [
   './index.html',
   './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './modules/bootstrap/register-service-worker.js',
   './modules/bootstrap/html-fragment-manifest.js',
-  './modules/bootstrap/document-loader.js'
+  './modules/bootstrap/document-loader.js',
+  './generated/html-fragments/document-head.js',
+  './generated/html-fragments/intro-and-home.js',
+  './generated/html-fragments/health-and-couple.js',
+  './generated/html-fragments/cphone.js',
+  './generated/html-fragments/myphone.js',
+  './generated/html-fragments/worldbook-and-presets.js',
+  './generated/html-fragments/api-settings-core.js',
+  './generated/html-fragments/api-settings-providers.js',
+  './generated/html-fragments/api-settings-data.js',
+  './generated/html-fragments/data-and-social-list.js',
+  './generated/html-fragments/chat-interface.js',
+  './generated/html-fragments/appearance-and-thoughts.js',
+  './generated/html-fragments/calls-and-social.js',
+  './generated/html-fragments/chat-settings-main.js',
+  './generated/html-fragments/chat-settings-extra.js',
+  './generated/html-fragments/feature-screens.js',
+  './generated/html-fragments/modals-general.js',
+  './generated/html-fragments/modals-feature.js',
+  './generated/html-fragments/modals-phone-and-finance.js',
+  './generated/html-fragments/online-and-myphone-modals.js',
+  './generated/html-fragments/games-and-document-tail.js'
 ];
 
 // 1. 安装事件：当 Service Worker 首次被注册时触发
@@ -21,15 +45,7 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(async cache => {
         console.log('[SW] 缓存已打开，正在缓存最小启动外壳...');
-        const results = await Promise.allSettled(
-          CORE_URLS_TO_CACHE.map(url => cache.add(url))
-        );
-        const failedUrls = results
-          .map((result, index) => result.status === 'rejected' ? CORE_URLS_TO_CACHE[index] : null)
-          .filter(Boolean);
-        if (failedUrls.length > 0) {
-          console.warn('[SW] 部分启动文件缓存失败，不阻塞安装:', failedUrls);
-        }
+        await cache.addAll(CORE_URLS_TO_CACHE);
       })
       .then(() => {
         console.log('[SW] Service Worker 安装阶段已完成。');
@@ -85,6 +101,24 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // 页面导航统一回退到应用外壳，兼容 /、/index.html 和带查询参数的入口。
+  if (event.request.mode === 'navigate') {
+    const appShellUrl = new URL('./index.html', self.registration.scope).href;
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(event.request, { cache: 'no-cache' });
+        if (response && response.status === 200) {
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(event.request, response.clone());
+        }
+        return response;
+      } catch (error) {
+        return (await caches.match(event.request)) || caches.match(appShellUrl);
+      }
+    })());
+    return;
+  }
+
   // 识别资源类型
   const isImage = /\.(png|jpg|jpeg|gif|webp|svg|ico)(\?|$)/i.test(url) ||
                   url.includes('postimg.cc') ||
@@ -112,13 +146,11 @@ self.addEventListener('fetch', event => {
           return cachedResponse;
         }
         // 缓存未命中，从网络获取并缓存
-        return fetch(event.request).then(response => {
+        return fetch(event.request).then(async response => {
           if (response && response.status === 200) {
-            return caches.open(CACHE_NAME).then(cache => {
-              cache.put(event.request, response.clone());
-              console.log('[SW] 已缓存资源:', url);
-              return response;
-            });
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(event.request, response.clone());
+            console.log('[SW] 已缓存资源:', url);
           }
           return response;
         }).catch(() => {
@@ -134,12 +166,11 @@ self.addEventListener('fetch', event => {
       fetch(event.request, {
         cache: 'no-cache' // 允许验证缓存，不是完全禁用
       })
-      .then(response => {
+      .then(async response => {
         // 更新缓存
         if (response && response.status === 200) {
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, response.clone());
-          });
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(event.request, response.clone());
         }
         return response;
       })
@@ -154,12 +185,11 @@ self.addEventListener('fetch', event => {
   else {
     event.respondWith(
       caches.match(event.request).then(cachedResponse => {
-        const fetchPromise = fetch(event.request).then(response => {
+        const fetchPromise = fetch(event.request).then(async response => {
           // 后台更新缓存
           if (response && response.status === 200) {
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(event.request, response.clone());
-            });
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(event.request, response.clone());
           }
           return response;
         }).catch(() => null);

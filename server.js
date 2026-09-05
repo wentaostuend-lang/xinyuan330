@@ -1,10 +1,30 @@
 // ==================== EPhone 联机聊天服务器 ====================
 
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const WebSocket = require('ws');
 
 const PORT = process.env.PORT || 8080;
 const MAX_USERS = 200;
+const STATIC_ROOT = __dirname;
+
+const MIME_TYPES = {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf'
+};
 
 // 在线用户 Map: userId -> { ws, nickname, avatar }
 const onlineUsers = new Map();
@@ -12,8 +32,50 @@ const onlineUsers = new Map();
 // ==================== HTTP 服务器 ====================
 
 const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('EPhone 联机服务器运行中');
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.writeHead(405, { Allow: 'GET, HEAD' });
+        res.end('Method Not Allowed');
+        return;
+    }
+
+    let pathname;
+    try {
+        pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    } catch (error) {
+        res.writeHead(400);
+        res.end('Bad Request');
+        return;
+    }
+
+    const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+    const filePath = path.resolve(STATIC_ROOT, relativePath);
+    if (filePath !== STATIC_ROOT && !filePath.startsWith(`${STATIC_ROOT}${path.sep}`)) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
+
+    fs.stat(filePath, (statError, stats) => {
+        if (statError || !stats.isFile()) {
+            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end('Not Found');
+            return;
+        }
+
+        const extension = path.extname(filePath).toLowerCase();
+        const noCache = extension === '.html' || relativePath === 'sw.js' || relativePath === 'manifest.json';
+        res.writeHead(200, {
+            'Content-Type': MIME_TYPES[extension] || 'application/octet-stream',
+            'Content-Length': stats.size,
+            'Cache-Control': noCache ? 'no-cache' : 'public, max-age=3600'
+        });
+
+        if (req.method === 'HEAD') {
+            res.end();
+            return;
+        }
+        fs.createReadStream(filePath).pipe(res);
+    });
 });
 
 // ==================== WebSocket 服务器 ====================

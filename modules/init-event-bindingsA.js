@@ -856,15 +856,6 @@ window.initEventBindingsA = async function(state, db) {
     window.openCharWallet = openCharWallet;
     window.switchToCharHomeScreen = switchToCharHomeScreen;
 
-    // 小组件商城入口函数
-    window.openWidgetMarket = function() {
-      if (typeof showCustomAlert === 'function') {
-        showCustomAlert("小组件商城", "正在加急赶工中……");
-      } else {
-        alert("正在加急赶工中……");
-      }
-    };
-
     // MY Phone 函数暴露
     window.openMyphoneScreen = openMyphoneScreen;
     window.openMyPhoneApp = openMyPhoneApp;

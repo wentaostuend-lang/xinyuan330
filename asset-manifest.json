@@ -1,7 +1,9 @@
 [
   "index.html",
   "manifest.json",
+  "sw.js",
   "html-fragments.json",
+  "modules/bootstrap/register-service-worker.js",
   "modules/bootstrap/html-fragment-manifest.js",
   "modules/bootstrap/document-loader.js",
   "generated/html-fragments/document-head.js",
@@ -85,6 +87,7 @@
   "css/health/period-tracker.css",
   "css/productivity/focus-timer.css",
   "css/core/extra.css",
+  "icons/icon-192.png",
   "update-notification.js",
   "modules/memory/thought-chain-manager.js",
   "modules/online/manager.js",

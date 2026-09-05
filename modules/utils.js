@@ -378,22 +378,6 @@ let isPinActivated = localStorage.getItem('ephonePinActivated') === 'true';
 })();
 
 
-if ('serviceWorker' in navigator) {
-
-  window.addEventListener('load', () => {
-
-    navigator.serviceWorker.register('./sw.js')
-      .then(registration => {
-
-        console.log('ServiceWorker 注册成功，作用域为: ', registration.scope);
-      })
-      .catch(error => {
-
-        console.log('ServiceWorker 注册失败: ', error);
-      });
-  });
-}
-
 if (!Array.prototype.findLastIndex) {
   Object.defineProperty(Array.prototype, 'findLastIndex', {
     value: function (predicate) {

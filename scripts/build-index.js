@@ -68,7 +68,16 @@ const generatedShell = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EPhone">
   <title>EPhone</title>
+  <link rel="manifest" href="manifest.json?v=0.0.36-pwa2">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <script src="modules/bootstrap/register-service-worker.js"></script>
 </head>
 <body>
   <noscript>此应用需要启用 JavaScript。</noscript>
@@ -92,7 +101,9 @@ const generatedAssetManifest = `${JSON.stringify(
   Array.from(new Set([
     'index.html',
     'manifest.json',
+    'sw.js',
     'html-fragments.json',
+    'modules/bootstrap/register-service-worker.js',
     'modules/bootstrap/html-fragment-manifest.js',
     'modules/bootstrap/document-loader.js',
     ...fragmentScriptPaths,
