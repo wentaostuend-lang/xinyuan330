@@ -35,6 +35,138 @@
 
   let callTimerInterval = null;
   let voiceCallTimerInterval = null;
+  let videoCallRequestController = null;
+  let voiceCallRequestController = null;
+  let videoCallSessionId = 0;
+  let voiceCallSessionId = 0;
+  let voiceCallDraftWrite = Promise.resolve();
+  let voiceCallDraftReady = Promise.resolve(null);
+  let voiceCallDraftHeartbeatAt = 0;
+
+  const CALL_API_HISTORY_MAX = 60;
+
+  function abortCallRequest(controller) {
+    if (controller && !controller.signal.aborted) controller.abort();
+  }
+
+  function resetCallState(callState) {
+    Object.assign(callState, {
+      isActive: false,
+      isAwaitingResponse: false,
+      isGroupCall: false,
+      activeChatId: null,
+      initiator: null,
+      startTime: null,
+      participants: [],
+      isUserParticipating: true,
+      callHistory: [],
+      preCallContext: "",
+      recordId: null
+    });
+  }
+
+  function clonePersistableCallMessage(message) {
+    const cloned = { ...message };
+    if (Array.isArray(cloned.content)) {
+      cloned.content = cloned.content.map(part => {
+        if (part?.type === 'image_url') {
+          return { type: 'text', text: '[通话中的临时摄像头画面未长期保存]' };
+        }
+        return part && typeof part === 'object' ? { ...part } : part;
+      });
+    }
+    return cloned;
+  }
+
+  // 活动草稿、异常恢复与请求失效保护参考并独立改写自：
+  // https://github.com/yxlforever/YYY/commit/ece2d6bec633ced55c89af3871f96c97ebf3aa7e
+  function queueVoiceCallDraftUpdate(mutator) {
+    const recordId = voiceCallState.recordId;
+    if (!recordId) return Promise.resolve();
+    voiceCallDraftWrite = voiceCallDraftWrite
+      .catch(() => {})
+      .then(() => db.callRecords.get(recordId))
+      .then(record => {
+        if (!record || record.status !== 'active') return;
+        mutator(record);
+        record.lastUpdatedAt = Date.now();
+        return db.callRecords.put(record);
+      })
+      .catch(error => console.error('[语音通话] 保存通话草稿失败:', error));
+    return voiceCallDraftWrite;
+  }
+
+  function persistVoiceCallMessage(message) {
+    const persistedMessage = clonePersistableCallMessage(message);
+    return queueVoiceCallDraftUpdate(record => {
+      record.transcript = Array.isArray(record.transcript) ? record.transcript : [];
+      const index = record.transcript.findIndex(item => item.timestamp === persistedMessage.timestamp);
+      if (index >= 0) record.transcript[index] = persistedMessage;
+      else record.transcript.push(persistedMessage);
+    });
+  }
+
+  function updateVoiceCallDraftMessage(timestamp, content) {
+    return queueVoiceCallDraftUpdate(record => {
+      const message = Array.isArray(record.transcript)
+        ? record.transcript.find(item => item.timestamp === timestamp)
+        : null;
+      if (message) message.content = content;
+    });
+  }
+
+  function deleteVoiceCallDraftMessage(timestamp) {
+    return queueVoiceCallDraftUpdate(record => {
+      record.transcript = Array.isArray(record.transcript)
+        ? record.transcript.filter(item => item.timestamp !== timestamp)
+        : [];
+    });
+  }
+
+  async function recoverInterruptedVoiceCalls() {
+    try {
+      const activeRecords = await db.callRecords
+        .filter(record => record.callType === 'voice' && record.status === 'active')
+        .toArray();
+      for (const record of activeRecords) {
+        try {
+          const fallbackTime = Date.now();
+          const endCandidate = Number(record.lastUpdatedAt || record.startTime || record.timestamp);
+          const endTime = Number.isFinite(endCandidate) ? endCandidate : fallbackTime;
+          const startCandidate = Number(record.startTime || record.timestamp);
+          const startTime = Number.isFinite(startCandidate) ? startCandidate : endTime;
+          const duration = Math.max(0, Math.floor((endTime - startTime) / 1000));
+          await db.callRecords.update(record.id, {
+            status: 'interrupted',
+            endReason: 'app_terminated',
+            endTime,
+            duration,
+            lastUpdatedAt: fallbackTime
+          });
+
+          const chat = state.chats[record.chatId];
+          if (!chat || !Array.isArray(chat.history)) continue;
+          if (chat.history.some(message => message.callRecordId === record.id)) continue;
+          const durationText = `${Math.floor(duration / 60)}分${duration % 60}秒`;
+          const summaryMessage = {
+            role: record.initiator === 'user' ? 'user' : 'assistant',
+            content: `语音通话意外中断，时长 ${durationText}`,
+            timestamp: endTime,
+            callRecordId: record.id
+          };
+          if (chat.isGroup && summaryMessage.role === 'assistant') {
+            summaryMessage.senderName = record.callRequester || chat.members?.[0]?.originalName || chat.name;
+          }
+          chat.history.push(summaryMessage);
+          await db.chats.put(chat);
+        } catch (recordError) {
+          console.error('[语音通话] 恢复单条异常中断记录失败:', record.id, recordError);
+        }
+      }
+    } catch (error) {
+      console.error('[语音通话] 恢复异常中断记录失败:', error);
+    }
+  }
 
 
   async function handleInitiateCall() {
@@ -79,6 +211,9 @@
     const chat = state.chats[videoCallState.activeChatId];
     if (!chat) return;
 
+    abortCallRequest(videoCallRequestController);
+    videoCallRequestController = null;
+    videoCallSessionId += 1;
     videoCallState.isActive = true;
     videoCallState.isAwaitingResponse = false;
     videoCallState.startTime = Date.now();
@@ -139,6 +274,9 @@
 
   async function endVideoCall() {
     if (!videoCallState.isActive) return;
+    const endingSessionId = ++videoCallSessionId;
+    abortCallRequest(videoCallRequestController);
+    videoCallRequestController = null;
     stopTtsQueue();
     document.getElementById('video-call-restore-btn').style.display = 'none';
     const duration = Math.floor((Date.now() - videoCallState.startTime) / 1000);
@@ -176,7 +314,7 @@
         timestamp: Date.now(),
         duration: duration,
         participants: participantsData,
-        transcript: [...videoCallState.callHistory]
+        transcript: videoCallState.callHistory.map(clonePersistableCallMessage)
       };
       await db.callRecords.add(callRecord);
       console.log("通话记录已保存:", callRecord);
@@ -228,18 +366,7 @@
       stopCamera();
     }
 
-    videoCallState = {
-      isActive: false,
-      isAwaitingResponse: false,
-      isGroupCall: false,
-      activeChatId: null,
-      initiator: null,
-      startTime: null,
-      participants: [],
-      isUserParticipating: true,
-      callHistory: [],
-      preCallContext: ""
-    };
+    if (videoCallSessionId === endingSessionId) resetCallState(videoCallState);
 
 
     if (chat) {
@@ -393,15 +520,7 @@ ${linkedContents}
 `;
         }
       }
-    let longTermMemoryContent = '';
-    const memMode = chat.settings?.memoryMode || (chat.settings?.enableStructuredMemory ? 'structured' : 'diary');
-    if (memMode === 'vector' && window.vectorMemoryManager) {
-      longTermMemoryContent = window.vectorMemoryManager.serializeCoreMemories(chat);
-    } else if (memMode === 'structured' && window.structuredMemoryManager) {
-      longTermMemoryContent = window.structuredMemoryManager.serializeForPrompt(chat);
-    } else if (chat.longTermMemory && chat.longTermMemory.length > 0) {
-      longTermMemoryContent = chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n');
-    }
+    const longTermMemoryContent = getMemoryContextForPrompt(chat, { queryText: userInput || '' });
     const longTermMemoryContext = longTermMemoryContent ? `\n# 长期记忆 (必须参考)\n${longTermMemoryContent}` : '';
 
     if (userInput && videoCallState.isUserParticipating) {
@@ -495,7 +614,7 @@ ${linkedContents}
       role: 'system',
       content: inCallPrompt
     },
-    ...videoCallState.callHistory.map(h => ({
+    ...buildCallHistoryForApi(videoCallState.callHistory).map(h => ({
       role: h.role,
       content: h.content
     }))
@@ -509,11 +628,16 @@ ${linkedContents}
       });
     }
 
+    const requestSessionId = videoCallSessionId;
+    abortCallRequest(videoCallRequestController);
+    const requestController = new AbortController();
+    videoCallRequestController = requestController;
     try {
       let isGemini = proxyUrl === GEMINI_API_URL;
       let geminiConfig = toGeminiRequestData(model, apiKey, inCallPrompt, messagesForApi)
-      const response = isGemini ? await fetch(geminiConfig.url, geminiConfig.data) : await fetch(`${proxyUrl}/v1/chat/completions`, {
+      const response = isGemini ? await fetch(geminiConfig.url, { ...geminiConfig.data, signal: requestController.signal }) : await fetch(`${proxyUrl}/v1/chat/completions`, {
         method: 'POST',
+        signal: requestController.signal,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
@@ -535,6 +659,7 @@ ${linkedContents}
       }
 
       const data = await response.json();
+      if (requestController.signal.aborted || requestSessionId !== videoCallSessionId || !videoCallState.isActive) return;
       const aiResponse = isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content;
 
       const connectingElement = callFeed.querySelector('em');
@@ -684,6 +809,7 @@ ${linkedContents}
       callFeed.scrollTop = callFeed.scrollHeight;
 
     } catch (error) {
+      if (error.name === 'AbortError' || requestSessionId !== videoCallSessionId || !videoCallState.isActive) return;
       const errorBubble = document.createElement('div');
       errorBubble.className = 'call-message-bubble ai-speech';
       errorBubble.style.color = '#ff8a80';
@@ -694,24 +820,60 @@ ${linkedContents}
         role: 'assistant',
         content: `[ERROR: ${error.message}]`
       });
+    } finally {
+      if (videoCallRequestController === requestController) videoCallRequestController = null;
     }
     // ★ 每次发送后修剪历史
     trimCallHistory(videoCallState);
   }
-  function trimCallHistory(callState) {
-    if (callState.callHistory.length > 100) {
-      callState.callHistory = callState.callHistory.slice(-100);
-    }
+
+  function buildCallHistoryForApi(history) {
+    const recentHistory = Array.isArray(history) ? history.slice(-CALL_API_HISTORY_MAX) : [];
+    let keptLatestImage = false;
+    return recentHistory.slice().reverse().map(message => {
+      if (!Array.isArray(message.content)) return message;
+      const content = message.content.filter(part => {
+        if (part?.type !== 'image_url') return true;
+        if (keptLatestImage) return false;
+        keptLatestImage = true;
+        return true;
+      });
+      return { ...message, content };
+    }).reverse();
   }
 
-
-
+  function trimCallHistory(callState) {
+    // 完整文字记录继续保留；这里只释放旧的临时摄像头 Base64，API 上下文另行限量。
+    let keptLatestImage = false;
+    for (let index = callState.callHistory.length - 1; index >= 0; index -= 1) {
+      const message = callState.callHistory[index];
+      if (!Array.isArray(message.content)) continue;
+      message.content = message.content.map(part => {
+        if (part?.type !== 'image_url') return part;
+        if (!keptLatestImage) {
+          keptLatestImage = true;
+          return part;
+        }
+        return { type: 'text', text: '[较早的临时摄像头画面已释放]' };
+      });
+    }
+  }
 
   function toggleCallButtons(isGroup) {
     document.getElementById('video-call-btn').style.display = isGroup ? 'none' : 'flex';
     document.getElementById('group-video-call-btn').style.display = isGroup ? 'flex' : 'none';
     document.getElementById('voice-call-btn').style.display = isGroup ? 'none' : 'flex';
     document.getElementById('group-voice-call-btn').style.display = isGroup ? 'flex' : 'none';
+  }
+
+  function updateVoiceCallSpeakButton(chat) {
+    const button = document.getElementById('voice-user-speak-btn');
+    if (!button) return;
+    const mode = chat?.settings?.voiceCallInputMode || 'text';
+    const label = mode === 'hold' ? '按住说话，松开发送' : mode === 'tap' ? '点击开始或结束录音' : '输入你想说的话';
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    button.dataset.inputMode = mode;
   }
 
   // ==================== 语音通话功能 ====================
@@ -750,14 +912,45 @@ ${linkedContents}
     await triggerAiResponse();
   }
 
-  function startVoiceCall() {
+  async function startVoiceCall() {
     const chat = state.chats[voiceCallState.activeChatId];
     if (!chat) return;
 
+    abortCallRequest(voiceCallRequestController);
+    voiceCallRequestController = null;
+    voiceCallSessionId += 1;
     voiceCallState.isActive = true;
     voiceCallState.isAwaitingResponse = false;
     voiceCallState.startTime = Date.now();
     voiceCallState.callHistory = [];
+
+    const draftRecord = {
+      chatId: voiceCallState.activeChatId,
+      timestamp: voiceCallState.startTime,
+      startTime: voiceCallState.startTime,
+      lastUpdatedAt: voiceCallState.startTime,
+      duration: 0,
+      participants: [],
+      transcript: [],
+      callType: 'voice',
+      status: 'active',
+      initiator: voiceCallState.initiator,
+      callRequester: voiceCallState.callRequester || null
+    };
+    const startingSessionId = voiceCallSessionId;
+    voiceCallDraftReady = db.callRecords.add(draftRecord).then(recordId => {
+      if (startingSessionId === voiceCallSessionId) {
+        voiceCallState.recordId = recordId;
+        voiceCallDraftHeartbeatAt = voiceCallState.startTime;
+        queueVoiceCallDraftUpdate(record => {
+          record.transcript = voiceCallState.callHistory.map(clonePersistableCallMessage);
+        });
+      }
+      return recordId;
+    }).catch(error => {
+      console.error('[语音通话] 创建通话草稿失败:', error);
+      return null;
+    });
 
     const preCallHistory = chat.history.slice(-10);
     voiceCallState.preCallContext = preCallHistory.map(msg => {
@@ -772,6 +965,7 @@ ${linkedContents}
 
     document.getElementById('voice-user-speak-btn').style.display = voiceCallState.isUserParticipating ? 'block' : 'none';
     document.getElementById('voice-join-call-btn').style.display = voiceCallState.isUserParticipating ? 'none' : 'block';
+    updateVoiceCallSpeakButton(chat);
 
     if (voiceCallTimerInterval) clearInterval(voiceCallTimerInterval);
     voiceCallTimerInterval = setInterval(updateVoiceCallTimer, 1000);
@@ -796,6 +990,10 @@ ${linkedContents}
 
   async function endVoiceCall() {
     if (!voiceCallState.isActive) return;
+    window.voiceRecording?.cancelRecording('call');
+    const endingSessionId = ++voiceCallSessionId;
+    abortCallRequest(voiceCallRequestController);
+    voiceCallRequestController = null;
     stopTtsQueue();
     document.getElementById('voice-call-restore-btn').style.display = 'none';
     const duration = Math.floor((Date.now() - voiceCallState.startTime) / 1000);
@@ -833,15 +1031,29 @@ ${linkedContents}
         duration: duration,
         participants: participantsData,
         transcript: [...voiceCallState.callHistory],
-        callType: 'voice'
+        callType: 'voice',
+        status: 'completed',
+        startTime: voiceCallState.startTime,
+        endTime: Date.now(),
+        lastUpdatedAt: Date.now(),
+        initiator: voiceCallState.initiator,
+        callRequester: voiceCallState.callRequester || null
       };
-      await db.callRecords.add(callRecord);
+      const draftRecordId = voiceCallState.recordId || await voiceCallDraftReady;
+      await voiceCallDraftWrite.catch(() => {});
+      if (draftRecordId) {
+        callRecord.id = draftRecordId;
+        await db.callRecords.put(callRecord);
+      } else {
+        callRecord.id = await db.callRecords.add(callRecord);
+      }
       console.log("语音通话记录已保存:", callRecord);
 
       let summaryMessage = {
         role: voiceCallState.initiator === 'user' ? 'user' : 'assistant',
         content: endCallText,
         timestamp: Date.now(),
+        callRecordId: callRecord.id,
       };
       if (chat.isGroup && summaryMessage.role === 'assistant') {
         summaryMessage.senderName = voiceCallState.callRequester || chat.members[0]?.originalName || chat.name;
@@ -869,18 +1081,7 @@ ${linkedContents}
     clearInterval(voiceCallTimerInterval);
     voiceCallTimerInterval = null;
 
-    voiceCallState = {
-      isActive: false,
-      isAwaitingResponse: false,
-      isGroupCall: false,
-      activeChatId: null,
-      initiator: null,
-      startTime: null,
-      participants: [],
-      isUserParticipating: true,
-      callHistory: [],
-      preCallContext: ""
-    };
+    if (voiceCallSessionId === endingSessionId) resetCallState(voiceCallState);
 
     if (chat) {
       openChat(chat.id);
@@ -934,6 +1135,7 @@ ${linkedContents}
 
     document.getElementById('voice-user-speak-btn').style.display = 'block';
     document.getElementById('voice-join-call-btn').style.display = 'none';
+    updateVoiceCallSpeakButton(state.chats[voiceCallState.activeChatId]);
 
     triggerAiInVoiceCallAction("[系统提示：用户加入了通话]");
   }
@@ -944,9 +1146,13 @@ ${linkedContents}
     const minutes = Math.floor(elapsed / 60);
     const seconds = elapsed % 60;
     document.getElementById('voice-call-timer').textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    if (Date.now() - voiceCallDraftHeartbeatAt >= 15000) {
+      voiceCallDraftHeartbeatAt = Date.now();
+      queueVoiceCallDraftUpdate(() => {});
+    }
   }
 
-  async function triggerAiInVoiceCallAction(userInput = null) {
+  async function triggerAiInVoiceCallAction(userInput = null, voiceMeta = null) {
     if (!voiceCallState.isActive) return;
 
     const chat = state.chats[voiceCallState.activeChatId];
@@ -978,32 +1184,35 @@ ${linkedContents}
 `;
       }
     }
-    let longTermMemoryContent = '';
-    const memMode = chat.settings?.memoryMode || (chat.settings?.enableStructuredMemory ? 'structured' : 'diary');
-    if (memMode === 'vector' && window.vectorMemoryManager) {
-      longTermMemoryContent = window.vectorMemoryManager.serializeCoreMemories(chat);
-    } else if (memMode === 'structured' && window.structuredMemoryManager) {
-      longTermMemoryContent = window.structuredMemoryManager.serializeForPrompt(chat);
-    } else if (chat.longTermMemory && chat.longTermMemory.length > 0) {
-      longTermMemoryContent = chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n');
-    }
+    const longTermMemoryContent = getMemoryContextForPrompt(chat, { queryText: userInput || '' });
     const longTermMemoryContext = longTermMemoryContent ? `\n# 长期记忆 (必须参考)\n${longTermMemoryContent}` : '';
 
     if (userInput && voiceCallState.isUserParticipating) {
       const userTimestamp = Date.now();
       const userBubble = document.createElement('div');
-      userBubble.className = 'call-message-bubble user-speech';
+      userBubble.className = `call-message-bubble user-speech${voiceMeta ? ' user-voice-speech' : ''}`;
       userBubble.textContent = userInput;
+      if (voiceMeta) userBubble.title = `真实语音 · ${voiceMeta.audioDuration || 0} 秒`;
       userBubble.dataset.timestamp = userTimestamp;
       addLongPressListener(userBubble, () => showCallMessageActions(userTimestamp));
       callFeed.appendChild(userBubble);
       callFeed.scrollTop = callFeed.scrollHeight;
 
-      voiceCallState.callHistory.push({
+      const userCallMessage = {
         role: 'user',
         content: userInput,
-        timestamp: userTimestamp
-      });
+        timestamp: userTimestamp,
+        ...(voiceMeta ? {
+          type: 'voice_message',
+          voiceTranscript: userInput,
+          audioData: voiceMeta.audioData,
+          audioMimeType: voiceMeta.audioMimeType,
+          audioDuration: voiceMeta.audioDuration,
+          voiceUnderstandingMode: voiceMeta.voiceUnderstandingMode
+        } : {})
+      };
+      voiceCallState.callHistory.push(userCallMessage);
+      persistVoiceCallMessage(userCallMessage);
     }
 
     let inCallPrompt;
@@ -1072,7 +1281,7 @@ ${worldBookContent}
       role: 'system',
       content: inCallPrompt
     },
-    ...voiceCallState.callHistory.map(h => ({
+    ...buildCallHistoryForApi(voiceCallState.callHistory).map(h => ({
       role: h.role,
       content: h.content
     }))
@@ -1086,11 +1295,16 @@ ${worldBookContent}
       });
     }
 
+    const requestSessionId = voiceCallSessionId;
+    abortCallRequest(voiceCallRequestController);
+    const requestController = new AbortController();
+    voiceCallRequestController = requestController;
     try {
       let isGemini = proxyUrl === GEMINI_API_URL;
       let geminiConfig = toGeminiRequestData(model, apiKey, inCallPrompt, messagesForApi)
-      const response = isGemini ? await fetch(geminiConfig.url, geminiConfig.data) : await fetch(`${proxyUrl}/v1/chat/completions`, {
+      const response = isGemini ? await fetch(geminiConfig.url, { ...geminiConfig.data, signal: requestController.signal }) : await fetch(`${proxyUrl}/v1/chat/completions`, {
         method: 'POST',
+        signal: requestController.signal,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${apiKey}`
@@ -1112,6 +1326,7 @@ ${worldBookContent}
       }
 
       const data = await response.json();
+      if (requestController.signal.aborted || requestSessionId !== voiceCallSessionId || !voiceCallState.isActive) return;
       const aiResponse = isGemini ? data.candidates[0].content.parts[0].text : data.choices[0].message.content;
 
       const connectingElement = callFeed.querySelector('em');
@@ -1128,11 +1343,13 @@ ${worldBookContent}
           aiBubble.dataset.timestamp = aiTimestamp;
           addLongPressListener(aiBubble, () => showCallMessageActions(aiTimestamp));
           callFeed.appendChild(aiBubble);
-          voiceCallState.callHistory.push({
+          const groupVoiceMessage = {
             role: 'assistant',
             content: `${turn.name}: ${turn.speech}`,
             timestamp: aiTimestamp
-          });
+          };
+          voiceCallState.callHistory.push(groupVoiceMessage);
+          persistVoiceCallMessage(groupVoiceMessage);
 
           const speaker = voiceCallState.participants.find(p => p.name === turn.name);
           if (speaker) {
@@ -1162,11 +1379,13 @@ ${worldBookContent}
           addLongPressListener(aiBubble, () => showCallMessageActions(aiTimestamp));
           callFeed.appendChild(aiBubble);
 
-          voiceCallState.callHistory.push({
+          const aiVoiceMessage = {
             role: 'assistant',
             content: messageContent,
             timestamp: aiTimestamp
-          });
+          };
+          voiceCallState.callHistory.push(aiVoiceMessage);
+          persistVoiceCallMessage(aiVoiceMessage);
 
           // 为每条消息播放TTS
           if (enableTts && voiceId) {
@@ -1186,16 +1405,22 @@ ${worldBookContent}
       callFeed.scrollTop = callFeed.scrollHeight;
 
     } catch (error) {
+      if (error.name === 'AbortError' || requestSessionId !== voiceCallSessionId || !voiceCallState.isActive) return;
       const errorBubble = document.createElement('div');
       errorBubble.className = 'call-message-bubble ai-speech';
       errorBubble.style.color = '#ff8a80';
       errorBubble.textContent = `[ERROR: ${error.message}]`;
       callFeed.appendChild(errorBubble);
       callFeed.scrollTop = callFeed.scrollHeight;
-      voiceCallState.callHistory.push({
+      const voiceErrorMessage = {
         role: 'assistant',
-        content: `[ERROR: ${error.message}]`
-      });
+        content: `[ERROR: ${String(error.message || error).slice(0, 500)}]`,
+        timestamp: Date.now()
+      };
+      voiceCallState.callHistory.push(voiceErrorMessage);
+      persistVoiceCallMessage(voiceErrorMessage);
+    } finally {
+      if (voiceCallRequestController === requestController) voiceCallRequestController = null;
     }
     // ★ 每次发送后修剪历史
     trimCallHistory(voiceCallState);
@@ -1398,6 +1623,7 @@ ${worldBookContent}
         finalContent = `${senderName}: ${newContent}`;
       }
       message.content = finalContent;
+      if (!isVideoCall) updateVoiceCallDraftMessage(timestamp, finalContent);
 
       const messageBubble = document.querySelector(`.call-message-bubble[data-timestamp="${timestamp}"]`);
       if (messageBubble) {
@@ -1432,6 +1658,7 @@ ${worldBookContent}
       if (messageIndex > -1) {
         currentCallState.callHistory.splice(messageIndex, 1);
       }
+      if (!isVideoCall) deleteVoiceCallDraftMessage(timestampToDelete);
 
       const messageBubble = document.querySelector(`.call-message-bubble[data-timestamp="${timestampToDelete}"]`);
       if (messageBubble) {
@@ -1446,6 +1673,7 @@ ${worldBookContent}
   // ========== 导出到全局作用域 ==========
   window.videoCallState = videoCallState;
   window.voiceCallState = voiceCallState;
+  window.recoverInterruptedVoiceCalls = recoverInterruptedVoiceCalls;
   window.handleInitiateCall = handleInitiateCall;
   window.startVideoCall = startVideoCall;
   window.minimizeVideoCall = minimizeVideoCall;
@@ -1474,6 +1702,14 @@ ${worldBookContent}
   window.openCallMessageEditor = openCallMessageEditor;
   window.saveEditedCallMessage = saveEditedCallMessage;
   window.deleteCallMessage = deleteCallMessage;
+
+  const persistActiveVoiceCallHeartbeat = () => {
+    if (voiceCallState.isActive) queueVoiceCallDraftUpdate(() => {});
+  };
+  window.addEventListener('pagehide', persistActiveVoiceCallHeartbeat);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') persistActiveVoiceCallHeartbeat();
+  });
   window.isFrameManagementMode = isFrameManagementMode;
   window.selectedFrames = selectedFrames;
 

@@ -8886,6 +8886,11 @@ function openGardenSettings() {
         '<div class="diary-setting-desc">添加自定义特殊日期和奖励金额</div></div>' +
         '<button style="padding:6px 14px;border-radius:9999px;font-size:12px;background:#fafaf9;border:1px solid #e7e5e4;color:#57534e;cursor:pointer" onclick="openGardenSpecialDates()">管理</button>' +
       '</div>' +
+      '<div class="diary-setting-item">' +
+        '<div><div class="diary-setting-label">历史奖励检查</div>' +
+        '<div class="diary-setting-desc">预览金额缺失记录，逐条确认是否修复</div></div>' +
+        '<button style="padding:6px 14px;border-radius:9999px;font-size:12px;background:#fafaf9;border:1px solid #e7e5e4;color:#57534e;cursor:pointer" onclick="requestGardenRewardRepairPreview()">检查</button>' +
+      '</div>' +
     '</div>' +
     '<div style="padding-top:16px;margin-top:8px;border-top:1px solid #f0efed">' +
       '<div class="diary-setting-item">' +
@@ -8911,6 +8916,10 @@ function openGardenSettings() {
 function closeGardenSettings() {
   var el = document.getElementById('garden-settings-overlay');
   if (el) el.remove();
+}
+function requestGardenRewardRepairPreview() {
+  closeGardenSettings();
+  window.parent.postMessage({ type: 'coupleSpaceGardenRepairPreviewRequest', charId: currentCharId }, '*');
 }
 function toggleGardenSetting(key) {
   var settings = getGardenSettings();
@@ -9130,6 +9139,10 @@ function deleteGardenSpecialDate(idx) {
 
 // --- Garden message listener ---
 window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'coupleSpaceGardenRepairApplied' && e.data.charId === currentCharId) {
+    renderGardenPage();
+    showGardenToast('历史奖励记录已更新');
+  }
   // AI water result
   if (e.data && e.data.type === 'coupleSpaceGardenAiResult') {
     aiWritingGarden = false;

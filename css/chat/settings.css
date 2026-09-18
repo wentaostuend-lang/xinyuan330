@@ -1,55 +1,57 @@
-           /* --- 聊天设置页 (Chat Settings) QQ风格重构 --- */
+           /* --- 聊天设置页 (Chat Settings) 精致 iOS 风格重构 --- */
 
-           /* 背景色 */
+           /* 背景色：纯白无杂质 */
            #chat-settings-screen {
-               background-color: #f2f2f7 !important;
-               /* 浅灰底色 */
+               background-color: #ffffff !important;
            }
 
            #phone-screen.dark-mode #chat-settings-screen {
-               background-color: #000 !important;
+               background-color: #000000 !important;
            }
 
            /* 容器 */
            .settings-container {
-               padding: 16px;
-               padding-top: calc(80px + env(safe-area-inset-top));
-               padding-bottom: calc(20px + env(safe-area-inset-bottom));
+               padding: 16px 16px 36px;
+               padding-top: 12px !important;
+               padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important;
                overflow-y: auto;
                height: 100%;
                box-sizing: border-box;
+               background-color: #ffffff !important;
            }
 
-           /* 分组卡片 */
+           #phone-screen.dark-mode .settings-container {
+               background-color: #000000 !important;
+           }
+
+           /* 分组卡片：精致微浮雕层级 */
            .settings-section {
                background-color: #ffffff;
-               border-radius: 12px;
+               border-radius: 14px;
                margin-bottom: 16px;
-               box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
-
-               /* 【核心修复】：移除 overflow: hidden，允许下拉框溢出 */
-               /* overflow: hidden;  <-- 删除这行 */
+               border: 0.5px solid rgba(0, 0, 0, 0.08);
+               box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
                position: relative;
-               /* 确保内部定位正常 */
            }
 
            #phone-screen.dark-mode .settings-section {
                background-color: #1c1c1e;
+               border: 0.5px solid rgba(255, 255, 255, 0.08);
+               box-shadow: none;
            }
 
            /* 手动处理圆角，替代 overflow: hidden */
            .settings-section>.settings-item:first-child,
            .settings-section>.settings-item-block:first-child {
-               border-top-left-radius: 12px;
-               border-top-right-radius: 12px;
+               border-top-left-radius: 14px;
+               border-top-right-radius: 14px;
            }
 
            .settings-section>.settings-item:last-child,
            .settings-section>.settings-item-block:last-child {
-               border-bottom-left-radius: 12px;
-               border-bottom-right-radius: 12px;
+               border-bottom-left-radius: 14px;
+               border-bottom-right-radius: 14px;
                border-bottom: none;
-               /* 去除最后一条线 */
            }
 
            /* 单行设置项 */
@@ -57,23 +59,23 @@
                display: flex;
                justify-content: space-between;
                align-items: center;
-               padding: 14px 16px;
-               background-color: #fff;
-               border-bottom: 0.5px solid #ebedf0;
-               min-height: 24px;
-               transition: background-color 0.2s;
+               padding: 12px 16px;
+               background-color: #ffffff;
+               border-bottom: 0.5px solid rgba(60, 60, 67, 0.08);
+               min-height: 44px;
+               transition: background-color 0.15s ease;
                position: relative;
-               /* 确保点击反馈正常 */
+               box-sizing: border-box;
            }
 
            #phone-screen.dark-mode .settings-item {
                background-color: #1c1c1e;
-               border-bottom-color: #2c2c2e;
+               border-bottom-color: rgba(255, 255, 255, 0.08);
            }
 
            /* 可点击项反馈 */
            .settings-item.clickable:active {
-               background-color: #f5f5f5;
+               background-color: rgba(0, 0, 0, 0.03);
            }
 
            #phone-screen.dark-mode .settings-item.clickable:active {
@@ -82,18 +84,19 @@
 
            /* 块级设置项 (用于多行内容) */
            .settings-item-block {
-               padding: 14px 16px;
-               background-color: #fff;
-               border-bottom: 0.5px solid #ebedf0;
+               padding: 12px 16px;
+               background-color: #ffffff;
+               border-bottom: 0.5px solid rgba(60, 60, 67, 0.08);
                display: flex;
                flex-direction: column;
                gap: 8px;
                position: relative;
+               box-sizing: border-box;
            }
 
            #phone-screen.dark-mode .settings-item-block {
                background-color: #1c1c1e;
-               border-bottom-color: #2c2c2e;
+               border-bottom-color: rgba(255, 255, 255, 0.08);
            }
 
            /* 标签文本 */
@@ -183,20 +186,32 @@
            /* 文本域样式 */
            .settings-textarea {
                width: 100%;
-               border: 1px solid #f0f0f0;
-               background-color: #f9f9f9;
-               border-radius: 8px;
-               padding: 10px;
+               border: 1px solid rgba(60, 60, 67, 0.12);
+               background-color: #f9f9fb;
+               border-radius: 10px;
+               padding: 10px 12px;
                font-size: 14px;
+               line-height: 1.5;
                resize: vertical;
                box-sizing: border-box;
-               color: #333;
+               color: #000000;
+               outline: none;
+               transition: border-color 0.2s, background-color 0.2s;
+           }
+
+           .settings-textarea:focus {
+               border-color: #007aff;
+               background-color: #ffffff;
            }
 
            #phone-screen.dark-mode .settings-textarea {
                background-color: #2c2c2e;
                border-color: #38383a;
-               color: #eee;
+               color: #ffffff;
+           }
+           #phone-screen.dark-mode .settings-textarea:focus {
+               border-color: #0a84ff;
+               background-color: #242426;
            }
 
            /* 头像预览 */
@@ -272,15 +287,42 @@
                color: #fff !important;
            }
 
-           /* 头部右侧按钮 */
-           .header .save-btn {
-               font-size: 16px;
-               background-color: #4cd964;
-               /* 绿色完成按钮 */
-               color: white !important;
-               padding: 5px 12px;
-               border-radius: 6px;
-               font-weight: 500;
+           /* 头部右侧按钮：iOS 原生纯色绿胶囊完成按钮 (无渐变) */
+           #chat-settings-screen .header .save-btn {
+               display: inline-flex !important;
+               align-items: center !important;
+               justify-content: center !important;
+               min-width: 50px !important;
+               height: 30px !important;
+               padding: 0 12px !important;
+               border-radius: 8px !important;
+               background-color: #34c759 !important;
+               color: #ffffff !important;
+               font-size: 14px !important;
+               font-weight: 600 !important;
+               border: none !important;
+               cursor: pointer !important;
+               box-shadow: none !important;
+               transition: opacity 0.15s ease, transform 0.15s ease !important;
+           }
+
+           #chat-settings-screen .header .save-btn:active {
+               opacity: 0.8 !important;
+               transform: scale(0.96) !important;
+           }
+
+           #chat-settings-screen .header .back-btn {
+               font-size: 24px !important;
+               color: #007aff !important;
+               cursor: pointer !important;
+               display: inline-flex !important;
+               align-items: center !important;
+               padding-right: 8px !important;
+               transition: opacity 0.15s !important;
+           }
+
+           #chat-settings-screen .header .back-btn:active {
+               opacity: 0.5 !important;
            }
 
            /* 头像操作区 */
@@ -517,45 +559,58 @@
                color: #fff !important;
            }
 
-           /* 头部样式微调：确保 Header 和 内容的连接处自然 */
+           /* 头部样式微调：纯白毛玻璃，精致无杂质 */
            #chat-settings-screen .header {
-               /* 确保头部背景色与 body 一致或为白色，去除多余阴影 */
-               background-color: #f2f2f7 !important;
-               border-bottom: none !important;
-               /* 去掉分割线，看起来更像原生设置页 */
+               background-color: rgba(255, 255, 255, 0.96) !important;
+               backdrop-filter: blur(20px) !important;
+               -webkit-backdrop-filter: blur(20px) !important;
+               border-bottom: 0.5px solid rgba(60, 60, 67, 0.08) !important;
                box-shadow: none !important;
                padding-bottom: 0 !important;
-               /* 减小头部下方的留白 */
            }
 
            #phone-screen.dark-mode #chat-settings-screen .header {
-               background-color: #000 !important;
+               background-color: rgba(0, 0, 0, 0.92) !important;
+               border-bottom: 0.5px solid rgba(255, 255, 255, 0.1) !important;
            }
 
-           .settings-mini-btn {
-               /* 强制去掉旧代码可能残留的外边距，解决间距不一致问题 */
+           /* 统一精致 iOS 小按钮（更换、图库、挂件等）无渐变微胶囊 */
+           #chat-settings-screen .settings-mini-btn {
                margin: 0 !important;
-
-               /* 改为浅灰色背景，让按钮在白色卡片上更显眼，更有“框”的感觉 */
-               background-color: #f5f5f7 !important;
-
-               /* 稍微加深一点边框 */
-               border: 1px solid #e0e0e0 !important;
-
-               /* 稍微增加内边距，不那么挤 */
-               padding: 6px 12px !important;
+               background-color: #f2f2f7 !important;
+               border: 0.5px solid rgba(60, 60, 67, 0.12) !important;
+               border-radius: 7px !important;
+               color: #007aff !important;
+               padding: 5px 12px !important;
+               font-size: 13px !important;
+               font-weight: 500 !important;
+               cursor: pointer !important;
+               box-shadow: none !important;
+               transition: all 0.15s ease !important;
+               line-height: 1.2 !important;
            }
 
-           /* 2. 统一调整按钮之间的间距 */
+           #chat-settings-screen .settings-mini-btn:active {
+               background-color: #e5e5ea !important;
+               opacity: 0.7 !important;
+               transform: scale(0.96) !important;
+           }
+
+           /* 统一头像按钮间距 */
            .avatar-btn-group {
-               /* 增大间距，不再“贴着” */
-               gap: 12px !important;
+               display: flex !important;
+               gap: 8px !important;
+               align-items: center !important;
            }
 
            /* 暗黑模式下的适配 */
-           #phone-screen.dark-mode .settings-mini-btn {
+           #phone-screen.dark-mode #chat-settings-screen .settings-mini-btn {
                background-color: #2c2c2e !important;
-               border-color: #3a3a3c !important;
+               border-color: rgba(255, 255, 255, 0.12) !important;
+               color: #0a84ff !important;
+           }
+           #phone-screen.dark-mode #chat-settings-screen .settings-mini-btn:active {
+               background-color: #3a3a3c !important;
            }
 
            /* --- 终极修复 V2：完美解决显隐冲突与布局问题 --- */
@@ -597,66 +652,48 @@
            /* --- 终极圆角修复方案 --- */
 
            /* 1. 全局强制卡片圆角裁剪 */
-           /* 这会让所有卡片（包括时区设置那一组）的头尾自动变成圆角，无论内部是否有隐藏元素 */
            .settings-section {
                overflow: hidden !important;
-               border-radius: 12px !important;
+               border-radius: 14px !important;
            }
 
            /* 2. 特例豁免：只有包含“自定义多选下拉框”的卡片才允许内容溢出 */
-           /* 这是为了防止“关联世界书”或“挂载记忆”的下拉菜单被卡片边缘切断 */
-           /* 注意：时区设置使用的是原生下拉框，不受 overflow 影响，所以不需要豁免 */
            .settings-section:has(.custom-multiselect) {
                overflow: visible !important;
            }
 
            /* 3. 针对上述“豁免”的卡片，手动修补首尾圆角 */
-           /* 因为允许溢出了，所以必须手动给第一个和最后一个元素加圆角 */
            .settings-section:has(.custom-multiselect)>div:first-child {
-               border-top-left-radius: 12px !important;
-               border-top-right-radius: 12px !important;
+               border-top-left-radius: 14px !important;
+               border-top-right-radius: 14px !important;
            }
 
            .settings-section:has(.custom-multiselect)>div:last-child {
-               border-bottom-left-radius: 12px !important;
-               border-bottom-right-radius: 12px !important;
+               border-bottom-left-radius: 14px !important;
+               border-bottom-right-radius: 14px !important;
                border-bottom: none !important;
            }
 
            /* --- 核心修复：给嵌套在透明容器里的“注入心声”补圆角 --- */
 
-           /* 当卡片允许溢出时，如果第一个孩子是包裹容器，
-   那么包裹容器里的第一个 .settings-item 必须有顶部圆角 */
            .settings-section:has(.custom-multiselect)>div:first-child>.settings-item:first-child {
-               border-top-left-radius: 12px !important;
-               border-top-right-radius: 12px !important;
+               border-top-left-radius: 14px !important;
+               border-top-right-radius: 14px !important;
            }
 
-           /* --- 补充修复：群聊模式下的顶部圆角 --- */
-           /* 如果第一个孩子（单聊设置）隐藏了，那么第二个孩子（群聊设置）就是视觉上的第一个，
-   它也需要圆角。CSS无法直接检测 display:none，
-   所以我们直接给“群聊后台活动”也加上条件性的圆角 */
            #group-background-activity-group {
-               /* 只有当它上面那个兄弟隐藏时才需要圆角，但在纯CSS里很难判断。
-       这里做一个权衡：如果它是该组第一个可见元素，赋予它圆角 */
-               border-top-left-radius: 12px;
-               border-top-right-radius: 12px;
+               border-top-left-radius: 14px;
+               border-top-right-radius: 14px;
            }
 
-           /* --- 修复群聊模式下“我的人设”直角问题 --- */
-
-           /* 当 AI人设被 JS 设置为隐藏(display: none)时，
-   紧随其后的 我的人设 必须变成顶部圆角 */
            #ai-persona-group[style*="none"]+#my-persona-group {
-               border-top-left-radius: 12px !important;
-               border-top-right-radius: 12px !important;
+               border-top-left-radius: 14px !important;
+               border-top-right-radius: 14px !important;
            }
 
-           /* --- 修复群成员管理在特殊情况下的圆角 --- */
-           /* 如果群聊中 我的人设 也是隐藏的（虽然一般不会），兜底给群成员管理加圆角 */
            #my-persona-group[style*="none"]+#group-members-group {
-               border-top-left-radius: 12px !important;
-               border-top-right-radius: 12px !important;
+               border-top-left-radius: 14px !important;
+               border-top-right-radius: 14px !important;
            }
 
            /* 多选模式下的头部图标样式调整 */
@@ -745,4 +782,3 @@
                padding: 0 5px;
                /* 增加一点点击区域 */
            }
-

@@ -5,6 +5,23 @@
 
 // ========== 提示词处理函数（来源：script.js 第 36490~36608 行）==========
 
+  function getStoredPromptEntries(scope) {
+    const collections = state.globalSettings.customPromptCollections;
+    if (!collections) return null;
+    if (scope === 'thoughts' || scope === 'summary') return collections[scope]?.items || null;
+    return collections.chat?.[scope]?.items || null;
+  }
+
+  function composeStoredPromptEntries(scope) {
+    const items = getStoredPromptEntries(scope);
+    if (!Array.isArray(items)) return null;
+    return items
+      .filter(item => item && item.enabled !== false && typeof item.content === 'string' && item.content.trim())
+      .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+      .map((item, index) => `${index > 0 ? (typeof item.separatorBefore === 'string' ? item.separatorBefore : '\n\n') : ''}${item.content}`)
+      .join('');
+  }
+
   /**
    * 获取默认的心声提示词
    */
@@ -21,8 +38,12 @@
    * 获取当前生效的心声提示词（优先用户自定义，否则用默认）
    */
   function getActiveThoughtsPrompt() {
-    if (state.globalSettings.customThoughtsPromptEnabled && state.globalSettings.customThoughtsPrompt && state.globalSettings.customThoughtsPrompt.trim()) {
-      return state.globalSettings.customThoughtsPrompt;
+    if (state.globalSettings.customThoughtsPromptEnabled) {
+      const entriesPrompt = composeStoredPromptEntries('thoughts');
+      if (entriesPrompt && entriesPrompt.trim()) return entriesPrompt;
+      if (state.globalSettings.customThoughtsPrompt && state.globalSettings.customThoughtsPrompt.trim()) {
+        return state.globalSettings.customThoughtsPrompt;
+      }
     }
     return getDefaultThoughtsPrompt();
   }
@@ -166,8 +187,12 @@
    * 获取当前生效的结构化总结提示词（优先用户自定义，否则用默认）
    */
   function getActiveSummaryPrompt() {
-    if (state.globalSettings.customSummaryPromptEnabled && state.globalSettings.customSummaryPrompt && state.globalSettings.customSummaryPrompt.trim()) {
-      return state.globalSettings.customSummaryPrompt;
+    if (state.globalSettings.customSummaryPromptEnabled) {
+      const entriesPrompt = composeStoredPromptEntries('summary');
+      if (entriesPrompt && entriesPrompt.trim()) return entriesPrompt;
+      if (state.globalSettings.customSummaryPrompt && state.globalSettings.customSummaryPrompt.trim()) {
+        return state.globalSettings.customSummaryPrompt;
+      }
     }
     return getDefaultSummaryPrompt();
   }
@@ -558,6 +583,8 @@
   function getActiveChatPrompt(chatType) {
     let customPrompt = '';
     if (state.globalSettings.customChatPromptEnabled) {
+      const entriesPrompt = composeStoredPromptEntries(chatType);
+      if (entriesPrompt && entriesPrompt.trim()) return entriesPrompt;
       switch(chatType) {
         case 'single':
           customPrompt = state.globalSettings.customChatPromptSingle;
@@ -619,6 +646,12 @@
   }
   
   window.getActiveChatPrompt = getActiveChatPrompt;
+  window.getActiveThoughtsPrompt = getActiveThoughtsPrompt;
+  window.getActiveSummaryPrompt = getActiveSummaryPrompt;
+  window.getDefaultThoughtsPrompt = getDefaultThoughtsPrompt;
+  window.getDefaultSummaryPrompt = getDefaultSummaryPrompt;
+  window.getDefaultChatPrompt = getDefaultChatPrompt;
+  window.composeStoredPromptEntries = composeStoredPromptEntries;
 
 // ========== 提示词处理函数结束 ==========
 

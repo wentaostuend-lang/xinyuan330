@@ -638,7 +638,23 @@
         }
 
         if (aiMessage) {
+          if (chat.settings.enableBilingualMode && window.languagePolicy && (aiMessage.type === 'text' || aiMessage.type === 'voice_message' || !aiMessage.type)) {
+            const languageParts = window.languagePolicy.splitContent(aiMessage.content);
+            const languageSettings = window.languagePolicy.resolvePolicyForSender(chat, aiMessage.senderName || msgData.name);
+            aiMessage.languageData = {
+              sourceText: languageParts.sourceText,
+              translationText: languageParts.translationText,
+              outputLanguage: languageSettings.outputLanguage || '',
+              translationLanguage: languageSettings.translationLanguage || '',
+              policySnapshot: {
+                outputMode: languageSettings.outputMode,
+                translationMode: languageSettings.translationMode,
+                ttsReadMode: languageSettings.ttsReadMode
+              }
+            };
+          }
           chat.history.push(aiMessage);
+          if (window.CharacterBond) window.CharacterBond.onMessageSaved(chat, aiMessage);
           if (!isViewingThisChat) {
             chat.unreadCount = (chat.unreadCount || 0) + 1;
           }
@@ -672,7 +688,7 @@
               default:
                 notificationText = String(aiMessage.content || '');
             }
-            const finalNotifText = chat.isGroup ? `${aiMessage.senderName}: ${notificationText}` : notificationText;
+            const finalNotifText = (chat.isGroup || aiMessage.actorType === 'pet') ? `${aiMessage.senderName}: ${notificationText}` : notificationText;
             showNotification(chatId, finalNotifText.substring(0, 40) + (finalNotifText.length > 40 ? '...' : ''));
             notificationShown = true;
           } else if (isViewingThisChat && !notificationShown) {
@@ -706,7 +722,7 @@
               default:
                 notificationText = String(aiMessage.content || '');
             }
-            const finalNotifText = chat.isGroup ? `${aiMessage.senderName}: ${notificationText}` : notificationText;
+            const finalNotifText = (chat.isGroup || aiMessage.actorType === 'pet') ? `${aiMessage.senderName}: ${notificationText}` : notificationText;
             triggerSystemNotificationInChatPage(chatId, finalNotifText.substring(0, 40) + (finalNotifText.length > 40 ? '...' : ''));
             notificationShown = true;
           }

@@ -290,7 +290,13 @@
                         <span class="post-nickname">${authorNickname}</span>
                         <span class="post-timestamp">${formatPostTimestamp(post.timestamp)}</span>
                     </div>
-                    <div class="post-actions-btn">…</div>
+                    <div class="post-actions-btn" title="更多操作">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <circle cx="5" cy="12" r="2"></circle>
+                        <circle cx="12" cy="12" r="2"></circle>
+                        <circle cx="19" cy="12" r="2"></circle>
+                      </svg>
+                    </div>
                 </div>
                 ${mainContentHtml}
                 <div class="post-feedback-icons">

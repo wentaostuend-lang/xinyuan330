@@ -201,8 +201,8 @@
 
            /* 头部适配 */
            #wallpaper-screen .header {
-               background-color: #f2f2f7 !important;
-               border-bottom: none !important;
+               background-color: #ffffff !important;
+               border-bottom: 0.5px solid rgba(60, 60, 67, 0.08) !important;
                box-shadow: none !important;
            }
 
@@ -248,6 +248,180 @@
            .action-btn-group {
                display: flex;
                gap: 6px;
+               flex-wrap: wrap;
+           }
+
+           /* ============================================================
+              外观设置项布局重构：自适应防挤压（不够宽度时上下分层，不硬塞）
+              ============================================================ */
+           #wallpaper-screen .settings-item {
+               display: flex;
+               flex-direction: column;
+               align-items: stretch;
+               gap: 12px;
+               padding: 13px 16px;
+               min-height: auto;
+           }
+
+           #wallpaper-screen .settings-item label {
+               font-size: 15px;
+               font-weight: 500;
+           }
+
+           /* 普通开关型项：保持左右对齐，弹性分配 */
+           #wallpaper-screen .settings-item:has(> .toggle-switch) {
+               flex-direction: row;
+               align-items: center;
+               justify-content: space-between;
+           }
+
+           #wallpaper-screen .settings-item:has(> .toggle-switch) > div:first-child {
+               flex: 1;
+               min-width: 0;
+               padding-right: 12px;
+           }
+
+           #wallpaper-screen .settings-item .settings-desc {
+               margin: 4px 0 0 0;
+               font-size: 12px;
+               line-height: 1.4;
+               color: #8e8e93;
+           }
+
+           /* 壁纸与背景类设置项：重构为上下两行布局，防止挤压并加大预览图 */
+           #wallpaper-screen .settings-item:has(.wallpaper-thumbnail),
+           .settings-item:has(.wallpaper-thumbnail) {
+               display: grid !important;
+               grid-template-columns: 1fr auto !important;
+               grid-template-rows: auto auto !important;
+               grid-template-areas: 
+                   "title preview"
+                   "buttons buttons" !important;
+               align-items: center !important;
+               gap: 14px 16px !important;
+               padding: 16px 18px !important;
+               box-sizing: border-box !important;
+           }
+
+           .settings-item:has(.wallpaper-thumbnail) > label {
+               grid-area: title;
+               display: flex;
+               align-items: center;
+               font-size: 15.5px !important;
+               font-weight: 600 !important;
+               margin: 0 !important;
+           }
+
+           .settings-item:has(.wallpaper-thumbnail) .settings-right {
+               display: contents !important;
+           }
+
+           .settings-item:has(.wallpaper-thumbnail) .wallpaper-thumbnail {
+               grid-area: preview;
+               justify-self: end;
+           }
+
+           .settings-item:has(.wallpaper-thumbnail) .action-btn-group {
+               grid-area: buttons;
+               width: 100% !important;
+               display: flex !important;
+               gap: 8px !important;
+           }
+
+           .settings-item:has(.wallpaper-thumbnail) .action-btn-group .settings-mini-btn {
+               flex: 1 1 0 !important;
+               min-width: 0 !important;
+               height: 36px !important;
+               padding: 0 10px !important;
+               display: inline-flex !important;
+               align-items: center !important;
+               justify-content: center !important;
+               font-size: 13.5px !important;
+               font-weight: 500 !important;
+               border-radius: 8px !important;
+               background-color: #f2f2f7 !important;
+               border: 1px solid rgba(0, 0, 0, 0.08) !important;
+               box-sizing: border-box !important;
+               cursor: pointer;
+               transition: background-color 0.15s, transform 0.1s;
+           }
+
+           .settings-item:has(.wallpaper-thumbnail) .action-btn-group .settings-mini-btn:active {
+               background-color: #e5e5ea !important;
+               transform: scale(0.98);
+           }
+
+           /* 重置按钮采用醒目的柔和危险色提示 */
+           .settings-item:has(.wallpaper-thumbnail) .action-btn-group .settings-mini-btn[id*="reset"] {
+               color: #ff3b30 !important;
+               border-color: rgba(255, 59, 48, 0.25) !important;
+               background-color: rgba(255, 59, 48, 0.05) !important;
+           }
+
+           .settings-item:has(.wallpaper-thumbnail) .action-btn-group .settings-mini-btn[id*="reset"]:active {
+               background-color: rgba(255, 59, 48, 0.15) !important;
+           }
+
+           /* 暗黑模式适配 */
+           #phone-screen.dark-mode .settings-item:has(.wallpaper-thumbnail) .action-btn-group .settings-mini-btn {
+               background-color: #2c2c2e !important;
+               border-color: rgba(255, 255, 255, 0.1) !important;
+               color: #fff !important;
+           }
+
+           #phone-screen.dark-mode .settings-item:has(.wallpaper-thumbnail) .action-btn-group .settings-mini-btn:active {
+               background-color: #3a3a3c !important;
+           }
+
+           #phone-screen.dark-mode .settings-item:has(.wallpaper-thumbnail) .action-btn-group .settings-mini-btn[id*="reset"] {
+               color: #ff453a !important;
+               border-color: rgba(255, 69, 58, 0.3) !important;
+               background-color: rgba(255, 69, 58, 0.12) !important;
+           }
+
+           /* 外观预设 / CSS 预设行：上下分层，下拉框占据一行或舒展对齐 */
+           #wallpaper-screen .settings-item:has(#appearance-preset-select),
+           #wallpaper-screen .settings-item:has(#css-preset-select) {
+               flex-direction: column;
+               align-items: stretch;
+               gap: 10px;
+           }
+
+           #wallpaper-screen .settings-item:has(#appearance-preset-select) .settings-right,
+           #wallpaper-screen .settings-item:has(#css-preset-select) .settings-right {
+               width: 100%;
+               margin-left: 0;
+               display: flex;
+               align-items: center;
+               gap: 8px;
+           }
+
+           #wallpaper-screen #appearance-preset-select,
+           #wallpaper-screen #css-preset-select {
+               flex: 1;
+               min-width: 0;
+               height: 34px;
+               background-color: #f2f2f7;
+               border: 1px solid #e5e5ea;
+               border-radius: 8px;
+               padding: 0 10px;
+               font-size: 14px;
+               color: #333;
+               text-align: left !important;
+           }
+
+           #phone-screen.dark-mode #wallpaper-screen #appearance-preset-select,
+           #phone-screen.dark-mode #wallpaper-screen #css-preset-select {
+               background-color: #2c2c2e;
+               border-color: #3a3a3c;
+               color: #fff;
+           }
+
+           #wallpaper-screen .settings-item:has(#appearance-preset-select) .settings-mini-btn,
+           #wallpaper-screen .settings-item:has(#css-preset-select) .settings-mini-btn {
+               height: 34px;
+               padding: 0 12px;
+               flex-shrink: 0;
            }
 
            /* 隐藏的 Input 保持隐藏 */
@@ -332,39 +506,36 @@
                color: #fff;
            }
 
-           /* --- 修复：壁纸预览图样式 (带强制覆盖) --- */
+           /* --- 优化：壁纸预览图样式 (加宽加大，告别过窄缝隙感) --- */
            .wallpaper-thumbnail {
-               /* 使用 !important 强制覆盖旧的 #wallpaper-preview 样式 */
-               width: 40px !important;
-               height: 70px !important;
-               /* 9:16 比例 */
-
-               border-radius: 6px;
-               background-color: #eee;
-               background-size: cover;
-               background-position: center;
-
-               /* 覆盖旧的边框样式 */
-               border: 1px solid #d1d1d6 !important;
+               width: 58px !important;
+               height: 88px !important;
+               border-radius: 10px !important;
+               background-color: #f7f7f9 !important;
+               background-size: cover !important;
+               background-position: center !important;
+               border: 1.5px solid rgba(0, 0, 0, 0.1) !important;
+               box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
                margin: 0 !important;
-               margin-right: 8px !important;
-
-               display: flex;
-               align-items: center;
-               justify-content: center;
-               font-size: 10px;
-               color: #999;
-               overflow: hidden;
-               text-align: center;
-               line-height: 1.2;
-               flex-shrink: 0;
-               /* 防止被挤压 */
+               display: flex !important;
+               align-items: center !important;
+               justify-content: center !important;
+               font-size: 11px !important;
+               color: #8e8e93 !important;
+               overflow: hidden !important;
+               text-align: center !important;
+               line-height: 1.3 !important;
+               padding: 4px !important;
+               box-sizing: border-box !important;
+               flex-shrink: 0 !important;
            }
 
            /* 暗黑模式适配 */
            #phone-screen.dark-mode .wallpaper-thumbnail {
-               background-color: #2c2c2e;
-               border-color: #3a3a3c !important;
+               background-color: #2c2c2e !important;
+               border-color: rgba(255, 255, 255, 0.15) !important;
+               box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+               color: #98989d !important;
            }
 
            /* 天气设置专用样式 - 保持原生风格 */
@@ -446,4 +617,3 @@
                height: 80%;
                object-fit: contain;
            }
-

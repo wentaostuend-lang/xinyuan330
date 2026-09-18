@@ -1,6 +1,10 @@
   async function triggerGroupAiAction(chatId) {
     const chat = state.chats[chatId];
     if (!chat || !chat.isGroup) return;
+    if (window.TimeAwareness?.isBackgroundPaused(chat)) {
+      console.log(`群聊 "${chat.name}" 的后台活动当前已暂停。`);
+      return;
+    }
 
     const maxMemory = chat.settings.maxMemory || 10;
     const recentHistory_RAW = chat.history.filter(m => !m.isHidden && !m.isExcluded).slice(-maxMemory);
@@ -87,17 +91,20 @@
       }
 
       if (chat.settings.enableTimePerception) {
-        const lastMessage = chat.history.filter(m => !m.isHidden).slice(-1)[0];
-        if (lastMessage) {
-          const lastTime = new Date(lastMessage.timestamp);
-          const diffMinutes = (now - lastTime) / (1000 * 60);
-          if (diffMinutes > 60) {
-            timeContextText = `群里已经安静了 ${Math.round(diffMinutes / 60)} 小时了。`;
-          } else {
-            timeContextText = `群里在${Math.floor(diffMinutes)}分钟前有人聊过。`;
-          }
+        if (window.TimeAwareness) {
+          const result = window.TimeAwareness.buildContext({
+            chat,
+            history: chat.history,
+            mode: 'groupBackground',
+            currentTime,
+            localizedDate,
+            timeOfDayGreeting: getTimeOfDayGreeting(localizedDate),
+            isGroup: true
+          });
+          timeContextText = result.context || result.timeContextText;
         } else {
-          timeContextText = "群里还没有任何消息。";
+          const lastMessage = chat.history.filter(m => !m.isHidden).slice(-1)[0];
+          timeContextText = lastMessage ? `群里在${Math.floor((Date.now() - lastMessage.timestamp) / 60000)}分钟前有人聊过。` : '群里还没有任何消息。';
         }
       }
       let recentContextSummary = "你们最近没有有效聊天记录。";

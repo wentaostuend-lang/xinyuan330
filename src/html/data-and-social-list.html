@@ -188,37 +188,101 @@
         </div>
       </div>
     </div>
-    <div id="npc-editor-modal" class="modal">
-      <div class="modal-content" style="height: 80%;">
-        <div class="modal-header"> <span id="npc-editor-title"data-lang-key="add">添加 NPC</span> </div>
-        <div class="modal-body">
-          <div class="form-group"> <label>NPC 头像</label>
-            <div class="avatar-upload"> <img id="npc-avatar-preview" src="https://i.postimg.cc/VkQfgzGJ/1.jpg"> <button onclick="document.getElementById('npc-avatar-input').click()">上传头像</button> <input type="file" id="npc-avatar-input" accept="image/*" hidden> </div>
-          </div>
-          <div class="form-group"> <label for="npc-name-input">NPC 昵称</label> <input type="text" id="npc-name-input" placeholder="输入NPC的常用名"> </div>
-          <div class="form-group"> <label for="npc-persona-input">NPC 人设</label> <textarea id="npc-persona-input" rows="4" placeholder="详细描述这个NPC的性格、背景、说话方式等..."></textarea> </div>
-<div class="form-group" id="npc-group-section">
-            <label for="npc-group-select">NPC 分组 (用于NPC间互评)</label>
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <select id="npc-group-select" style="flex-grow: 1;">
-                <option value="">-- 未分组 --</option>
-              </select>
-              <button id="manage-npc-groups-btn" type="button" class="form-button-secondary" style="margin-top: 0; padding: 12px;">管理分组</button>
-            </div>
-            <p style="font-size: 12px; font-weight: normal; color: #999; margin-top: 5px;">
-                只有在同一个分组内的NPC才能互相看见和评论对方的动态。
-            </p>
-          </div>
-          <hr style="opacity: 0.2;">
-          <div class="form-group" style="display: flex; justify-content: space-between; align-items: center;"> <label for="npc-background-activity-switch" style="margin-bottom: 0;"> 启用独立后台活动 <p style="font-size: 12px; font-weight: normal; color: #999; margin-top: 5px;">
-                允许该NPC在后台独立发表动态评论。需同时开启API设置中的总开关。 </p> </label> <label class="toggle-switch"> <input type="checkbox" id="npc-background-activity-switch"> <span class="slider"></span> </label> </div>
-          <div class="form-group"> <label for="npc-action-cooldown-input"> 独立行动冷却 (分钟) <p style="font-size: 12px; font-weight: normal; color: #999; margin-top: 5px;"> 该NPC在后台主动行动的最小间隔。 </p> </label> <input type="number" id="npc-action-cooldown-input" min="1" value="15"
-              style="width: 80px; text-align: center;"> </div>
-          <div class="form-group"> <label>关联的角色 (NPC会去评论这些角色的动态)</label>
-            <div id="npc-association-list" style="max-height: 150px; overflow-y: auto; background: #f9f9f9; padding: 10px; border-radius: 8px;"> </div>
-          </div>
+    <div id="npc-editor-modal" class="modal npc-ios-modal">
+      <div class="modal-content npc-ios-content">
+        <div class="npc-ios-header">
+          <button type="button" class="npc-ios-header-cancel" id="cancel-npc-editor-btn" data-lang-key="cancel">取消</button>
+          <span id="npc-editor-title" class="npc-ios-title" data-lang-key="add">添加 NPC</span>
+          <button type="button" class="npc-ios-header-save" id="save-npc-btn">保存</button>
         </div>
-        <div class="modal-footer"> <button class="cancel" id="cancel-npc-editor-btn"data-lang-key="cancel">取消</button> <button class="save" id="save-npc-btn">保存</button> </div>
+        <div class="npc-ios-body">
+          <!-- 头像选择区 (居中精致卡片) -->
+          <div class="npc-ios-avatar-section">
+            <div class="npc-ios-avatar-wrapper" onclick="document.getElementById('npc-avatar-input').click()" title="更换头像">
+              <img id="npc-avatar-preview" src="https://i.postimg.cc/VkQfgzGJ/1.jpg" alt="NPC 头像">
+              <div class="npc-ios-avatar-badge" aria-label="上传头像">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                  <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+              </div>
+            </div>
+            <button type="button" class="npc-ios-avatar-btn" onclick="document.getElementById('npc-avatar-input').click()">更换头像</button>
+            <input type="file" id="npc-avatar-input" accept="image/*" hidden>
+          </div>
+
+          <!-- 第一组：基本资料 -->
+          <div class="npc-ios-group-title">基本信息</div>
+          <div class="npc-ios-card">
+            <div class="npc-ios-row">
+              <label class="npc-ios-label" for="npc-name-input">昵称</label>
+              <input type="text" id="npc-name-input" class="npc-ios-input" placeholder="输入常用名" autocomplete="off">
+            </div>
+            <div class="npc-ios-row-divider"></div>
+            <div class="npc-ios-row npc-ios-row-multiline">
+              <label class="npc-ios-label" for="npc-persona-input">人设</label>
+              <textarea id="npc-persona-input" class="npc-ios-textarea" rows="3" placeholder="详细描述性格、背景设定、说话风格等..."></textarea>
+            </div>
+          </div>
+
+          <!-- 第二组：分组管理 -->
+          <div class="npc-ios-group-title">社交与分组</div>
+          <div class="npc-ios-card" id="npc-group-section">
+            <div class="npc-ios-row">
+              <label class="npc-ios-label" for="npc-group-select">所属分组</label>
+              <div class="npc-ios-select-wrapper">
+                <select id="npc-group-select" class="npc-ios-select">
+                  <option value="">未分组</option>
+                </select>
+                <svg class="npc-ios-select-arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+              <button id="manage-npc-groups-btn" type="button" class="npc-ios-action-btn">管理</button>
+            </div>
+          </div>
+          <div class="npc-ios-group-footer">同分组内的 NPC 可以在动态中互相看到并进行互动评论。</div>
+
+          <!-- 第三组：独立活动 -->
+          <div class="npc-ios-group-title">后台独立活动</div>
+          <div class="npc-ios-card">
+            <div class="npc-ios-row npc-ios-switch-row">
+              <div class="npc-ios-row-text">
+                <label class="npc-ios-label" for="npc-background-activity-switch">启用独立活动</label>
+                <span class="npc-ios-sublabel">允许在后台自动发表动态或回复</span>
+              </div>
+              <label class="npc-ios-switch">
+                <input type="checkbox" id="npc-background-activity-switch">
+                <span class="npc-ios-switch-slider"></span>
+              </label>
+            </div>
+            <div class="npc-ios-row-divider"></div>
+            <div class="npc-ios-row">
+              <label class="npc-ios-label" for="npc-action-cooldown-input">行动冷却</label>
+              <div class="npc-ios-stepper-wrap">
+                <input type="number" id="npc-action-cooldown-input" class="npc-ios-number-input" min="1" max="1440" value="15">
+                <span class="npc-ios-unit">分钟</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 第四组：关联角色 -->
+          <div class="npc-ios-group-title">关联角色互动</div>
+          <div class="npc-ios-card">
+            <div class="npc-ios-search-bar">
+              <svg class="npc-ios-search-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="npc-association-search-input" class="npc-ios-search-input" placeholder="搜索角色或用户..." autocomplete="off">
+              <button type="button" id="npc-association-search-clear" class="npc-ios-search-clear" style="display: none;">×</button>
+            </div>
+            <div class="npc-ios-row-divider"></div>
+            <div id="npc-association-list" class="npc-ios-association-list"></div>
+            <div id="npc-association-empty" class="npc-ios-association-empty" style="display: none;">无匹配的角色</div>
+          </div>
+          <div class="npc-ios-group-footer">该 NPC 会主动关注并评论选中角色的动态。</div>
+        </div>
       </div>
     </div>
     <div id="clear-posts-modal" class="modal">

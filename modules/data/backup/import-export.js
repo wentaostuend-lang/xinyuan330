@@ -57,6 +57,7 @@
         auctions,
         inventory,
         emails,
+        mailThreads, mailContacts, mailAccounts, mailEvents, mailPublicBoxes, mailSettings,
         watchTogetherPlaylist,
         mcpConnections,
         mcpActivities,
@@ -110,6 +111,8 @@
         db.auctions.toArray(),
         db.inventory.toArray(),
         db.emails.toArray(),
+        db.mailThreads.toArray(), db.mailContacts.toArray(), db.mailAccounts.toArray(),
+        db.mailEvents.toArray(), db.mailPublicBoxes.toArray(), db.mailSettings.get('main'),
         db.watchTogetherPlaylist.toArray(),
         db.mcpConnections.toArray(),
         db.mcpActivities.toArray(),
@@ -171,6 +174,7 @@
         auctions,
         inventory,
         emails,
+        mailThreads, mailContacts, mailAccounts, mailEvents, mailPublicBoxes, mailSettings,
         watchTogetherPlaylist,
         mcpConnections: sanitizeMcpConnectionsForBackup(mcpConnections),
         mcpActivities,
@@ -294,6 +298,12 @@
         auctions: '拍卖',
         inventory: '背包',
         emails: '邮件',
+        mailThreads: '邮件线程',
+        mailContacts: '邮件联系人与笔友',
+        mailAccounts: '邮箱账户',
+        mailEvents: '邮件后台任务',
+        mailPublicBoxes: '公共邮箱',
+        mailSettings: '邮箱设置',
         watchTogetherPlaylist: '观影播放列表',
         mcpConnections: 'MCP连接',
         mcpActivities: 'MCP活动记录',
@@ -509,11 +519,25 @@
       const text = await file.text();
       const data = JSON.parse(text);
 
+      if (data.exportType === 'advanced' && data.data && data.categories) {
+        if (typeof window.handleAdvancedImport !== 'function') {
+          throw new Error('分类备份导入功能尚未加载完成，请稍后重试。');
+        }
+        await window.handleAdvancedImport(file);
+        return;
+      }
+
+      if (data.type === 'slice' && data.data && typeof data.data === 'object') {
+        pendingBackupData = { type: 'slice', content: data.data };
+        openSelectiveImportModal(data.data);
+        return;
+      }
+
       let backupDataContent;
       let backupType;
 
 
-      if (data.data && typeof data.data === 'object' && (data.data.chats || data.data.worldBooks)) {
+      if (data.data && typeof data.data === 'object') {
         console.log("检测到新版流式备份文件...");
         backupDataContent = data.data;
         backupType = 'streamed'; // 'streamed' or 'legacy'
@@ -597,7 +621,7 @@
     };
 
     let foundData = false;
-    for (const key in contentSummary) {
+    for (const key of Object.keys(backupDataContent)) {
       if (backupDataContent[key] && (Array.isArray(backupDataContent[key]) ? backupDataContent[key].length > 0 : backupDataContent[key])) {
         let count;
         let countText;
@@ -612,7 +636,7 @@
         }
         
         const li = document.createElement('li');
-        li.textContent = `${contentSummary[key]}: ${countText}`;
+        li.textContent = `${contentSummary[key] || key}: ${countText}`;
         listEl.appendChild(li);
         foundData = true;
       }
@@ -761,7 +785,7 @@
     };
 
     let hasContent = false;
-    for (const key in contentSummary) {
+    for (const key of Object.keys(backupDataContent)) {
       if (backupDataContent[key] && (Array.isArray(backupDataContent[key]) ? backupDataContent[key].length > 0 : backupDataContent[key])) {
         let count;
         let countText;
@@ -784,7 +808,7 @@
         item.innerHTML = `
                 <div class="checkbox selected"></div>
                 <div>
-                    <span class="name">${contentSummary[key]} (${countText})</span>
+                    <span class="name">${contentSummary[key] || key} (${countText})</span>
                     ${isSingleObject ? '<p style="font-size: 12px; color: #ff8c00; margin: 4px 0 0;">(注意: 这将【覆盖】您当前的设置)</p>' : ''}
                 </div>
             `;
@@ -974,6 +998,12 @@
         if (Array.isArray(backupData.auctions)) await db.auctions.bulkPut(backupData.auctions);
         if (Array.isArray(backupData.inventory)) await db.inventory.bulkPut(backupData.inventory);
         if (Array.isArray(backupData.emails)) await db.emails.bulkPut(backupData.emails);
+        if (Array.isArray(backupData.mailThreads)) await db.mailThreads.bulkPut(backupData.mailThreads);
+        if (Array.isArray(backupData.mailContacts)) await db.mailContacts.bulkPut(backupData.mailContacts);
+        if (Array.isArray(backupData.mailAccounts)) await db.mailAccounts.bulkPut(backupData.mailAccounts);
+        if (Array.isArray(backupData.mailEvents)) await db.mailEvents.bulkPut(backupData.mailEvents);
+        if (Array.isArray(backupData.mailPublicBoxes)) await db.mailPublicBoxes.bulkPut(backupData.mailPublicBoxes);
+        if (backupData.mailSettings) await db.mailSettings.put(backupData.mailSettings);
         if (Array.isArray(backupData.watchTogetherPlaylist)) await db.watchTogetherPlaylist.bulkPut(backupData.watchTogetherPlaylist);
         if (Array.isArray(backupData.mcpConnections)) await db.mcpConnections.bulkPut(sanitizeMcpConnectionsForBackup(backupData.mcpConnections));
         if (Array.isArray(backupData.mcpActivities)) await db.mcpActivities.bulkPut(backupData.mcpActivities);

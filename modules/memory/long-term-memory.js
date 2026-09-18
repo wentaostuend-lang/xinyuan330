@@ -3,6 +3,14 @@
 function initExportMemoryButton() {
   const btn = document.getElementById('export-original-memory-btn');
   if (!btn) return;
+  if (btn.dataset.memoryTransferReady === 'true') return;
+  btn.dataset.memoryTransferReady = 'true';
+  btn.title = '记忆导入导出';
+  btn.setAttribute('aria-label', '打开记忆导入导出');
+  // 按钮原本位于“原始记忆”容器内，切到结构化/向量页会被父容器一起隐藏。
+  // 移到记忆页面根节点后仍保持 fixed 布局和原交互，三个记忆页签都可使用。
+  const memoryScreen = document.getElementById('long-term-memory-screen');
+  if (memoryScreen && btn.parentElement !== memoryScreen) memoryScreen.appendChild(btn);
   
   // 1. 读取保存的位置并应用
   const savedState = localStorage.getItem('export-memory-btn-state');
@@ -19,19 +27,35 @@ function initExportMemoryButton() {
     } catch (e) {
       console.error('Failed to parse export button state', e);
     }
-  } else {
-    // 默认位置：右下角
-    btn.style.left = (window.innerWidth - 80) + 'px';
-    btn.style.top = (window.innerHeight - 80) + 'px';
   }
+
+  function getBounds() {
+    const rect = document.getElementById('long-term-memory-screen')?.getBoundingClientRect();
+    if (rect && rect.width > 0 && rect.height > 0) return rect;
+    return { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+  }
+
+  function clampPosition(position) {
+    const bounds = getBounds();
+    const x = Number(position.x);
+    const y = Number(position.y);
+    return {
+      x: Math.max(bounds.left, Math.min(bounds.right - 50, Number.isFinite(x) ? x : bounds.right - 65)),
+      y: Math.max(bounds.top, Math.min(bounds.bottom - 50, Number.isFinite(y) ? y : bounds.bottom - 75))
+    };
+  }
+
+  const initialPosition = clampPosition({ x: parseFloat(btn.style.left), y: parseFloat(btn.style.top) });
+  btn.style.left = initialPosition.x + 'px';
+  btn.style.top = initialPosition.y + 'px';
 
   // 2. 拖拽逻辑（直接复用 floating-ball.js 的逻辑）
   let isDragging = false;
   let hasMoved = false;
   let dragStart = { x: 0, y: 0 };
   let currentPos = { 
-    x: parseInt(btn.style.left) || window.innerWidth - 80, 
-    y: parseInt(btn.style.top) || window.innerHeight - 80 
+    x: initialPosition.x,
+    y: initialPosition.y
   };
   let longPressTimer = null;
 
@@ -93,11 +117,7 @@ function initExportMemoryButton() {
     currentPos.x = x - dragStart.x;
     currentPos.y = y - dragStart.y;
     
-    // 限制在屏幕内
-    const maxX = window.innerWidth - 50;
-    const maxY = window.innerHeight - 50;
-    currentPos.x = Math.max(0, Math.min(maxX, currentPos.x));
-    currentPos.y = Math.max(0, Math.min(maxY, currentPos.y));
+    currentPos = clampPosition(currentPos);
     
     btn.style.left = currentPos.x + 'px';
     btn.style.top = currentPos.y + 'px';
@@ -112,7 +132,7 @@ function initExportMemoryButton() {
       endDrag();
     } else if (!hasMoved) {
       // 点击事件
-      handleExportLongTermMemory();
+      openMemoryTransferMenu();
     }
   }
 
@@ -125,7 +145,7 @@ function initExportMemoryButton() {
       endDrag();
     } else if (!hasMoved) {
       // 点击事件
-      handleExportLongTermMemory();
+      openMemoryTransferMenu();
     }
   }
 
@@ -137,6 +157,27 @@ function initExportMemoryButton() {
     state.position = currentPos;
     localStorage.setItem('export-memory-btn-state', JSON.stringify(state));
   }
+
+  function openMemoryTransferMenu() {
+    const chat = state.chats[state.activeChatId];
+    if (window.EPhoneMemoryTransfer?.open) window.EPhoneMemoryTransfer.open(chat);
+    else if (typeof handleExportLongTermMemory === 'function') handleExportLongTermMemory();
+  }
+
+  window.hideMemoryTransferButton = function () {
+    btn.classList.add('hidden');
+    const saved = JSON.parse(localStorage.getItem('export-memory-btn-state') || '{}');
+    saved.hidden = true;
+    localStorage.setItem('export-memory-btn-state', JSON.stringify(saved));
+    showToast('按钮已隐藏，在记忆页面快速点击三次即可唤醒');
+  };
+
+  window.ensureMemoryTransferButtonPosition = () => {
+    currentPos = clampPosition(currentPos);
+    btn.style.left = currentPos.x + 'px';
+    btn.style.top = currentPos.y + 'px';
+  };
+  window.addEventListener('resize', window.ensureMemoryTransferButtonPosition);
 
   // 3. 三击唤醒逻辑
   let tapCount = 0;
@@ -198,6 +239,7 @@ function openLongTermMemoryScreen() {
   const defaultTab = memoryMode === 'vector' ? 'vector' : (memoryMode === 'structured' ? 'structured' : 'original');
   switchMemoryTab(defaultTab);
   showScreen('long-term-memory-screen');
+  requestAnimationFrame(() => window.ensureMemoryTransferButtonPosition?.());
 }
 
 // 切换记忆 Tab
@@ -421,11 +463,22 @@ function renderStructuredMemoryView() {
           const data = JSON.parse(text);
           let mode = 'merge';
           if (data.type !== 'structured-memory-partial') {
-            const isMerge = await showCustomConfirm('导入模式', '选择"确认"为合并模式（保留现有数据），选择"取消"为替换模式（清空现有数据）');
-            mode = isMerge ? 'merge' : 'replace';
+            mode = await showChoiceModal('导入模式', [
+              { text: '合并导入（保留现有记忆）', value: 'merge' },
+              { text: '替换导入（清空现有记忆）', value: 'replace' }
+            ]);
+            if (!mode) return;
           }
+          const backup = JSON.parse(JSON.stringify(chat.structuredMemory || null));
+          const backupTimestamp = chat.lastStructuredMemoryTimestamp;
           const count = window.structuredMemoryManager.importMemory(chat, text, mode);
-          await db.chats.put(chat);
+          try {
+            await db.chats.put(chat);
+          } catch (error) {
+            chat.structuredMemory = backup;
+            chat.lastStructuredMemoryTimestamp = backupTimestamp;
+            throw error;
+          }
           renderStructuredMemoryView();
           showToast(`成功导入 ${count} 条记忆`, 'success');
         } catch (err) {

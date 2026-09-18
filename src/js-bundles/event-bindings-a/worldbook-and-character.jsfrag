@@ -751,22 +751,142 @@ window.initEventBindingsA = async function(state, db) {
     }
 
 
+    function showWorldBookExportSelectionModal(books, categories) {
+      return new Promise(resolve => {
+        const modal = document.getElementById('custom-modal-overlay');
+        const modalTitle = document.getElementById('custom-modal-title');
+        const modalBody = document.getElementById('custom-modal-body');
+        const modalFooter = document.querySelector('#custom-modal .custom-modal-footer');
+
+        if (!modal || !modalTitle || !modalBody || !modalFooter) {
+          resolve(books);
+          return;
+        }
+
+        modalTitle.textContent = '选择要导出的世界书';
+        modalBody.innerHTML = `
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;">
+            <span id="world-book-export-count" style="font-size:13px; color:var(--text-secondary, #666);"></span>
+            <div style="display:flex; gap:6px;">
+              <button type="button" id="select-all-world-books-for-export" style="padding:5px 9px; border:1px solid var(--border-color, #ddd); border-radius:7px; background:var(--secondary-bg, #fff); color:var(--text-color, #333); cursor:pointer;">全选</button>
+              <button type="button" id="deselect-all-world-books-for-export" style="padding:5px 9px; border:1px solid var(--border-color, #ddd); border-radius:7px; background:var(--secondary-bg, #fff); color:var(--text-color, #333); cursor:pointer;">取消全选</button>
+            </div>
+          </div>
+          <div id="world-book-export-list" style="max-height:48vh; overflow-y:auto; border:1px solid var(--border-color, #e5e5e5); border-radius:9px; text-align:left;"></div>
+        `;
+
+        const categoryNameById = new Map(categories.map(category => [String(category.id), category.name]));
+        const list = document.getElementById('world-book-export-list');
+        const count = document.getElementById('world-book-export-count');
+        const checkboxes = [];
+
+        books.forEach((book, index) => {
+          const row = document.createElement('label');
+          row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:10px 11px; cursor:pointer; border-bottom:1px solid var(--border-color, #eee);';
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.checked = true;
+          checkbox.dataset.bookIndex = String(index);
+          checkbox.style.cssText = 'width:18px; height:18px; padding:0; margin:0; flex:0 0 auto; cursor:pointer;';
+          checkboxes.push(checkbox);
+
+          const text = document.createElement('span');
+          text.style.cssText = 'display:flex; flex-direction:column; min-width:0; flex:1;';
+
+          const name = document.createElement('span');
+          name.textContent = book.name || '未命名世界书';
+          name.style.cssText = 'font-size:14px; color:var(--text-color, #333); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+          text.appendChild(name);
+
+          if (book.categoryId !== null && book.categoryId !== undefined && book.categoryId !== '') {
+            const category = document.createElement('span');
+            category.textContent = categoryNameById.get(String(book.categoryId)) || '未知分类';
+            category.style.cssText = 'margin-top:2px; font-size:11px; color:var(--text-secondary, #888);';
+            text.appendChild(category);
+          }
+
+          row.appendChild(checkbox);
+          row.appendChild(text);
+          list.appendChild(row);
+        });
+
+        const lastRow = list.lastElementChild;
+        if (lastRow) lastRow.style.borderBottom = 'none';
+
+        modalFooter.style.cssText = '';
+        modalFooter.style.flexDirection = 'row';
+        modalFooter.innerHTML = `
+          <button type="button" id="custom-modal-cancel">取消</button>
+          <button type="button" id="custom-modal-confirm" class="confirm-btn">导出</button>
+        `;
+
+        const cancelBtn = document.getElementById('custom-modal-cancel');
+        const confirmBtn = document.getElementById('custom-modal-confirm');
+        const selectAllBtn = document.getElementById('select-all-world-books-for-export');
+        const deselectAllBtn = document.getElementById('deselect-all-world-books-for-export');
+
+        const updateCount = () => {
+          const selectedCount = checkboxes.filter(checkbox => checkbox.checked).length;
+          count.textContent = `已选择 ${selectedCount} / ${books.length} 本`;
+          confirmBtn.disabled = selectedCount === 0;
+          confirmBtn.style.opacity = selectedCount === 0 ? '0.45' : '1';
+          confirmBtn.style.cursor = selectedCount === 0 ? 'not-allowed' : 'pointer';
+        };
+
+        checkboxes.forEach(checkbox => checkbox.addEventListener('change', updateCount));
+        selectAllBtn.onclick = () => {
+          checkboxes.forEach(checkbox => { checkbox.checked = true; });
+          updateCount();
+        };
+        deselectAllBtn.onclick = () => {
+          checkboxes.forEach(checkbox => { checkbox.checked = false; });
+          updateCount();
+        };
+        cancelBtn.onclick = () => {
+          modal.classList.remove('visible');
+          resolve(null);
+        };
+        confirmBtn.onclick = () => {
+          const selectedBooks = checkboxes
+            .filter(checkbox => checkbox.checked)
+            .map(checkbox => books[Number(checkbox.dataset.bookIndex)]);
+          modal.classList.remove('visible');
+          resolve(selectedBooks);
+        };
+
+        updateCount();
+        modal.classList.add('visible');
+      });
+    }
+
     async function exportWorldBooks() {
       try {
         const books = await db.worldBooks.toArray();
         const categories = await db.worldBookCategories.toArray();
 
-        if (books.length === 0 && categories.length === 0) {
+        if (books.length === 0) {
           alert("没有可导出的世界书数据。");
           return;
         }
+
+        const selectedBooks = await showWorldBookExportSelectionModal(books, categories);
+        if (!selectedBooks) return;
+
+        const selectedCategoryIds = new Set(
+          selectedBooks
+            .map(book => book.categoryId)
+            .filter(categoryId => categoryId !== null && categoryId !== undefined && categoryId !== '')
+            .map(String)
+        );
+        const selectedCategories = categories.filter(category => selectedCategoryIds.has(String(category.id)));
 
         const backupData = {
           type: 'EPhoneWorldBookBackup',
           version: 1,
           timestamp: Date.now(),
-          books: books,
-          categories: categories
+          books: selectedBooks,
+          categories: selectedCategories
         };
 
         const blob = new Blob(
@@ -781,7 +901,7 @@ window.initEventBindingsA = async function(state, db) {
         link.click();
         URL.revokeObjectURL(url);
 
-        await showCustomAlert('导出成功', '所有世界书数据已成功导出！');
+        await showCustomAlert('导出成功', `已成功导出 ${selectedBooks.length} 本世界书！`);
 
       } catch (error) {
         console.error("导出世界书时出错:", error);

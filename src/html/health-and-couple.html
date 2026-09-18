@@ -121,41 +121,60 @@
     </div>
 
     <!-- 番茄钟 - 角色选择弹窗 -->
-    <div id="focus-companion-modal" style="display: none;">
-      <div class="focus-companion-modal-content">
+    <div id="focus-companion-modal" class="focus-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="focus-companion-modal-title">
+      <div class="focus-companion-modal-content" tabindex="-1">
         <div class="focus-companion-modal-header">
-          <span class="focus-companion-modal-title">选择陪伴角色</span>
-          <button class="focus-companion-modal-close" onclick="closeFocusCompanionModal()">×</button>
+          <span id="focus-companion-modal-title" class="focus-companion-modal-title">选择陪伴角色</span>
+          <button type="button" class="focus-companion-modal-close" onclick="closeFocusCompanionModal()" aria-label="关闭角色选择">×</button>
         </div>
         <div class="focus-companion-modal-body">
+          <button type="button" class="focus-companion-none" onclick="confirmFocusCompanion(null)">不使用陪伴角色</button>
           <div id="focus-companion-list"></div>
         </div>
       </div>
     </div>
 
     <!-- 番茄钟 - 设置弹窗 -->
-    <div id="focus-settings-modal" style="display: none;">
-      <div class="focus-settings-modal-content">
-        <div class="focus-settings-modal-header">番茄钟设置</div>
+    <div id="focus-settings-modal" class="focus-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="focus-settings-title">
+      <div class="focus-settings-modal-content" tabindex="-1">
+        <div class="focus-settings-modal-header">
+          <span id="focus-settings-title">番茄钟设置</span>
+          <button type="button" class="focus-companion-modal-close" onclick="closeFocusSettings()" aria-label="关闭设置">×</button>
+        </div>
         <div class="focus-settings-form">
-          <div class="focus-settings-row">
-            <label class="focus-settings-label">专注时长（分钟）</label>
-            <input type="number" id="focus-duration-input" class="focus-settings-input" 
-                   min="1" max="120" value="25">
+          <div class="focus-settings-grid">
+            <label class="focus-settings-row"><span class="focus-settings-label">专注时长（分钟）</span><input type="number" id="focus-duration-input" class="focus-settings-input" min="1" max="120" step="1" value="25"></label>
+            <label class="focus-settings-row"><span class="focus-settings-label">短休息（分钟）</span><input type="number" id="focus-short-break-input" class="focus-settings-input" min="1" max="60" step="1" value="5"></label>
+            <label class="focus-settings-row"><span class="focus-settings-label">长休息（分钟）</span><input type="number" id="focus-long-break-input" class="focus-settings-input" min="1" max="120" step="1" value="15"></label>
+            <label class="focus-settings-row"><span class="focus-settings-label">每组专注次数</span><input type="number" id="focus-rounds-input" class="focus-settings-input" min="1" max="12" step="1" value="4"></label>
+            <label class="focus-settings-row"><span class="focus-settings-label">定时呼叫间隔（分钟）</span><input type="number" id="auto-call-interval-input" class="focus-settings-input" min="0" max="60" step="1" value="0" placeholder="0 表示关闭"></label>
+            <label class="focus-settings-row"><span class="focus-settings-label">有效专注最低时长（分钟）</span><input type="number" id="focus-min-valid-input" class="focus-settings-input" min="1" max="120" step="1" value="1"></label>
           </div>
-          <div class="focus-settings-row">
-            <label class="focus-settings-label">定时呼叫间隔（分钟）</label>
-            <input type="number" id="auto-call-interval-input" class="focus-settings-input" 
-                   min="0" max="60" value="0" placeholder="0表示不启用">
+          <div class="focus-settings-toggles">
+            <label class="focus-setting-toggle"><input type="checkbox" id="focus-auto-break-input"><span>完成后自动开始休息</span></label>
+            <label class="focus-setting-toggle"><input type="checkbox" id="focus-auto-next-input"><span>休息后自动开始下一轮</span></label>
+            <label class="focus-setting-toggle"><input type="checkbox" id="focus-notification-input" checked><span>到时提醒</span></label>
+            <label class="focus-setting-toggle"><input type="checkbox" id="focus-sound-input" checked><span>提示音</span></label>
+            <label class="focus-setting-toggle"><input type="checkbox" id="focus-vibration-input" checked><span>设备支持时震动</span></label>
+            <label class="focus-setting-toggle"><input type="checkbox" id="focus-sync-chat-input"><span>陪伴消息同步到主聊天</span></label>
           </div>
-          <div class="focus-settings-hint">
-            设置后，角色会按间隔时间自动呼叫你
-          </div>
+          <div id="focus-settings-error" class="focus-settings-error" role="alert"></div>
+          <div class="focus-settings-hint">设置会保存；进行中的会话继续使用开始时的时长与角色。自动呼叫为 0 时保持关闭。</div>
         </div>
         <div class="focus-settings-actions">
-          <button class="focus-btn focus-btn-secondary" onclick="closeFocusSettings()">取消</button>
-          <button class="focus-btn focus-btn-primary" onclick="saveFocusSettings()">保存</button>
+          <button type="button" class="focus-btn focus-btn-secondary" onclick="closeFocusSettings()">取消</button>
+          <button type="button" class="focus-btn focus-btn-primary" onclick="saveFocusSettings()">保存</button>
         </div>
+      </div>
+    </div>
+
+    <!-- 番茄钟 - 完成/放弃确认与复盘 -->
+    <div id="focus-action-modal" class="focus-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="focus-action-title">
+      <div class="focus-action-modal-content" tabindex="-1">
+        <div class="focus-settings-modal-header"><span id="focus-action-title">结束本次专注</span><button type="button" class="focus-companion-modal-close" onclick="closeFocusActionModal()" aria-label="关闭">×</button></div>
+        <p id="focus-action-description" class="focus-action-description"></p>
+        <label class="focus-settings-row"><span class="focus-settings-label">简短复盘或中断原因（可留空）</span><textarea id="focus-action-note" class="focus-settings-input focus-action-note" rows="3" maxlength="500" placeholder="完成了什么、为什么中断、下一步做什么…"></textarea></label>
+        <div class="focus-settings-actions"><button type="button" class="focus-btn focus-btn-secondary" onclick="closeFocusActionModal()">取消</button><button type="button" id="focus-action-confirm" class="focus-btn focus-btn-primary">确认</button></div>
       </div>
     </div>
 
@@ -182,5 +201,16 @@
         <span style="width: 30px;"></span>
       </div>
       <div id="couple-space-select-content" class="list-container"></div>
+    </div>
+
+    <div id="garden-repair-modal" class="modal" aria-hidden="true">
+      <div class="modal-content garden-repair-modal-content" role="dialog" aria-modal="true" aria-labelledby="garden-repair-title">
+        <div class="modal-header">
+          <span id="garden-repair-title">历史浇水奖励检查</span>
+          <button id="garden-repair-close-btn" class="garden-repair-close-btn" type="button" aria-label="关闭">×</button>
+        </div>
+        <div class="garden-repair-summary" id="garden-repair-summary"></div>
+        <div class="modal-body garden-repair-list" id="garden-repair-list"></div>
+      </div>
     </div>
 

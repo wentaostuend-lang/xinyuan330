@@ -523,13 +523,31 @@
     document.getElementById('save-chat-settings-btn').addEventListener('click', async () => {
       if (!state.activeChatId) return;
       const chat = state.chats[state.activeChatId];
+      const shouldOpenPetSetup = !chat.isGroup
+        && !chat.settings.enableSharedPet
+        && document.getElementById('shared-pet-switch').checked
+        && chat.sharedPet?.status !== 'active';
 
+      if (window.languagePolicy) {
+        const languageError = window.languagePolicy.validateSettingsUi(document.getElementById('bilingual-mode-toggle').checked);
+        if (languageError) {
+          await showCustomAlert('语言设置未完成', languageError);
+          return;
+        }
+      }
 
       const oldOfflineModeState = chat.settings.isOfflineMode || false;
 
 
       const newName = document.getElementById('chat-name-input').value.trim();
       if (!newName) return alert('备注名/群名不能为空！');
+      if (!chat.isGroup && window.CharacterBond) {
+        window.CharacterBond.setSwitches(
+          chat,
+          document.getElementById('character-spark-switch').checked,
+          document.getElementById('shared-pet-switch').checked
+        );
+      }
       if (!chat.isGroup && newName !== chat.name) {
         if (!chat.nameHistory) chat.nameHistory = [];
         if (!chat.nameHistory.includes(chat.name)) chat.nameHistory.push(chat.name);
@@ -606,6 +624,7 @@
 
       chat.settings.enableTimePerception = document.getElementById('time-perception-toggle').checked;
       chat.settings.timeZone = document.getElementById('time-zone-select').value;
+      if (window.TimeAwareness) window.TimeAwareness.saveSettingsUi(chat);
       chat.settings.lyricsPosition = {
         vertical: document.getElementById('lyrics-vertical-pos').value,
         horizontal: document.getElementById('lyrics-horizontal-pos').value,
@@ -617,6 +636,7 @@
       // 保存双语模式设置
       chat.settings.enableBilingualMode = document.getElementById('bilingual-mode-toggle').checked;
       chat.settings.bilingualDisplayMode = document.getElementById('bilingual-display-mode-select').value;
+      if (window.languagePolicy) window.languagePolicy.saveSettingsUi(chat);
       
       if (chat.isGroup) {
         const checkedBilingualChars = document.querySelectorAll('#bilingual-chars-checkboxes-container input[type="checkbox"]:checked');
@@ -783,6 +803,17 @@
         chat.settings.ttsLanguage = document.getElementById('ai-voice-lang-select').value;
         chat.settings.showSeconds = document.getElementById('chat-show-seconds-switch').checked;
         chat.settings.enableTts = document.getElementById('enable-tts-switch').checked;
+        chat.settings.enableRealVoice = document.getElementById('enable-real-voice-switch').checked;
+        chat.settings.realVoiceOperation = document.getElementById('real-voice-operation-select').value;
+        chat.settings.voiceUnderstandingMode = document.getElementById('voice-understanding-mode-select').value;
+        chat.settings.voiceTranscriptionUrl = document.getElementById('voice-transcription-url-input').value.trim();
+        chat.settings.voiceTranscriptionModel = document.getElementById('voice-transcription-model-input').value.trim() || 'whisper-1';
+        chat.settings.voiceTranscriptionKey = document.getElementById('voice-transcription-key-input').value.trim();
+        chat.settings.voiceMaxDuration = parseInt(document.getElementById('voice-max-duration-select').value, 10) || 60;
+        chat.settings.voiceConfirmTranscript = document.getElementById('voice-confirm-transcript-switch').checked;
+        chat.settings.voiceCallInputMode = document.getElementById('voice-call-input-mode-select').value;
+        chat.settings.voiceCallUnderstandingMode = document.getElementById('voice-call-understanding-select').value;
+        chat.settings.voiceCallTextFallback = document.getElementById('voice-call-text-fallback-switch').checked;
         chat.settings.aiAvatar = document.getElementById('ai-avatar-preview').src;
         chat.settings.myNickname = document.getElementById('my-nickname-input').value.trim() || '我';
         chat.settings.actionCooldownMinutes = parseInt(document.getElementById('ai-action-cooldown-input').value) || 10;
@@ -811,6 +842,10 @@
       showScreen('chat-interface-screen');
       renderChatInterface(state.activeChatId);
       renderChatList();
+      if (shouldOpenPetSetup && window.CharacterBond) {
+        window.CharacterBond.showBondModal('pet', chat);
+      }
+      if (window.voiceRecording?.refreshAvailability) window.voiceRecording.refreshAvailability();
     });
     // 暴露需要跨文件引用的函数到 window
     window.handleWorldBookImport = handleWorldBookImport;

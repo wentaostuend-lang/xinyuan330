@@ -40,6 +40,10 @@
     window.renderWorldBookScreenProxy = renderWorldBookScreen;
 
     await loadAllDataFromDB();
+    // 在常规数据加载完成后再恢复异常中断的通话，避免启动阶段读取到半初始化状态。
+    if (typeof window.recoverInterruptedVoiceCalls === 'function') {
+      await window.recoverInterruptedVoiceCalls();
+    }
     await initFunds();
 
     // 初始化提示词管理器
@@ -214,6 +218,10 @@
       await showAdvancedExportImportModal();
     });
 
+    document.getElementById('advanced-import-btn')?.addEventListener('click', () => {
+      document.getElementById('advanced-import-input').click();
+    });
+
     // 高级导入文件选择
     document.getElementById('advanced-import-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -243,10 +251,12 @@
     // 双语模式开关事件
     document.getElementById('bilingual-mode-toggle').addEventListener('change', (e) => {
       document.getElementById('bilingual-display-mode-group').style.display = e.target.checked ? 'flex' : 'none';
+      document.getElementById('language-policy-settings').style.display = e.target.checked ? 'block' : 'none';
       if (state.activeChatId && state.chats[state.activeChatId] && state.chats[state.activeChatId].isGroup) {
         document.getElementById('bilingual-characters-group').style.display = e.target.checked ? 'block' : 'none';
       }
     });
+    if (window.languagePolicy) window.languagePolicy.bindSettingsUi();
     
     // 自动记忆开关实时生效
     document.getElementById('auto-memory-toggle').addEventListener('change', (e) => {
@@ -435,6 +445,7 @@
 
       // E. 清理全局临时变量 (最重要的一步！)
       ruleCache = {};
+      window.invalidateRenderingRuleCache?.();
       activeMessageTimestamp = null;
       activeTransferTimestamp = null;
       //lastRawAiResponse = ''; 
@@ -744,10 +755,13 @@
 
     document.getElementById('send-btn').addEventListener('click', () => {
       playSilentAudio();
-      const content = chatInput.value.trim();
+      let content = chatInput.value.trim();
       if (!content || !state.activeChatId) return;
 
       const chat = state.chats[state.activeChatId];
+      if (window.CharacterBond && !chat.isGroup) {
+        content = window.CharacterBond.normalizePetMention(content, chat);
+      }
       if (content.startsWith('/n ') || content.startsWith('/旁白 ')) {
         const narrationText = content.replace(/^\/n\s+|^\/旁白\s+/, '');
 
@@ -784,6 +798,7 @@
 
       (async () => {
         chat.history.push(msg);
+        if (window.CharacterBond) window.CharacterBond.onMessageSaved(chat, msg);
         await db.chats.put(chat);
         renderChatList();
 

@@ -248,6 +248,10 @@
           namesToMention = namesToMention.concat(memberNames);
         }
 
+        if (!chat.isGroup && window.CharacterBond && window.CharacterBond.petIsUsable(chat)) {
+          namesToMention.push({ name: chat.sharedPet.name, type: 'pet' });
+        }
+
         chatMentionPopup.innerHTML = '';
 
         if (namesToMention.length > 0) {
@@ -328,9 +332,6 @@
 
 
     document.getElementById('add-manual-memory-btn-header').addEventListener('click', handleAddManualMemory);
-
-    const exportBtn = document.getElementById('export-original-memory-btn');
-    if(exportBtn) exportBtn.addEventListener('click', handleExportLongTermMemory);
 
     document.getElementById('summarize-recent-btn-header').addEventListener('click', handleManualSummary);
 
@@ -483,7 +484,7 @@
       if (isProductManagementMode) {
         openProductEditor(null);
       } else {
-        alert("请先点击扳手图标进入管理模式，才能添加新商品。");
+        showCustomAlert("提示", "请先点击扳手图标进入管理模式，才能添加新商品。");
       }
     });
 
@@ -667,7 +668,10 @@
 
 };
 
-  // ========== 邮箱相关事件绑定 ==========
+  // 邮箱绑定统一由 mail-app.js 管理，避免生成、删除等操作重复触发。
+  window.initMailAppBindings?.();
+  if (false) {
+  // ========== 旧邮箱相关事件绑定（保留作历史兼容参考，不再执行） ==========
   const deleteSelectedEmailBtn = document.getElementById('mail-delete-selected-btn');
   if (deleteSelectedEmailBtn) {
     deleteSelectedEmailBtn.addEventListener('click', executeBatchDeleteEmails);
@@ -728,9 +732,7 @@
           characterContext = "\n# 【重要】指定发件人的详细档案 (请根据这些信息生成个性化邮件)\n";
 
           activeChars.forEach(chat => {
-            const memory = (chat.longTermMemory && chat.longTermMemory.length > 0)
-              ? chat.longTermMemory.map(m => m.content).join('; ')
-              : '暂无';
+            const memory = getMemoryContextForPrompt(chat) || '暂无';
 
             const recentHistory = chat.history
               .filter(m => !m.isHidden)
@@ -834,4 +836,5 @@ ${allowRandom ? "- 允许生成随机路人/系统通知/垃圾邮件 (如: 银�
   const mailSearchInput = document.getElementById('mail-search-input');
   if (mailSearchInput) {
     mailSearchInput.addEventListener('input', renderEmailList);
+  }
   }

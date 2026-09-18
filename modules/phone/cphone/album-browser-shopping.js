@@ -21,9 +21,7 @@
 
     const userDisplayNameForAI = (state.qzoneSettings.nickname === '{{user}}' || !state.qzoneSettings.nickname) ? '用户' : state.qzoneSettings.nickname;
 
-    const longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0 ?
-      chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n') :
-      '无';
+    const longTermMemoryContext = getMemoryContextForPrompt(chat) || '无';
     const maxMemory = chat.settings.maxMemory || 10;
     const recentHistory_RAW = chat.history.slice(-maxMemory);
     const filteredHistory = await filterHistoryWithDoNotSendRules(recentHistory_RAW, activeCharacterId);
@@ -180,9 +178,7 @@ ${recentHistoryWithUser}
 
     const userDisplayNameForAI = (state.qzoneSettings.nickname === '{{user}}' || !state.qzoneSettings.nickname) ? '用户' : state.qzoneSettings.nickname;
 
-    const longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0 ?
-      chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n') :
-      '无';
+    const longTermMemoryContext = getMemoryContextForPrompt(chat) || '无';
     const maxMemory = chat.settings.maxMemory || 10;
     const recentHistoryWithUser = chat.history.slice(-maxMemory).map(msg => `${msg.role === 'user' ? userDisplayNameForAI : chat.name}: ${String(msg.content).substring(0, 30)}...`).join('\n');
     const worldBookContext = (chat.settings.linkedWorldBookIds || [])
@@ -444,9 +440,7 @@ ${recentHistoryWithUser}
 
     const userDisplayNameForAI = (state.qzoneSettings.nickname === '{{user}}' || !state.qzoneSettings.nickname) ? '用户' : state.qzoneSettings.nickname;
 
-    const longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0 ?
-      chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n') :
-      '无';
+    const longTermMemoryContext = getMemoryContextForPrompt(chat) || '无';
     const maxMemory = chat.settings.maxMemory || 10;
     const recentHistory_RAW = chat.history.slice(-maxMemory);
     const filteredHistory = await filterHistoryWithDoNotSendRules(recentHistory_RAW, activeCharacterId);

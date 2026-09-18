@@ -63,6 +63,7 @@
 
 
   function switchToMyPhone() {
+    window.invalidateCPhoneConversationRender?.();
     activeCharacterId = null;
     console.log("已返回我的手机");
     showScreen('home-screen');
@@ -284,6 +285,10 @@
     if (window.event) window.event.stopPropagation();
   }
   function switchToCharScreen(screenId) {
+    const currentScreen = document.querySelector('.char-screen.active');
+    if (currentScreen?.id === 'char-qq-conversation-screen' && screenId !== 'char-qq-conversation-screen') {
+      window.invalidateCPhoneConversationRender?.();
+    }
     document.querySelectorAll('.char-screen').forEach(s => s.classList.remove('active'));
     document.getElementById(screenId).classList.add('active');
   }

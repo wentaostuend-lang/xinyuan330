@@ -62,10 +62,92 @@
       groupSelectEl.appendChild(option);
     });
 
-    associationListEl.innerHTML += `<label><input type="checkbox" value="user"> ${state.qzoneSettings.nickname || '我'} (用户)</label>`;
+    const userItemHtml = `
+      <label class="npc-ios-checkbox-item" data-name="${(state.qzoneSettings.nickname || '我').toLowerCase()}">
+        <span class="npc-ios-checkbox-name">${state.qzoneSettings.nickname || '我'} <span class="npc-ios-role-tag">用户</span></span>
+        <input type="checkbox" value="user" class="npc-ios-checkbox-input">
+        <span class="npc-ios-checkmark"></span>
+      </label>
+    `;
+    let charItemsHtml = userItemHtml;
+
     Object.values(state.chats).filter(c => !c.isGroup).forEach(char => {
-      associationListEl.innerHTML += `<label><input type="checkbox" value="${char.id}"> ${char.name} (角色)</label>`;
+      charItemsHtml += `
+        <label class="npc-ios-checkbox-item" data-name="${(char.name || '').toLowerCase()}">
+          <span class="npc-ios-checkbox-name">${char.name} <span class="npc-ios-role-tag">角色</span></span>
+          <input type="checkbox" value="${char.id}" class="npc-ios-checkbox-input">
+          <span class="npc-ios-checkmark"></span>
+        </label>
+      `;
     });
+    associationListEl.innerHTML = charItemsHtml;
+
+    // 初始化/重置关联角色搜索框
+    const searchInput = document.getElementById('npc-association-search-input');
+    const searchClear = document.getElementById('npc-association-search-clear');
+    const searchEmpty = document.getElementById('npc-association-empty');
+
+    function filterAssociations() {
+      const term = (searchInput ? searchInput.value.trim() : '').toLowerCase();
+      if (searchClear) {
+        searchClear.style.display = term ? 'flex' : 'none';
+      }
+      let visibleCount = 0;
+      const items = associationListEl.querySelectorAll('.npc-ios-checkbox-item');
+      items.forEach(item => {
+        const name = item.dataset.name || '';
+        const match = !term || name.includes(term);
+        item.style.display = match ? 'flex' : 'none';
+        if (match) visibleCount++;
+      });
+      if (searchEmpty) {
+        searchEmpty.style.display = visibleCount === 0 ? 'block' : 'none';
+      }
+    }
+
+    if (searchInput) {
+      searchInput.value = '';
+      if (!searchInput.dataset.bound) {
+        searchInput.dataset.bound = 'true';
+        searchInput.addEventListener('input', () => {
+          const currentList = document.getElementById('npc-association-list');
+          const currentClear = document.getElementById('npc-association-search-clear');
+          const currentEmpty = document.getElementById('npc-association-empty');
+          const term = searchInput.value.trim().toLowerCase();
+          if (currentClear) currentClear.style.display = term ? 'flex' : 'none';
+          let count = 0;
+          if (currentList) {
+            currentList.querySelectorAll('.npc-ios-checkbox-item').forEach(item => {
+              const name = item.dataset.name || '';
+              const match = !term || name.includes(term);
+              item.style.display = match ? 'flex' : 'none';
+              if (match) count++;
+            });
+          }
+          if (currentEmpty) {
+            currentEmpty.style.display = count === 0 ? 'block' : 'none';
+          }
+        });
+      }
+    }
+
+    if (searchClear) {
+      searchClear.style.display = 'none';
+      if (!searchClear.dataset.bound) {
+        searchClear.dataset.bound = 'true';
+        searchClear.addEventListener('click', () => {
+          if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+            searchInput.dispatchEvent(new Event('input'));
+          }
+        });
+      }
+    }
+
+    if (searchEmpty) {
+      searchEmpty.style.display = 'none';
+    }
 
     if (npcId) {
       titleEl.textContent = '编辑 NPC';
@@ -219,4 +301,3 @@
       await renderNpcListScreen();
     }
   }
-

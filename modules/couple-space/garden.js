@@ -141,6 +141,206 @@ function calculateCoupleSpaceGardenReward(gardenData, now = new Date()) {
   };
 }
 
+function getCoupleSpaceGardenRepairTransactionId(charId, water, index) {
+  return water.rewardTransactionId || (water.id
+    ? 'garden-water-' + water.id
+    : ['garden-repair', charId, Number(water.createdAt) || 0, water.author || 'unknown', index].join('-'));
+}
+
+async function isCoupleSpaceGardenRewardSettled(charId, water, transactionId) {
+  if (water.rewardSettled === true) return true;
+  const ledger = getCoupleSpaceGardenRewardLedger();
+  if (ledger[transactionId]?.state === 'completed') return true;
+  if (water.author === 'char') {
+    return state.chats[charId]?.coupleGardenRewardTransactionIds?.includes(transactionId) === true;
+  }
+  if (water.author === 'user' && typeof db !== 'undefined' && db.userTransactions) {
+    try {
+      return Boolean(await db.userTransactions.filter(item => item.transactionId === transactionId).first());
+    } catch (error) {
+      console.warn('[情侣树] 检查历史奖励到账记录失败，将在确认时再次核验:', error);
+    }
+  }
+  return false;
+}
+
+async function getCoupleSpaceGardenRepairCandidates() {
+  const candidates = [];
+  for (const space of getCoupleSpaces()) {
+    let gardenData;
+    try { gardenData = JSON.parse(localStorage.getItem('coupleGarden_' + space.charId) || '{}'); }
+    catch (_) { continue; }
+    const waterLogs = Array.isArray(gardenData.waterLogs) ? gardenData.waterLogs : [];
+    const knownRewardTotal = waterLogs.reduce((sum, item) => {
+      const amount = Number(item.coinsEarned);
+      return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0);
+    }, 0);
+    for (let index = 0; index < waterLogs.length; index += 1) {
+      const water = waterLogs[index];
+      const existingAmount = Number(water.coinsEarned);
+      if (Number.isFinite(existingAmount) && existingAmount > 0) continue;
+      if (!['user', 'char'].includes(water.author)) continue;
+      const createdAt = new Date(water.createdAt);
+      if (!Number.isFinite(createdAt.getTime())) continue;
+      const reward = calculateCoupleSpaceGardenReward({ ...gardenData, charId: space.charId }, createdAt);
+      if (!reward.special && water.author === 'user') reward.description = '情侣树浇水奖励';
+      if (!Number.isFinite(reward.amount) || reward.amount <= 0) continue;
+      const transactionId = getCoupleSpaceGardenRepairTransactionId(space.charId, water, index);
+      const settled = await isCoupleSpaceGardenRewardSettled(space.charId, water, transactionId);
+      const totalCoins = Math.max(0, Number(gardenData.totalCoins) || 0);
+      const treeDelta = Math.max(0, knownRewardTotal + reward.amount - totalCoins);
+      candidates.push({
+        charId: space.charId,
+        waterId: water.id || null,
+        waterIndex: index,
+        createdAt: createdAt.getTime(),
+        author: water.author,
+        content: String(water.content || ''),
+        existingAmount: Number.isFinite(existingAmount) ? existingAmount : null,
+        amount: reward.amount,
+        special: reward.special,
+        description: reward.description,
+        transactionId,
+        walletDelta: settled ? 0 : reward.amount,
+        treeDelta,
+        settled
+      });
+    }
+  }
+  return candidates;
+}
+
+async function countCoupleSpaceGardenRepairCandidates() {
+  return (await getCoupleSpaceGardenRepairCandidates()).length;
+}
+
+function closeCoupleSpaceGardenRepairPreview() {
+  const modal = document.getElementById('garden-repair-modal');
+  modal?.classList.remove('visible');
+  modal?.setAttribute('aria-hidden', 'true');
+}
+
+function bindCoupleSpaceGardenRepairPreview() {
+  const modal = document.getElementById('garden-repair-modal');
+  if (!modal || modal.dataset.repairBound === '1') return;
+  modal.dataset.repairBound = '1';
+  document.getElementById('garden-repair-close-btn')?.addEventListener('click', closeCoupleSpaceGardenRepairPreview);
+  modal.addEventListener('click', event => {
+    if (event.target === modal) closeCoupleSpaceGardenRepairPreview();
+  });
+}
+
+async function openCoupleSpaceGardenRepairPreview() {
+  bindCoupleSpaceGardenRepairPreview();
+  const modal = document.getElementById('garden-repair-modal');
+  const list = document.getElementById('garden-repair-list');
+  const summary = document.getElementById('garden-repair-summary');
+  if (!modal || !list || !summary) return;
+  modal.classList.add('visible');
+  modal.setAttribute('aria-hidden', 'false');
+  list.innerHTML = '<p style="text-align:center;color:var(--text-secondary);">正在检查历史记录…</p>';
+  const candidates = await getCoupleSpaceGardenRepairCandidates();
+  summary.textContent = candidates.length
+    ? `发现 ${candidates.length} 条金额缺失记录。不会自动修改；每次只处理你确认的这一条。`
+    : '未发现需要修复的历史浇水奖励记录。';
+  list.innerHTML = '';
+  if (candidates.length === 0) {
+    list.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:20px 0;">当前记录无需处理</p>';
+    return;
+  }
+  candidates.forEach((candidate, candidateIndex) => {
+    const chat = state.chats[candidate.charId];
+    const item = document.createElement('article');
+    item.className = 'garden-repair-item';
+    const title = document.createElement('div');
+    title.className = 'garden-repair-item-title';
+    title.textContent = `${chat?.name || '未知角色'} · ${candidate.author === 'user' ? '我的浇水' : '角色浇水'}`;
+    const meta = document.createElement('div');
+    meta.className = 'garden-repair-item-meta';
+    const specialText = candidate.special?.name ? `（${candidate.special.name}）` : '';
+    meta.textContent = `${new Date(candidate.createdAt).toLocaleString()} · 原金额 ${candidate.existingAmount ?? '缺失'} · 建议 ¥${candidate.amount.toFixed(2)}${specialText} · 钱包 +¥${candidate.walletDelta.toFixed(2)} · 树累计 +¥${candidate.treeDelta.toFixed(2)}`;
+    const content = document.createElement('div');
+    content.className = 'garden-repair-item-content';
+    content.textContent = candidate.content || '（无浇水文字）';
+    const actions = document.createElement('div');
+    actions.className = 'garden-repair-item-actions';
+    const confirmButton = document.createElement('button');
+    confirmButton.type = 'button';
+    confirmButton.className = 'garden-repair-confirm-btn';
+    confirmButton.textContent = candidate.settled ? '确认修正记录' : '确认修正并补发';
+    confirmButton.addEventListener('click', async () => {
+      const confirmed = await showCustomConfirm(
+        '确认这一条奖励修复',
+        `将这条浇水记录修正为 ¥${candidate.amount.toFixed(2)}。${candidate.walletDelta > 0 ? `对应钱包将补发 ¥${candidate.walletDelta.toFixed(2)}。` : '检测到已有到账凭据，不会重复补发钱包。'}${candidate.treeDelta > 0 ? `情侣树累计增加 ¥${candidate.treeDelta.toFixed(2)}。` : '情侣树累计无需重复增加。'}只处理这一条，是否继续？`
+      );
+      if (!confirmed) return;
+      confirmButton.disabled = true;
+      const success = await applyCoupleSpaceGardenRepairCandidate(candidate);
+      if (success) {
+        showToast('这条历史浇水奖励已修复', 'success');
+        await openCoupleSpaceGardenRepairPreview();
+      } else {
+        confirmButton.disabled = false;
+        showToast('修复未完成，请重新打开清单核对到账状态', 'error');
+      }
+    });
+    actions.appendChild(confirmButton);
+    item.append(title, meta, content, actions);
+    list.appendChild(item);
+  });
+}
+
+async function applyCoupleSpaceGardenRepairCandidate(candidate) {
+  let gardenData;
+  try { gardenData = JSON.parse(localStorage.getItem('coupleGarden_' + candidate.charId) || '{}'); }
+  catch (_) { return false; }
+  const waterLogs = Array.isArray(gardenData.waterLogs) ? gardenData.waterLogs : [];
+  const water = candidate.waterId
+    ? waterLogs.find(item => item.id === candidate.waterId)
+    : waterLogs[candidate.waterIndex];
+  if (!water || Number(water.createdAt) !== candidate.createdAt || water.author !== candidate.author) return false;
+  const currentAmount = Number(water.coinsEarned);
+  if (Number.isFinite(currentAmount) && currentAmount > 0) return true;
+  const settled = await isCoupleSpaceGardenRewardSettled(candidate.charId, water, candidate.transactionId);
+  if (!settled) {
+    const rewardSuccess = await applyCoupleSpaceGardenReward({
+      charId: candidate.charId,
+      author: candidate.author,
+      amount: candidate.amount,
+      description: candidate.description,
+      transactionId: candidate.transactionId
+    });
+    if (!rewardSuccess) return false;
+  }
+  water.coinsEarned = candidate.amount;
+  water.specialDate = candidate.special;
+  water.rewardTransactionId = candidate.transactionId;
+  water.rewardSettled = true;
+  const knownRewardTotal = waterLogs.reduce((sum, item) => {
+    const amount = Number(item.coinsEarned);
+    return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0);
+  }, 0);
+  gardenData.totalCoins = Math.max(Number(gardenData.totalCoins) || 0, knownRewardTotal);
+  try {
+    localStorage.setItem('coupleGarden_' + candidate.charId, JSON.stringify(gardenData));
+    const iframe = document.getElementById('couple-space-iframe');
+    if (iframe?.contentWindow && localStorage.getItem('coupleSpaceLastId') === candidate.charId) {
+      iframe.contentWindow.postMessage({
+        type: 'coupleSpaceGardenRepairApplied',
+        charId: candidate.charId,
+        waterId: water.id || ''
+      }, '*');
+    }
+    return true;
+  } catch (error) {
+    console.error('[情侣树] 保存历史奖励修复失败:', error);
+    return false;
+  }
+}
+
+window.openCoupleSpaceGardenRepairPreview = openCoupleSpaceGardenRepairPreview;
+window.countCoupleSpaceGardenRepairCandidates = countCoupleSpaceGardenRepairCandidates;
+
 async function handleCoupleSpaceGardenAiRequest(data) {
   const iframe = document.getElementById('couple-space-iframe');
   if (!iframe || !iframe.contentWindow) return;

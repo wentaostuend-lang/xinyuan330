@@ -43,7 +43,14 @@ async function doSmartConvertWithAI(chat, allItems, selectedIndices, keepOrigina
 [
   {
     "content": "记忆内容（第一人称，简短清晰，如：我发现用户讨厌吃香菜）",
-    "tags": ["香菜", "讨厌", "饮食"],
+    "sourceLanguage": "zh/en/mixed/unknown",
+    "conversationLanguages": ["语言代码"],
+    "localizedContent": {"zh": "忠实中文表达", "en": "faithful English rendering"},
+    "retrievalText": "原文词、中英同义词、英文词形和实体别名",
+    "tags": ["原文关键词", "English keyword", "中文关键词"],
+    "entities": [{"type": "person/place/item/event/work/organization/other", "canonical": "原文规范名", "aliases": ["可靠别名"]}],
+    "polarity": "positive/negative",
+    "status": "fact/plan/wish/ongoing/completed/cancelled",
     "category": "U/A/R/E/I/L/P/T/M/C",
     "importance": 1-10,
     "emotionalWeight": 1-10,
@@ -67,6 +74,13 @@ async function doSmartConvertWithAI(chat, allItems, selectedIndices, keepOrigina
 # 评分规则 (1-10)
 - importance: 8-10(极其重要)，5-7(值得记住)，1-4(日常琐碎)
 - emotionalWeight: 情感的强烈程度。
+
+# 多语言规则
+- content 跟随原记忆主要语言；英文记忆使用英文正文，中文记忆使用中文正文。
+- retrievalText 与 tags 同时保留原文词及中英检索词。
+- 人名、昵称、地点、作品、品牌、组织等专有名词保留原文。
+- localizedContent 只能忠实翻译原事实，不能补充新信息。
+- 明确区分否定、愿望、计划、进行中和已完成事实。
 
 # 待处理的旧记忆
 ${formattedMemories}
@@ -94,10 +108,16 @@ ${formattedMemories}
       const extracted = window.vectorMemoryManager.parseExtractionResult(rawText);
       
       for (const item of extracted) {
-        const embedding = await window.vectorMemoryManager.getEmbedding(item.content, chat);
+        const vm = window.vectorMemoryManager.getVariableMemory(chat);
+        const duplicate = vm.fragments.some(fragment => fragment.content.trim() === item.content.trim() || window.vectorMemoryManager.bm25Match(window.vectorMemoryManager.tokenize(item.content), fragment.content) > 0.9);
+        if (duplicate) continue;
+        const embeddingText = window.vectorMemoryManager._embeddingTextFor(chat, item);
+        const embedding = await window.vectorMemoryManager.getEmbedding(embeddingText, chat);
         window.vectorMemoryManager.createFragment(chat, {
           ...item,
           embedding,
+          embeddingSignature: embedding ? window.vectorMemoryManager._embeddingSignature(chat) : '',
+          embeddingTextHash: embedding ? window.vectorMemoryManager._hashEmbeddingText(embeddingText) : '',
           memoryTime: item.memoryTime || Date.now(),
           source: 'smart_convert'
         });
@@ -105,7 +125,7 @@ ${formattedMemories}
       }
 
       // 记录要删除的原条目
-      if (!keepOriginal) {
+      if (!keepOriginal && extracted.length > 0) {
         batchIndices.forEach(idx => {
           const item = allItems[idx];
           if (item.type === 'longTerm') {
@@ -216,6 +236,10 @@ async function convertLongTermMemoryToVector(chatId) {
     const d = new Date(ts);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   };
+  const monthTimestamp = (yearMonth) => {
+    const match = String(yearMonth || '').match(/(\d{4})[-/.年](\d{1,2})/);
+    return match ? new Date(Number(match[1]), Number(match[2]) - 1, 1, 12).getTime() : undefined;
+  };
 
   // 1. 提取旧的长期记忆
   if (chat.isGroup) {
@@ -265,7 +289,7 @@ async function convertLongTermMemoryToVector(chatId) {
     for (const ym of Object.keys(mem.events)) {
       const evts = mem.events[ym].split('|');
       evts.forEach((evt, idx) => {
-        items.push({ type: 'structured', categoryCode: 'E', mappedCategory: 'E', content: `[${ym}] ${evt}`, id: `E_${ym}_${idx}`, displayLabel: '[事件] ' + `[${ym}] ${evt}` });
+        items.push({ type: 'structured', categoryCode: 'E', mappedCategory: 'E', content: `[${ym}] ${evt}`, timestamp: monthTimestamp(ym), id: `E_${ym}_${idx}`, displayLabel: '[事件] ' + `[${ym}] ${evt}` });
       });
     }
     mem.plans.forEach((p, idx) => {
@@ -308,7 +332,7 @@ async function convertLongTermMemoryToVector(chatId) {
           <label style="display: flex; align-items: flex-start; cursor: pointer; margin: 0; line-height: 1.5; width: 100%;">
             <input type="checkbox" class="memory-convert-checkbox" data-index="${index}" style="margin-right: 10px; margin-top: 2px; flex-shrink: 0; width: 16px; height: 16px;" checked>
             <div style="flex: 1; min-width: 0; font-size: 13px; color: var(--text-color, #333); text-align: left; word-break: break-word; white-space: pre-wrap;">
-              ${item.displayLabel.replace(/</g, '<').replace(/>/g, '>')}
+              ${window.vectorMemoryManager._escapeHtml(item.displayLabel)}
             </div>
           </label>
         </div>
@@ -404,17 +428,36 @@ async function convertLongTermMemoryToVector(chatId) {
         for (let i = 0; i < selectedIndices.length; i++) {
           const item = items[selectedIndices[i]];
           try {
+            const vm = window.vectorMemoryManager.getVariableMemory(chat);
+            const duplicate = vm.fragments.some(fragment => fragment.content.trim() === item.content.trim() || window.vectorMemoryManager.bm25Match(window.vectorMemoryManager.tokenize(item.content), fragment.content) > 0.9);
+            if (duplicate) {
+              if (!keepOriginal) {
+                if (item.type === 'longTerm') longTermToDelete.push({ authorId: item.authorId, id: item.id });
+                else {
+                  if (!structuredToDelete[item.categoryCode]) structuredToDelete[item.categoryCode] = [];
+                  structuredToDelete[item.categoryCode].push(item.id);
+                }
+              }
+              continue;
+            }
             // 尝试获取向量（如果失败返回null，不报错）
-            const embedding = await window.vectorMemoryManager.getEmbedding(item.content, chat);
+            const draft = {
+              content: item.content,
+              tags: [item.type === 'longTerm' ? '旧长期记忆转换' : '旧结构化转换'],
+              sourceLanguage: window.vectorMemoryManager.detectLanguage(item.content)
+            };
+            const embeddingText = window.vectorMemoryManager._embeddingTextFor(chat, draft);
+            const embedding = await window.vectorMemoryManager.getEmbedding(embeddingText, chat);
             
             // 只要到这里，无论 embedding 有无，都保存（有embedding就是向量，没有就是BM25）
             window.vectorMemoryManager.createFragment(chat, {
-              content: item.content,
-              tags: [item.type === 'longTerm' ? '旧长期记忆转换' : '旧结构化转换'],
+              ...draft,
               category: item.mappedCategory,
               importance: 5,
               emotionalWeight: 3,
               embedding: embedding || null,
+              embeddingSignature: embedding ? window.vectorMemoryManager._embeddingSignature(chat) : '',
+              embeddingTextHash: embedding ? window.vectorMemoryManager._hashEmbeddingText(embeddingText) : '',
               memoryTime: item.timestamp || Date.now(),
               source: 'manual'
             });

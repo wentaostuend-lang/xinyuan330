@@ -982,6 +982,10 @@
                right: 0;
                width: auto !important;
                z-index: 100 !important;
+               background-color: rgba(247, 247, 247, 0.8);
+               backdrop-filter: blur(10px);
+               -webkit-backdrop-filter: blur(10px);
+               border-bottom: 1px solid var(--border-color);
            }
 
            #chat-interface-screen #chat-input-area {

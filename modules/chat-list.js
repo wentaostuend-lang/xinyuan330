@@ -100,6 +100,13 @@
       const fontSize = state.globalSettings.globalFontSize || 16;
       document.getElementById('font-size-slider').value = fontSize;
       document.getElementById('font-size-value').textContent = fontSize;
+      // 初始化预览开关默认关闭
+      const previewToggle = document.getElementById('font-preview-toggle');
+      const previewContainer = document.getElementById('font-preview-container');
+      if (previewToggle && previewContainer) {
+        previewToggle.checked = false;
+        previewContainer.style.display = 'none';
+      }
       // 初始化字体应用范围 UI
       const scope = state.globalSettings.fontScope || { all: true };
       const allCb = document.getElementById('font-scope-all');
@@ -159,7 +166,7 @@
 
     switch (viewId) {
       case 'qzone-screen':
-        views['qzone-screen'].style.backgroundColor = '#f0f2f5';
+        views['qzone-screen'].style.backgroundColor = '#ffffff';
         updateUnreadIndicator(0);
         renderQzoneScreen();
         renderQzonePosts();
@@ -448,6 +455,8 @@
                 <span class="unread-count" style="display: none;">0</span>
             </div>
         `;
+
+      if (window.CharacterBond) window.CharacterBond.decorateChatListItem(item, chat);
 
       const unreadCount = chat.unreadCount || 0;
       const unreadEl = item.querySelector('.unread-count');

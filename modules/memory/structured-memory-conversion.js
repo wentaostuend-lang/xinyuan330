@@ -177,9 +177,11 @@ async function convertLongTermMemoryToStructured(chatId) {
 async function triggerStructuredMemorySummary(chatId, forceUpdate = false) {
   const chat = state.chats[chatId];
   if (!chat || !window.structuredMemoryManager) return;
+  window._structuredMemoryExtractionLocks ||= new Set();
+  if (window._structuredMemoryExtractionLocks.has(chatId)) return;
 
   const lastTimestamp = chat.lastStructuredMemoryTimestamp || 0;
-  const messagesToSummarize = chat.history.filter(m => m.timestamp > lastTimestamp && (!m.isHidden || (m.role === 'system' && m.content.includes('内心独白'))));
+  const messagesToSummarize = (chat.history || []).filter(m => Number(m?.timestamp) > lastTimestamp && (!m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白'))));
 
   console.log(`[结构化记忆] 检查更新: 上次时间戳=${lastTimestamp}, 待总结消息=${messagesToSummarize.length}条`);
 
@@ -188,6 +190,12 @@ async function triggerStructuredMemorySummary(chatId, forceUpdate = false) {
     console.log(`[结构化记忆] 消息数量不足(${messagesToSummarize.length}/5)，跳过本次更新`);
     return;
   }
+  if (messagesToSummarize.length === 0) {
+    if (forceUpdate) showToast('没有新的对话需要提取', 'info');
+    return;
+  }
+
+  window._structuredMemoryExtractionLocks.add(chatId);
 
   const userNickname = chat.settings.myNickname || (state.qzoneSettings.nickname || '用户');
   const startMsg = messagesToSummarize[0];
@@ -201,7 +209,7 @@ async function triggerStructuredMemorySummary(chatId, forceUpdate = false) {
 
   // 格式化对话历史
   const formattedHistory = messagesToSummarize.map(msg => {
-    if (msg.isHidden && msg.role === 'system' && msg.content.includes('内心独白')) return msg.content;
+    if (msg.isHidden && msg.role === 'system' && typeof msg.content === 'string' && msg.content.includes('内心独白')) return msg.content;
     if (msg.isHidden) return null;
     let sender = msg.role === 'user' ? userNickname : (msg.senderName || chat.originalName);
     let contentToSummarize = '';
@@ -272,14 +280,13 @@ async function triggerStructuredMemorySummary(chatId, forceUpdate = false) {
         console.log(`[结构化记忆] 虽无有效条目，但已更新时间戳避免重复处理`);
       }
     }
+    return entries.length;
   } catch (error) {
     console.error('[结构化记忆] 总结出错:', error);
-    // 即使出错，也更新时间戳，避免一直卡在同一批消息上
-    if (messagesToSummarize.length > 0) {
-      chat.lastStructuredMemoryTimestamp = endMsg.timestamp;
-      await db.chats.put(chat);
-      console.log(`[结构化记忆] 虽然出错，但已更新时间戳以避免死循环`);
-    }
+    showToast(`结构化记忆提取失败：${error.message}`, 'error');
+    return null;
+  } finally {
+    window._structuredMemoryExtractionLocks.delete(chatId);
   }
 }
 

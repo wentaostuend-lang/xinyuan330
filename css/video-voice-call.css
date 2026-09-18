@@ -1182,7 +1182,44 @@
            }
 
            #phone-screen.dark-mode .post-actions-btn:hover {
-               background-color: #333;
+               background-color: rgba(255, 255, 255, 0.1);
+               color: #fff;
+           }
+
+           #phone-screen.dark-mode .post-actions-btn:active {
+               background-color: rgba(255, 255, 255, 0.16);
+           }
+
+           #phone-screen.dark-mode #post-actions-modal #custom-modal {
+               background: rgba(36, 36, 38, 0.92);
+               border-color: rgba(255, 255, 255, 0.12);
+               box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+           }
+
+           #phone-screen.dark-mode #post-actions-modal .custom-modal-footer button {
+               color: #f2f2f7;
+           }
+
+           #phone-screen.dark-mode #post-actions-modal .custom-modal-footer button:hover {
+               background-color: rgba(255, 255, 255, 0.08);
+           }
+
+           #phone-screen.dark-mode #post-actions-modal .custom-modal-footer button:active {
+               background-color: rgba(255, 255, 255, 0.14);
+           }
+
+           #phone-screen.dark-mode #post-actions-modal #cancel-post-action-btn {
+               background-color: rgba(255, 255, 255, 0.08);
+               color: #98989f;
+           }
+
+           #phone-screen.dark-mode #post-actions-modal #cancel-post-action-btn:hover {
+               background-color: rgba(255, 255, 255, 0.12);
+               color: #fff;
+           }
+
+           #phone-screen.dark-mode #post-actions-modal #cancel-post-action-btn:active {
+               background-color: rgba(255, 255, 255, 0.18);
            }
 
            #phone-screen.dark-mode .at-mention-popup {
@@ -1244,4 +1281,3 @@
                border-color: #555;
                color: #fff;
            }
-

@@ -62,6 +62,10 @@
               let assistantMsgObject = {
                 type: msg.type || 'text'
               };
+              if (msg.actorType === 'pet') {
+                assistantMsgObject.speakerType = 'pet';
+                assistantMsgObject.name = msg.senderName || chat.sharedPet?.name || '小精灵';
+              }
               if (msg.type === 'sticker') {
 
                 assistantMsgObject.meaning = msg.meaning;
@@ -193,10 +197,13 @@
 
       // 记录API请求数据
       const requestData = {
+        schemaVersion: 2,
         timestamp: Date.now(),
         chatId: chatId,
         chatName: chat.name,
         model: model,
+        requestSource: 'chat',
+        provider: isGemini ? 'gemini' : 'openai-compatible',
         systemPrompt: systemPrompt,
         messages: isGemini ? messagesPayload : [{
           role: 'system',
@@ -209,7 +216,18 @@
         ...(state.globalSettings.apiFrequencyPenaltyEnabled && state.globalSettings.apiFrequencyPenalty !== undefined ? { frequency_penalty: state.globalSettings.apiFrequencyPenalty } : {}),
         stream: useStream,
         isGemini: isGemini,
-        apiUrl: isGemini ? geminiConfig.url : `${proxyUrl}/v1/chat/completions`
+        apiUrl: (() => {
+          const rawUrl = isGemini ? geminiConfig.url : `${proxyUrl}/v1/chat/completions`;
+          try {
+            const safeUrl = new URL(rawUrl, window.location.href);
+            ['key', 'api_key', 'apikey', 'token', 'access_token', 'authorization'].forEach(name => {
+              if (safeUrl.searchParams.has(name)) safeUrl.searchParams.set(name, '[REDACTED]');
+            });
+            return safeUrl.toString();
+          } catch (_) {
+            return String(rawUrl).replace(/([?&](?:key|api_key|apikey|token|access_token|authorization)=)[^&#]*/gi, '$1[REDACTED]');
+          }
+        })()
       };
 
       // 回复守护只保存恢复所需元数据，不保存 API Key 或完整提示词。
@@ -425,6 +443,7 @@
         responseStatus: response.status,
         responseStatusText: response.statusText
       };
+      responseData.durationMs = responseData.responseTimestamp - responseData.timestamp;
 
       // 方案4：只有在全局设置中启用API历史记录时才保存
       if (state.globalSettings.enableApiHistory) {
@@ -452,7 +471,7 @@
       }
 
       let consolidatedMessages = [];
-      if (chat.settings.isOfflineMode) {
+      if (chat.settings.isOfflineMode && !messagesArray.some(message => message?.speakerType === 'pet')) {
 
         let offlineBuffer = {
           content: [],
@@ -590,6 +609,11 @@
           }
         }
 
+        if (window.CharacterBond && !window.CharacterBond.isAllowedPetMessage(msgData, chat)) {
+          console.warn('已拦截共同宠物无权执行的指令:', msgData.type);
+          continue;
+        }
+
         if (msgData.type === 'video_call_response') {
           videoCallState.isAwaitingResponse = false;
           if (msgData.decision === 'accept') {
@@ -668,11 +692,14 @@
 
         let aiMessage = null;
         const currentMessageTimestamp = messageTimestamp++;
-        const baseMessage = {
+        let baseMessage = {
           role: 'assistant',
           senderName: msgData.name || chat.name,
           timestamp: currentMessageTimestamp
         };
+        if (window.CharacterBond && !chat.isGroup) {
+          baseMessage = window.CharacterBond.decorateAssistantBase(baseMessage, msgData, chat);
+        }
 
         lastResponseTimestamps.push(currentMessageTimestamp);
 

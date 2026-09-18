@@ -240,7 +240,6 @@
     document.getElementById('chat-expand-btn')?.addEventListener('click', () => {
       document.body.classList.toggle('chat-actions-expanded');
     });
-    document.getElementById('profile-edit-btn')?.addEventListener('click', openThoughtEditor);
     document.getElementById('open-quick-reply-btn')?.addEventListener('click', openQuickReplyModal);
     
     // ========== 旁白功能 ==========
@@ -261,7 +260,7 @@
         const chat = state.chats[state.activeChatId];
         const narrationMessage = {
           role: 'system',
-          type: 'pat_message',
+          type: 'narration',
           content: narrationText.trim(),
           timestamp: Date.now()
         };

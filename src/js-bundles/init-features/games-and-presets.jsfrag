@@ -174,9 +174,7 @@
         `## 世界书《${book.name}》设定:\n${book.content.filter(e => e.enabled).map(e => `- ${e.content}`).join('\n')}`
       ).join('\n');
 
-      const longTermMemory = chat.longTermMemory && chat.longTermMemory.length > 0
-        ? chat.longTermMemory.map(mem => `- ${mem.content}`).join('\n')
-        : '';
+      const longTermMemory = getMemoryContextForPrompt(chat);
 
       const shortTermMemory = chat.history.slice(-10).map(msg =>
         `${msg.role === 'user' ? userNickname : chat.name}: ${String(msg.content)}`
@@ -304,9 +302,7 @@
         ).join('\n');
 
         // 3. 长期记忆
-        const longTermMemory = chat.longTermMemory && chat.longTermMemory.length > 0
-          ? chat.longTermMemory.map(mem => `- ${mem.content}`).join('\n')
-          : '';
+        const longTermMemory = getMemoryContextForPrompt(chat);
 
         // 4. 短期记忆（主聊天最近的对话）
         const shortTermMemory = chat.history.slice(-15).map(msg =>

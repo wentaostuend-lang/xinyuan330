@@ -126,6 +126,11 @@
     }
     const chat = state.chats[chatId];
     if (!chat) return;
+    if (window.CharacterBond && !chat.isGroup) {
+      window.CharacterBond.ensureChat(chat);
+      window.CharacterBond.reconcile(chat);
+      await db.chats.put(chat);
+    }
 
     // 检查是否有待处理的购物车清空通知
     if (chat.pendingCartClearNotification && !chat.isGroup) {

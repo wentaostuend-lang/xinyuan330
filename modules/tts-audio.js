@@ -325,7 +325,23 @@
         // 优先使用标签上的ID，如果没有则用设置里的
         if (!voiceId) voiceId = chat.settings.minimaxVoiceId;
         // 【关键修复】获取用户在设置中选择的语言/方言
-        if (chat.settings.ttsLanguage) ttsLanguage = chat.settings.ttsLanguage;
+        if (chat.settings.ttsLanguage) {
+          ttsLanguage = chat.settings.ttsLanguage;
+        } else if (window.languagePolicy && chat.settings.enableBilingualMode) {
+          const policy = window.languagePolicy.getPolicy(chat);
+          const selectedLanguage = policy.ttsReadMode === 'translation'
+            ? (policy.translationMode === 'interface'
+              ? (localStorage.getItem('ephone-language') === 'en' ? 'en-US' : 'zh-Hans-CN')
+              : policy.translationLanguage)
+            : policy.outputLanguage;
+          const languageMap = {
+            'zh-Hans-CN': 'zh-CN', 'zh-Hant-TW': 'zh-CN', 'zh-Hant-HK': 'zh-HK',
+            'yue-Hant-HK': 'zh-HK', 'yue-Hans-CN': 'zh-HK', 'en-GB': 'en-US',
+            'ko-KR': 'ko-KR', 'ja-JP': 'ja-JP', 'fr-FR': 'fr-FR', 'de-DE': 'de-DE',
+            'es-MX': 'es-ES', 'pt-PT': 'pt-BR'
+          };
+          ttsLanguage = languageMap[selectedLanguage] || selectedLanguage || ttsLanguage;
+        }
       }
 
       // 处理"仅读取对话"功能
@@ -587,21 +603,18 @@
       const originalContent = bodyElement.dataset.originalContent;
       
       if (originalContent) {
-        // 有双语内容：显示外语 + 中文翻译
+        // 有双语内容：显示角色原文与目标译文。
         const decodedOriginal = decodeURIComponent(originalContent);
-        
-        // 提取外语部分（去掉〖〗中的内容）
-        const foreignText = decodedOriginal.replace(/[〖【][^〗】]*[〗】]/g, '').trim();
-        
-        // 提取中文翻译
-        const translationMatches = decodedOriginal.match(/[〖【]\s*([^〗】]+?)\s*[〗】]/g);
-        let translation = '';
-        if (translationMatches && translationMatches.length > 0) {
-          translation = translationMatches
-            .map(m => m.replace(/[〖【〗】]/g, '').trim())
-            .filter(t => t.length > 0)
-            .join(' ');
-        }
+        const languageParts = window.languagePolicy
+          ? window.languagePolicy.splitContent(decodedOriginal)
+          : null;
+        const foreignText = languageParts
+          ? languageParts.sourceText
+          : decodedOriginal.replace(/[〖【][^〗】]*[〗】]/g, '').trim();
+        const translationMatches = languageParts ? null : decodedOriginal.match(/[〖【]\s*([^〗】]+?)\s*[〗】]/g);
+        const translation = languageParts
+          ? languageParts.translationText
+          : (translationMatches || []).map(m => m.replace(/[〖【〗】]/g, '').trim()).filter(Boolean).join(' ');
         
         // 构建显示内容：外语 + 换行 + 中文翻译
         if (translation) {
@@ -713,11 +726,12 @@
       return bubble.dataset.cachedTranslation;
     }
     
-    // 【调试日志】
-    console.log('[双语调试] 原始内容:', content);
-    console.log('[双语调试] 内容长度:', content.length);
-    console.log('[双语调试] 包含〖:', content.includes('〖'));
-    console.log('[双语调试] 包含〗:', content.includes('〗'));
+    if (window.languagePolicy) {
+      const translation = window.languagePolicy.splitContent(content).translationText;
+      if (!translation) return null;
+      bubble.dataset.cachedTranslation = translation;
+      return translation;
+    }
     
     // 【预处理】清理可能的隐藏字符和统一符号
     let cleanedContent = content

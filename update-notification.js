@@ -32,7 +32,7 @@ class UpdateNotification {
       <div class="update-item">6. 新增网络音频批量导入；本地批量导入会从文件名识别歌名与歌手。</div>
       <div class="update-item">7. 优化本地歌曲保存和空播放列表提示，导入失败时会自动回退为本地保存。</div>
       <div class="update-item">8. 优化聊天列表点击、长按交互、功能页加载、图片显示与自动相册定时任务的稳定性。</div>
-      <div class="update-item important-note">致谢：角色手机与“我的手机”播放器中的本地歌曲 Blob URL 回收逻辑，参考并改写自穗穗 / 笨蛋小姐的 <a href="https://github.com/yxlforever/YYY/commit/ece2d6bec633ced55c89af3871f96c97ebf3aa7e" target="_blank" rel="noopener noreferrer" style="color: #4A9EFF;">yxlforever/YYY ece2d6b 提交</a>。详见项目内《致谢与第三方引用说明》。</div>
+      <div class="update-item important-note">致谢：语音通话持久化与资源治理、事件防重、API 历史兼容、iOS 安全区、播放器资源回收及启动装配思路，参考并按本项目结构改写自穗穗 / 笨蛋小姐的 <a href="https://github.com/yxlforever/YYY" target="_blank" rel="noopener noreferrer" style="color: #4A9EFF;">yxlforever/YYY</a> 与 <a href="https://github.com/wq70/xinyuan330/pull/1" target="_blank" rel="noopener noreferrer" style="color: #4A9EFF;">xinyuan330 PR #1</a>。既有对 1900 老师、330 老师、毛绒草莓老师及其他贡献者的感谢继续保留，具体来源见项目内《致谢与第三方引用说明》。</div>
     `;
 
     return `

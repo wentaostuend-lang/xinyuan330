@@ -23,6 +23,14 @@ window.initEventBindingsB = function(state, db) {
     // 收藏夹选择模式相关变量
     var selectedFavorites = new Set();
 
+    const cloneVectorMemoryForArchive = (memory) => {
+      if (!memory) return null;
+      const copied = JSON.parse(JSON.stringify(memory));
+      if (copied.settings) delete copied.settings.embeddingApiKey;
+      delete copied._retrievalCache;
+      return copied;
+    };
+
     // ==================== 记忆库功能 ====================
 
     // 保存记忆存档
@@ -49,6 +57,11 @@ window.initEventBindingsB = function(state, db) {
 
             // 长期记忆（总结的记忆）
             longTermMemory: chat.longTermMemory ? JSON.parse(JSON.stringify(chat.longTermMemory)) : [],
+            structuredMemory: chat.structuredMemory ? JSON.parse(JSON.stringify(chat.structuredMemory)) : null,
+            variableMemory: cloneVectorMemoryForArchive(chat.variableMemory),
+            vectorMemory: cloneVectorMemoryForArchive(chat.vectorMemory),
+            lastMemorySummaryTimestamp: chat.lastMemorySummaryTimestamp || 0,
+            lastStructuredMemoryTimestamp: chat.lastStructuredMemoryTimestamp || 0,
 
             // 人设和头像
             settings: {
@@ -65,11 +78,18 @@ window.initEventBindingsB = function(state, db) {
               enableAutoMemory: chat.settings.enableAutoMemory,
               autoMemoryInterval: chat.settings.autoMemoryInterval,
               enableDiaryMode: chat.settings.enableDiaryMode,
+              memoryMode: chat.settings.memoryMode,
+              enableStructuredMemory: chat.settings.enableStructuredMemory,
+              longTermMemoryLimit: chat.settings.longTermMemoryLimit,
 
               // 语音通话
               enableTts: chat.settings.enableTts,
               minimaxVoiceId: chat.settings.minimaxVoiceId,
               ttsLanguage: chat.settings.ttsLanguage,
+              enableBilingualMode: chat.settings.enableBilingualMode,
+              bilingualDisplayMode: chat.settings.bilingualDisplayMode,
+              bilingualCharacters: [...(chat.settings.bilingualCharacters || [])],
+              languagePolicy: chat.settings.languagePolicy ? JSON.parse(JSON.stringify(chat.settings.languagePolicy)) : null,
 
               // 预设
               linkedWorldBookIds: [...(chat.settings.linkedWorldBookIds || [])],
@@ -190,11 +210,31 @@ window.initEventBindingsB = function(state, db) {
       if (!confirmed) return;
 
       try {
+        const currentEmbeddingApiKey = chat.variableMemory?.settings?.embeddingApiKey || chat.vectorMemory?.settings?.embeddingApiKey || '';
         // 恢复聊天记录
         chat.history = JSON.parse(JSON.stringify(archive.data.history));
 
         // 恢复长期记忆（总结的记忆）
         chat.longTermMemory = archive.data.longTermMemory ? JSON.parse(JSON.stringify(archive.data.longTermMemory)) : [];
+        if (Object.prototype.hasOwnProperty.call(archive.data, 'structuredMemory')) {
+          chat.structuredMemory = archive.data.structuredMemory ? JSON.parse(JSON.stringify(archive.data.structuredMemory)) : null;
+        }
+        if (Object.prototype.hasOwnProperty.call(archive.data, 'variableMemory')) {
+          chat.variableMemory = archive.data.variableMemory ? JSON.parse(JSON.stringify(archive.data.variableMemory)) : null;
+        }
+        if (Object.prototype.hasOwnProperty.call(archive.data, 'vectorMemory')) {
+          chat.vectorMemory = archive.data.vectorMemory ? JSON.parse(JSON.stringify(archive.data.vectorMemory)) : null;
+        }
+        if (currentEmbeddingApiKey) {
+          if (chat.variableMemory?.settings) chat.variableMemory.settings.embeddingApiKey = currentEmbeddingApiKey;
+          if (chat.vectorMemory?.settings) chat.vectorMemory.settings.embeddingApiKey = currentEmbeddingApiKey;
+        }
+        if (Object.prototype.hasOwnProperty.call(archive.data, 'lastMemorySummaryTimestamp')) {
+          chat.lastMemorySummaryTimestamp = archive.data.lastMemorySummaryTimestamp || 0;
+        }
+        if (Object.prototype.hasOwnProperty.call(archive.data, 'lastStructuredMemoryTimestamp')) {
+          chat.lastStructuredMemoryTimestamp = archive.data.lastStructuredMemoryTimestamp || 0;
+        }
 
         // 恢复所有设置
         const savedSettings = archive.data.settings;
@@ -209,9 +249,16 @@ window.initEventBindingsB = function(state, db) {
         chat.settings.enableAutoMemory = savedSettings.enableAutoMemory;
         chat.settings.autoMemoryInterval = savedSettings.autoMemoryInterval;
         chat.settings.enableDiaryMode = savedSettings.enableDiaryMode || false;
+        if (savedSettings.memoryMode !== undefined) chat.settings.memoryMode = savedSettings.memoryMode;
+        if (savedSettings.enableStructuredMemory !== undefined) chat.settings.enableStructuredMemory = savedSettings.enableStructuredMemory;
+        if (savedSettings.longTermMemoryLimit !== undefined) chat.settings.longTermMemoryLimit = savedSettings.longTermMemoryLimit;
         chat.settings.enableTts = savedSettings.enableTts;
         chat.settings.minimaxVoiceId = savedSettings.minimaxVoiceId;
         chat.settings.ttsLanguage = savedSettings.ttsLanguage;
+        if (savedSettings.enableBilingualMode !== undefined) chat.settings.enableBilingualMode = savedSettings.enableBilingualMode;
+        if (savedSettings.bilingualDisplayMode !== undefined) chat.settings.bilingualDisplayMode = savedSettings.bilingualDisplayMode;
+        if (savedSettings.bilingualCharacters !== undefined) chat.settings.bilingualCharacters = [...(savedSettings.bilingualCharacters || [])];
+        if (savedSettings.languagePolicy !== undefined) chat.settings.languagePolicy = savedSettings.languagePolicy ? JSON.parse(JSON.stringify(savedSettings.languagePolicy)) : null;
         chat.settings.linkedWorldBookIds = [...(savedSettings.linkedWorldBookIds || [])];
         chat.settings.offlinePresetId = savedSettings.offlinePresetId;
         chat.settings.theme = savedSettings.theme;
@@ -542,6 +589,60 @@ window.initEventBindingsB = function(state, db) {
       }
     });
 
+    function normalizeApiHistoryTimestamp(value, fallback = null) {
+      if (value === null || value === undefined || value === '') return fallback;
+      const numericValue = typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number(value) : value;
+      const timestamp = numericValue instanceof Date ? numericValue.getTime() : new Date(numericValue).getTime();
+      return Number.isFinite(timestamp) ? timestamp : fallback;
+    }
+
+    function redactApiHistoryUrl(value) {
+      if (!value) return '';
+      try {
+        const url = new URL(String(value), window.location.href);
+        ['key', 'api_key', 'apikey', 'token', 'access_token', 'authorization'].forEach(name => {
+          if (url.searchParams.has(name)) url.searchParams.set(name, '[REDACTED]');
+        });
+        return url.toString();
+      } catch (_) {
+        return String(value).replace(/([?&](?:key|api_key|apikey|token|access_token|authorization)=)[^&#]*/gi, '$1[REDACTED]');
+      }
+    }
+
+    function normalizeApiHistoryRecord(record = {}) {
+      const timestamp = normalizeApiHistoryTimestamp(
+        record.timestamp ?? record.requestTimestamp ?? record.createdAt,
+        0
+      );
+      const responseTimestamp = normalizeApiHistoryTimestamp(
+        record.responseTimestamp ?? record.completedAt ?? record.endTime,
+        null
+      );
+      const rawDuration = Number(record.durationMs ?? record.elapsedMs);
+      const durationMs = Number.isFinite(rawDuration) && rawDuration >= 0
+        ? rawDuration
+        : (responseTimestamp ? Math.max(0, responseTimestamp - timestamp) : null);
+      const messages = Array.isArray(record.messages)
+        ? record.messages
+        : (Array.isArray(record.requestMessages) ? record.requestMessages : []);
+      const aiResponseContent = typeof record.aiResponseContent === 'string'
+        ? record.aiResponseContent
+        : (typeof record.response === 'string' ? record.response : '');
+      return {
+        ...record,
+        schemaVersion: Number(record.schemaVersion) || 2,
+        timestamp,
+        responseTimestamp,
+        durationMs,
+        messages,
+        model: String(record.model || record.modelName || '未知'),
+        temperature: record.temperature ?? '未记录',
+        apiUrl: redactApiHistoryUrl(record.apiUrl || record.url || ''),
+        aiResponseContent,
+        responseData: record.responseData ?? record.rawResponse ?? null
+      };
+    }
+
     // 渲染API历史列表
     function renderApiHistoryList() {
       if (!state.activeChatId) return;
@@ -554,13 +655,15 @@ window.initEventBindingsB = function(state, db) {
       }
 
       // 按时间倒序排列（最新的在前）
-      const history = [...chat.apiHistory].reverse();
+      const history = [...chat.apiHistory].reverse().map(normalizeApiHistoryRecord);
 
       listContainer.innerHTML = history.map((record, index) => {
         const date = new Date(record.timestamp);
-        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+        const dateStr = record.timestamp > 0
+          ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`
+          : '时间未知';
 
-        const duration = record.responseTimestamp ? `${Math.round((record.responseTimestamp - record.timestamp) / 1000)}秒` : '未完成';
+        const duration = record.durationMs !== null ? `${Math.round(record.durationMs / 100) / 10}秒` : '未完成';
         const reversedIndex = chat.apiHistory.length - index;
 
         // 计算提示词和响应的字符数
@@ -593,7 +696,7 @@ window.initEventBindingsB = function(state, db) {
                 模型: ${escapeHTML(record.model)}
               </span>
               <span style="font-size: 12px; padding: 4px 8px; background: var(--bg-secondary); border-radius: 4px;">
-                温度: ${record.temperature}
+                温度: ${escapeHTML(String(record.temperature))}
               </span>
               <span style="font-size: 12px; padding: 4px 8px; background: var(--bg-secondary); border-radius: 4px;">
                 提示词: ${promptLength.toLocaleString()} 字符
@@ -635,7 +738,7 @@ window.initEventBindingsB = function(state, db) {
       listContainer.querySelectorAll('.view-messages-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const index = parseInt(btn.dataset.index);
-          const record = chat.apiHistory[index];
+          const record = normalizeApiHistoryRecord(chat.apiHistory[index]);
           const messagesContent = JSON.stringify(record.messages, null, 2);
           showApiHistoryDetail('发送消息内容', messagesContent, 'json');
         });
@@ -644,7 +747,7 @@ window.initEventBindingsB = function(state, db) {
       listContainer.querySelectorAll('.view-response-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const index = parseInt(btn.dataset.index);
-          const record = chat.apiHistory[index];
+          const record = normalizeApiHistoryRecord(chat.apiHistory[index]);
           showApiHistoryDetail('AI响应内容', record.aiResponseContent, 'text');
         });
       });
@@ -652,7 +755,7 @@ window.initEventBindingsB = function(state, db) {
       listContainer.querySelectorAll('.view-raw-data-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const index = parseInt(btn.dataset.index);
-          const record = chat.apiHistory[index];
+          const record = normalizeApiHistoryRecord(chat.apiHistory[index]);
           showApiHistoryDetail('原始响应数据', JSON.stringify(record.responseData, null, 2), 'json');
         });
       });
@@ -821,6 +924,25 @@ window.initEventBindingsB = function(state, db) {
         
         if (shouldClearMemory) {
            chat.longTermMemory = [];
+           if (chat.structuredMemory) {
+             const customCategories = JSON.parse(JSON.stringify(chat.structuredMemory._customCategories || {}));
+             const emptyCustom = Object.fromEntries(Object.keys(customCategories).map(code => [code, []]));
+             chat.structuredMemory = { facts: {}, events: {}, decisions: [], plans: [], relationship: '', emotions: [], _customCategories: customCategories, _custom: emptyCustom };
+           }
+           if (chat.variableMemory) {
+             chat.variableMemory.fragments = [];
+             chat.variableMemory.timelineSummaries = {};
+             chat.variableMemory.stats = { totalFragments: 0, totalRecalls: 0, lastUpdated: Date.now() };
+             chat.variableMemory._retrievalCache = { query: '', resultIds: [], timestamp: 0, msgCount: 0 };
+             if (chat.variableMemory.settings) chat.variableMemory.settings.lastExtractedMsgIndex = -1;
+           }
+           if (chat.vectorMemory) {
+             chat.vectorMemory.coreMemories = [];
+             chat.vectorMemory.fragments = [];
+             chat.vectorMemory.stats = { totalFragments: 0, totalRecalls: 0, lastUpdated: Date.now() };
+           }
+           chat.lastMemorySummaryTimestamp = 0;
+           chat.lastStructuredMemoryTimestamp = 0;
         }
 
         // 重置角色状态为默认的"在线"
@@ -1077,6 +1199,12 @@ window.initEventBindingsB = function(state, db) {
       waimaiModal.classList.add('visible');
     });
 
+    const waimaiCloseBtn = document.getElementById('waimai-close-btn');
+    if (waimaiCloseBtn) {
+      waimaiCloseBtn.addEventListener('click', () => {
+        waimaiModal.classList.remove('visible');
+      });
+    }
 
     waimaiModal.addEventListener('click', (e) => {
 
@@ -1841,8 +1969,9 @@ window.initEventBindingsB = function(state, db) {
         commentInput.focus();
         return;
       }
-      if (target.classList.contains('post-actions-btn')) {
-        const container = target.closest('.qzone-post-container');
+      const actionsBtn = target.closest('.post-actions-btn');
+      if (actionsBtn) {
+        const container = actionsBtn.closest('.qzone-post-container');
         if (container && container.dataset.postId) showPostActions(parseInt(container.dataset.postId));
         return;
       }
@@ -2130,25 +2259,6 @@ window.initEventBindingsB = function(state, db) {
 
 
     document.getElementById('switch-greeting-btn').addEventListener('click', handleSwitchGreeting);
-
-    document.getElementById('thoughts-history-list').addEventListener('click', (e) => {
-      if (e.target && e.target.id === 'load-more-thoughts-btn') {
-        loadMoreThoughts();
-      }
-    });
-
-
-
-
-    document.getElementById('profile-history-icon-btn').addEventListener('click', showThoughtsHistory);
-
-    document.getElementById('history-back-btn').addEventListener('click', hideThoughtsHistory);
-    document.getElementById('character-profile-modal').addEventListener('click', (e) => {
-
-      if (e.target.id === 'character-profile-modal') {
-        e.target.classList.remove('visible');
-      }
-    });
 
     document.getElementById('manage-stickers-btn').addEventListener('click', toggleStickerManagementMode);
     document.getElementById('delete-selected-stickers-btn').addEventListener('click', executeBatchDeleteStickers);
@@ -2653,19 +2763,68 @@ window.initEventBindingsB = function(state, db) {
     document.getElementById('voice-call-restore-btn').addEventListener('click', restoreVoiceCall);
     makeDraggable(document.getElementById('voice-call-restore-btn'), document.getElementById('voice-call-restore-btn'));
     document.getElementById('voice-join-call-btn').addEventListener('click', handleUserJoinVoiceCall);
-    document.getElementById('voice-user-speak-btn').addEventListener('click', async () => {
-      if (!voiceCallState.isActive) return;
+    const voiceUserSpeakButton = document.getElementById('voice-user-speak-btn');
+    let suppressVoiceCallClick = false;
+    const getVoiceCallInputMode = () => state.chats[voiceCallState.activeChatId]?.settings?.voiceCallInputMode || 'text';
+    const setUserVoiceSpeaking = speaking => {
       const userAvatar = document.querySelector('#voice-participant-avatars-grid .participant-avatar-wrapper[data-participant-id="user"] .participant-avatar');
-      if (userAvatar) {
-        userAvatar.classList.add('speaking');
+      userAvatar?.classList.toggle('speaking', speaking);
+    };
+    const finishVoiceCallRecording = async cancelled => {
+      setUserVoiceSpeaking(false);
+      const result = await window.voiceRecording?.stopCallRecording(cancelled);
+      if (result?.text) triggerAiInVoiceCallAction(result.text, result);
+    };
+    window.addEventListener('real-voice-call-result', event => {
+      setUserVoiceSpeaking(false);
+      const result = event.detail;
+      if (voiceCallState.isActive && result?.text) triggerAiInVoiceCallAction(result.text, result);
+    });
+    voiceUserSpeakButton.addEventListener('click', async () => {
+      if (!voiceCallState.isActive) return;
+      if (suppressVoiceCallClick) {
+        suppressVoiceCallClick = false;
+        return;
       }
+      const inputMode = getVoiceCallInputMode();
+      if (inputMode === 'tap' && window.voiceRecording) {
+        if (window.voiceRecording.isRecording('call')) await finishVoiceCallRecording(false);
+        else {
+          setUserVoiceSpeaking(true);
+          const started = await window.voiceRecording.startCallRecording();
+          if (!started) setUserVoiceSpeaking(false);
+        }
+        return;
+      }
+      if (inputMode !== 'text' && !window.voiceRecording) showToast('真实语音组件尚未加载，已切换为文字输入', 'error');
+      setUserVoiceSpeaking(true);
       const userInput = await showCustomPrompt('你说', '请输入你想说的话...');
-      if (userAvatar) {
-        userAvatar.classList.remove('speaking');
-      }
+      setUserVoiceSpeaking(false);
       if (userInput && userInput.trim()) {
         triggerAiInVoiceCallAction(userInput.trim());
       }
+    });
+    voiceUserSpeakButton.addEventListener('pointerdown', async event => {
+      if (!voiceCallState.isActive || getVoiceCallInputMode() !== 'hold' || !window.voiceRecording) return;
+      event.preventDefault();
+      suppressVoiceCallClick = true;
+      try { voiceUserSpeakButton.setPointerCapture(event.pointerId); } catch (error) { /* Optional. */ }
+      setUserVoiceSpeaking(true);
+      const started = await window.voiceRecording.startCallRecording();
+      if (!started) setUserVoiceSpeaking(false);
+    });
+    voiceUserSpeakButton.addEventListener('pointerup', event => {
+      if (getVoiceCallInputMode() !== 'hold' || !window.voiceRecording) return;
+      event.preventDefault();
+      finishVoiceCallRecording(false);
+      setTimeout(() => { suppressVoiceCallClick = false; }, 0);
+    });
+    voiceUserSpeakButton.addEventListener('pointercancel', () => {
+      suppressVoiceCallClick = false;
+      if (getVoiceCallInputMode() === 'hold') finishVoiceCallRecording(true);
+    });
+    voiceUserSpeakButton.addEventListener('contextmenu', event => {
+      if (getVoiceCallInputMode() === 'hold') event.preventDefault();
     });
     document.getElementById('voice-regenerate-call-btn').addEventListener('click', () => {
       if (!voiceCallState.isActive) return;
@@ -3171,6 +3330,13 @@ window.initEventBindingsB = function(state, db) {
     document.getElementById('cancel-share-link-btn').addEventListener('click', () => {
       document.getElementById('share-link-modal').classList.remove('visible');
     });
+
+    const closeShareLinkBtn = document.getElementById('close-share-link-btn');
+    if (closeShareLinkBtn) {
+      closeShareLinkBtn.addEventListener('click', () => {
+        document.getElementById('share-link-modal').classList.remove('visible');
+      });
+    }
 
 
     document.getElementById('confirm-share-link-btn').addEventListener('click', sendUserLinkShare);
@@ -3859,6 +4025,10 @@ window.initEventBindingsB = function(state, db) {
           namesToMention = namesToMention.concat(memberNames);
         }
 
+        if (!chat.isGroup && window.CharacterBond && window.CharacterBond.petIsUsable(chat)) {
+          namesToMention.push({ name: chat.sharedPet.name, type: 'pet' });
+        }
+
         chatMentionPopup.innerHTML = '';
 
         if (namesToMention.length > 0) {
@@ -3939,9 +4109,6 @@ window.initEventBindingsB = function(state, db) {
 
 
     document.getElementById('add-manual-memory-btn-header').addEventListener('click', handleAddManualMemory);
-
-    const exportBtn = document.getElementById('export-original-memory-btn');
-    if(exportBtn) exportBtn.addEventListener('click', handleExportLongTermMemory);
 
     document.getElementById('summarize-recent-btn-header').addEventListener('click', handleManualSummary);
 
@@ -4094,7 +4261,7 @@ window.initEventBindingsB = function(state, db) {
       if (isProductManagementMode) {
         openProductEditor(null);
       } else {
-        alert("请先点击扳手图标进入管理模式，才能添加新商品。");
+        showCustomAlert("提示", "请先点击扳手图标进入管理模式，才能添加新商品。");
       }
     });
 
@@ -4278,7 +4445,10 @@ window.initEventBindingsB = function(state, db) {
 
 };
 
-  // ========== 邮箱相关事件绑定 ==========
+  // 邮箱绑定统一由 mail-app.js 管理，避免生成、删除等操作重复触发。
+  window.initMailAppBindings?.();
+  if (false) {
+  // ========== 旧邮箱相关事件绑定（保留作历史兼容参考，不再执行） ==========
   const deleteSelectedEmailBtn = document.getElementById('mail-delete-selected-btn');
   if (deleteSelectedEmailBtn) {
     deleteSelectedEmailBtn.addEventListener('click', executeBatchDeleteEmails);
@@ -4339,9 +4509,7 @@ window.initEventBindingsB = function(state, db) {
           characterContext = "\n# 【重要】指定发件人的详细档案 (请根据这些信息生成个性化邮件)\n";
 
           activeChars.forEach(chat => {
-            const memory = (chat.longTermMemory && chat.longTermMemory.length > 0)
-              ? chat.longTermMemory.map(m => m.content).join('; ')
-              : '暂无';
+            const memory = getMemoryContextForPrompt(chat) || '暂无';
 
             const recentHistory = chat.history
               .filter(m => !m.isHidden)
@@ -4445,4 +4613,5 @@ ${allowRandom ? "- 允许生成随机路人/系统通知/垃圾邮件 (如: 银�
   const mailSearchInput = document.getElementById('mail-search-input');
   if (mailSearchInput) {
     mailSearchInput.addEventListener('input', renderEmailList);
+  }
   }

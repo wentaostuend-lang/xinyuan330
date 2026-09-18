@@ -83,7 +83,8 @@
       return text;
     }
 
-    return text.replace(/@\[\[([^\]]+)\]\]/g, (match, originalName) => {
+    const petProcessedText = window.CharacterBond ? window.CharacterBond.displayMentions(text, chat) : text;
+    return petProcessedText.replace(/@\[\[([^\]]+)\]\]/g, (match, originalName) => {
       const trimmedOriginalName = originalName.trim();
       let displayName;
 
@@ -147,6 +148,12 @@
 
     const chat = state.chats[chatId];
     if (!chat) return;
+    if (window.CharacterBond) {
+      window.CharacterBond.ensureChat(chat);
+      window.CharacterBond.reconcile(chat);
+      window.CharacterBond.refreshVisibleUi(chat);
+    }
+    if (window.voiceRecording?.refreshAvailability) window.voiceRecording.refreshAvailability(chat);
 
     const messagesContainer = document.getElementById('chat-messages');
     disposeChatMessageDom();
@@ -227,6 +234,11 @@
     cleanupWaimaiTimers();
     const chat = state.chats[chatId];
     if (!chat) return;
+    if (window.CharacterBond) {
+      window.CharacterBond.ensureChat(chat);
+      window.CharacterBond.reconcile(chat);
+      window.CharacterBond.refreshVisibleUi(chat);
+    }
 
     exitSelectionMode();
 

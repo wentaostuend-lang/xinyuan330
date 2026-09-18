@@ -264,39 +264,124 @@
                   <select id="ai-voice-lang-select" class="settings-select" style="width: 100%; text-align: right;">
                     <option value=""> 自动识别 (Auto)</option>
                     <hr disabled>
-                    <option value="zh-CN">🇨🇳 国语/普通话 (Chinese)</option>
-                    <option value="zh-HK">🇭🇰 粤语/广东话 (Cantonese)</option>
-                    <option value="en-US">🇺🇸 英语 (English)</option>
-                    <option value="ja-JP">🇯🇵 日语 (Japanese)</option>
-                    <option value="ko-KR">🇰🇷 韩语 (Korean)</option>
+                    <option value="zh-CN">国语/普通话 (Chinese)</option>
+                    <option value="zh-HK">粤语/广东话 (Cantonese)</option>
+                    <option value="en-US">英语 (English)</option>
+                    <option value="ja-JP">日语 (Japanese)</option>
+                    <option value="ko-KR">韩语 (Korean)</option>
                     <hr disabled>
-                    <option value="de-DE">🇩🇪 德语 (German)</option>
-                    <option value="fr-FR">🇫🇷 法语 (French)</option>
-                    <option value="es-ES">🇪🇸 西班牙语 (Spanish)</option>
-                    <option value="it-IT">🇮🇹 意大利语 (Italian)</option>
-                    <option value="ru-RU">🇷🇺 俄语 (Russian)</option>
-                    <option value="pt-BR">🇧🇷 葡萄牙语 (Portuguese)</option>
-                    <option value="nl-NL">🇳🇱 荷兰语 (Dutch)</option>
-                    <option value="pl-PL">🇵🇱 波兰语 (Polish)</option>
-                    <option value="sv-SE">🇸🇪 瑞典语 (Swedish)</option>
+                    <option value="de-DE">德语 (German)</option>
+                    <option value="fr-FR">法语 (French)</option>
+                    <option value="es-ES">西班牙语 (Spanish)</option>
+                    <option value="it-IT">意大利语 (Italian)</option>
+                    <option value="ru-RU">俄语 (Russian)</option>
+                    <option value="pt-BR">葡萄牙语 (Portuguese)</option>
+                    <option value="nl-NL">荷兰语 (Dutch)</option>
+                    <option value="pl-PL">波兰语 (Polish)</option>
+                    <option value="sv-SE">瑞典语 (Swedish)</option>
                     <hr disabled>
-                    <option value="tr-TR">🇹🇷 土耳其语 (Turkish)</option>
-                    <option value="id-ID">🇮🇩 印尼语 (Indonesian)</option>
-                    <option value="ms-MY">🇲🇾 马来语 (Malay)</option>
-                    <option value="vi-VN">🇻🇳 越南语 (Vietnamese)</option>
-                    <option value="th-TH">🇹🇭 泰语 (Thai)</option>
-                    <option value="hi-IN">🇮🇳 印地语 (Hindi)</option>
-                   <option value="ar-SA">🇸🇦 阿拉伯语 (Arabic)</option>
+                    <option value="tr-TR">土耳其语 (Turkish)</option>
+                    <option value="id-ID">印尼语 (Indonesian)</option>
+                    <option value="ms-MY">马来语 (Malay)</option>
+                    <option value="vi-VN">越南语 (Vietnamese)</option>
+                    <option value="th-TH">泰语 (Thai)</option>
+                    <option value="hi-IN">印地语 (Hindi)</option>
+                   <option value="ar-SA">阿拉伯语 (Arabic)</option>
                  </select>
                </div>
             </div>
-            <div class="settings-item" id="ai-voice-speed-group">
+             <div class="settings-item" id="ai-voice-speed-group">
                <label>语音速度</label>
                <div class="settings-right">
                  <input type="number" id="ai-voice-speed-input" min="0.5" max="2.0" step="0.1" value="1.0" style="width: 80px; text-align: right; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-bg); color: var(--text-color);">
                  <span style="margin-left: 5px; color: var(--text-secondary); font-size: 12px;">x</span>
                </div>
-            </div>
+             </div>
+             <div class="voice-input-settings" id="voice-input-settings">
+               <div class="settings-item" id="real-voice-enable-group">
+                 <div style="flex: 1; padding-right: 10px;">
+                   <label style="margin-bottom: 2px;">启用真实语音</label>
+                   <div class="settings-desc">保留原有模拟语音，并允许录制、发送和播放你的原声</div>
+                 </div>
+                 <label class="toggle-switch" style="margin: 0;"><input type="checkbox" id="enable-real-voice-switch"><span class="slider"></span></label>
+               </div>
+               <div id="real-voice-config-container" style="display: none;">
+                 <div class="voice-settings-note">安卓/iOS 建议选“自动”或“后台转文字”；Gemini 音频理解使用当前 Gemini API 配置，Claude/DeepSeek 请走转写接口。</div>
+                 <div class="settings-item voice-config-row">
+                   <label for="real-voice-operation-select">聊天录音方式</label>
+                   <select id="real-voice-operation-select" class="settings-select voice-settings-select">
+                     <option value="tap">点击开始/结束</option>
+                     <option value="hold">按住说话</option>
+                   </select>
+                 </div>
+                 <div class="settings-item voice-config-row">
+                   <label for="voice-understanding-mode-select">角色理解方式</label>
+                   <select id="voice-understanding-mode-select" class="settings-select voice-settings-select">
+                     <option value="auto">自动选择</option>
+                     <option value="transcription">后台转文字</option>
+                     <option value="gemini">Gemini 音频理解</option>
+                     <option value="browser">浏览器识别（旧方式）</option>
+                     <option value="none">仅发送原声</option>
+                   </select>
+                 </div>
+                 <div id="voice-transcription-settings" class="voice-nested-settings">
+                   <div class="settings-item voice-field-row">
+                     <label for="voice-transcription-url-input">转写接口</label>
+                     <input type="url" id="voice-transcription-url-input" class="voice-settings-input" placeholder="OpenAI 兼容 /audio/transcriptions">
+                   </div>
+                   <div class="settings-item voice-field-row">
+                     <label for="voice-transcription-model-input">转写模型</label>
+                     <input type="text" id="voice-transcription-model-input" class="voice-settings-input" placeholder="whisper-1">
+                   </div>
+                   <div class="settings-item voice-field-row">
+                     <label for="voice-transcription-key-input">转写密钥</label>
+                     <input type="password" id="voice-transcription-key-input" class="voice-settings-input" autocomplete="off" placeholder="留空时使用主 API Key">
+                   </div>
+                 </div>
+                 <div class="settings-item voice-config-row">
+                   <label for="voice-max-duration-select">最长录音</label>
+                   <select id="voice-max-duration-select" class="settings-select voice-settings-select">
+                     <option value="30">30 秒</option>
+                     <option value="60">60 秒</option>
+                     <option value="120">120 秒</option>
+                   </select>
+                 </div>
+                 <div class="settings-item">
+                   <div style="flex: 1; padding-right: 10px;">
+                     <label style="margin-bottom: 2px;">发送前确认文字</label>
+                     <div class="settings-desc">识别失败也不会丢失录音，可手动补充或直接发送原声</div>
+                   </div>
+                   <label class="toggle-switch" style="margin: 0;"><input type="checkbox" id="voice-confirm-transcript-switch"><span class="slider"></span></label>
+                 </div>
+                 <div class="voice-settings-title voice-call-settings-title">语音电话输入</div>
+                 <div class="settings-item voice-config-row">
+                   <label for="voice-call-input-mode-select">我的说话方式</label>
+                   <select id="voice-call-input-mode-select" class="settings-select voice-settings-select">
+                     <option value="text">文字输入（原方式）</option>
+                     <option value="hold">按住说话</option>
+                     <option value="tap">点击开始/结束</option>
+                   </select>
+                 </div>
+                 <div class="settings-item voice-config-row">
+                   <label for="voice-call-understanding-select">电话理解方式</label>
+                   <select id="voice-call-understanding-select" class="settings-select voice-settings-select">
+                     <option value="same">跟随聊天设置</option>
+                     <option value="auto">自动选择</option>
+                     <option value="transcription">后台转文字</option>
+                     <option value="gemini">Gemini 音频理解</option>
+                     <option value="browser">浏览器识别（旧方式）</option>
+                     <option value="none">仅记录原声</option>
+                   </select>
+                 </div>
+                 <div class="settings-item">
+                   <div style="flex: 1; padding-right: 10px;">
+                     <label style="margin-bottom: 2px;">识别失败可补文字</label>
+                     <div class="settings-desc">保留电话原有文字输入作为可恢复操作</div>
+                   </div>
+                   <label class="toggle-switch" style="margin: 0;"><input type="checkbox" id="voice-call-text-fallback-switch"><span class="slider"></span></label>
+                 </div>
+               </div>
+             </div>
  <div class="settings-item" id="synth-music-group">
     <div>
         <label>启用乐谱合成</label>
@@ -321,8 +406,8 @@
 <!-- 双语模式设置 -->
 <div class="settings-item" id="bilingual-mode-group" style="display: flex; justify-content: space-between; align-items: center;">
     <div style="flex: 1; padding-right: 10px;">
-        <label style="margin-bottom: 2px;">启用双语模式</label>
-        <div class="settings-desc">AI回复会同时包含外语和中文翻译，点击消息可切换显示</div>
+        <label style="margin-bottom: 2px;">启用语言与翻译</label>
+        <div class="settings-desc">可自动或手动指定角色输出语言、翻译语言和语音朗读内容</div>
     </div>
     <label class="toggle-switch" style="margin: 0;"> 
         <input type="checkbox" id="bilingual-mode-toggle"> 
@@ -330,10 +415,120 @@
     </label>
 </div>
 
+<div id="language-policy-settings" style="display: none;">
+    <div class="settings-item language-policy-row">
+        <label for="language-output-mode-select">角色输出语言</label>
+        <div class="language-policy-control">
+            <select id="language-output-mode-select" class="settings-select">
+                <option value="auto">自动选择</option>
+                <option value="persona">根据角色设定并保持</option>
+                <option value="user">跟随用户语言</option>
+                <option value="fixed">手动指定</option>
+            </select>
+        </div>
+    </div>
+    <div class="settings-item language-policy-row" id="language-output-custom-row" style="display: none;">
+        <label for="language-output-input">指定输出语言</label>
+        <div class="language-policy-control">
+            <input type="text" id="language-output-input" class="language-policy-input" autocomplete="off" placeholder="搜索或直接描述语言、方言">
+            <div id="language-output-suggestions" class="language-suggestions"></div>
+        </div>
+    </div>
+    <div class="settings-item language-policy-row">
+        <label for="language-translation-mode-select">翻译语言</label>
+        <div class="language-policy-control">
+            <select id="language-translation-mode-select" class="settings-select">
+                <option value="fixed">手动指定</option>
+                <option value="interface">跟随应用语言</option>
+                <option value="none">不生成翻译</option>
+            </select>
+        </div>
+    </div>
+    <div class="settings-item language-policy-row" id="language-translation-custom-row">
+        <label for="language-translation-input">指定翻译语言</label>
+        <div class="language-policy-control">
+            <input type="text" id="language-translation-input" class="language-policy-input" autocomplete="off" placeholder="如 zh-Hans-CN 或自然语言描述">
+            <div id="language-translation-suggestions" class="language-suggestions"></div>
+        </div>
+    </div>
+    <div class="settings-item language-policy-row">
+        <label for="language-tts-read-mode-select">语音朗读内容</label>
+        <div class="language-policy-control">
+            <select id="language-tts-read-mode-select" class="settings-select">
+                <option value="source">只朗读角色原文</option>
+                <option value="translation">只朗读翻译</option>
+                <option value="both">先原文后翻译</option>
+            </select>
+        </div>
+    </div>
+    <div class="settings-item-block">
+        <button type="button" id="language-advanced-toggle" class="language-advanced-toggle" aria-expanded="false">
+            <span>高级语言设置</span>
+            <span class="language-expand-mark">展开</span>
+        </button>
+    </div>
+    <div id="language-advanced-panel" hidden>
+        <div class="settings-item language-advanced-row">
+            <label for="language-switch-policy-select">语言保持方式</label>
+            <div class="language-policy-control">
+                <select id="language-switch-policy-select" class="settings-select">
+                    <option value="dynamic">按情境自然切换</option>
+                    <option value="strict">严格保持指定语言</option>
+                    <option value="explicit">仅明确要求时切换</option>
+                    <option value="natural">主体固定，允许少量夹杂</option>
+                </select>
+            </div>
+        </div>
+        <div class="settings-item language-advanced-row">
+            <label for="language-translation-style-select">翻译风格</label>
+            <div class="language-policy-control">
+                <select id="language-translation-style-select" class="settings-select">
+                    <option value="natural">自然口语，保留语气</option>
+                    <option value="faithful">忠实准确</option>
+                    <option value="concise">简洁意译</option>
+                    <option value="custom">按自定义规则</option>
+                </select>
+            </div>
+        </div>
+        <div class="settings-item language-advanced-row">
+            <label for="language-narration-mode-select">旁白语言</label>
+            <div class="language-policy-control">
+                <select id="language-narration-mode-select" class="settings-select">
+                    <option value="inherit">沿用现有旁白规则</option>
+                    <option value="translation">使用翻译语言</option>
+                    <option value="fixed">手动指定</option>
+                </select>
+            </div>
+        </div>
+        <div class="settings-item language-advanced-row" id="language-narration-custom-row" style="display: none;">
+            <label for="language-narration-input">指定旁白语言</label>
+            <div class="language-policy-control">
+                <input type="text" id="language-narration-input" class="language-policy-input" autocomplete="off" placeholder="搜索或直接描述">
+                <div id="language-narration-suggestions" class="language-suggestions"></div>
+            </div>
+        </div>
+        <div class="settings-item-block">
+            <label for="language-custom-instruction">自定义语言规则</label>
+            <div class="settings-desc">可描述方言、时代、敬语、夹杂条件、架空语言或任何特殊表达要求。</div>
+            <textarea id="language-custom-instruction" class="language-policy-textarea" placeholder="例如：即使用户使用中文也保持韩语；对长辈使用敬语。"></textarea>
+        </div>
+        <div class="settings-item-block">
+            <label for="language-examples-input">语言示例</label>
+            <div class="settings-desc">可填写角色会怎样说、不会怎样说，以及架空词汇的固定含义。</div>
+            <textarea id="language-examples-input" class="language-policy-textarea" placeholder="填写原文、译文或正反示例"></textarea>
+        </div>
+        <div class="settings-item-block" id="language-member-overrides-group" style="display: none;">
+            <label>群聊成员语言覆盖</label>
+            <div class="settings-desc">留空即沿用群聊设置；可直接输入任意语言、方言或自定义描述。</div>
+            <div id="language-member-overrides-list" class="language-member-list"></div>
+        </div>
+    </div>
+</div>
+
 <!-- 双语模式生效角色 (仅群聊) -->
 <div class="settings-item-block" id="bilingual-characters-group" style="display: none;"> 
-    <label>双语生效角色 (仅群聊)</label>
-    <div class="settings-desc">勾选需要输出双语的角色，未勾选的将只输出单语（如果不勾选任何角色，则等同于全员双语）。</div>
+    <label>语言与翻译生效角色 (仅群聊)</label>
+    <div class="settings-desc">勾选需要应用语言与翻译规则的角色，未勾选的保持原有单语输出（如果不勾选任何角色，则等同于全员生效）。</div>
     <div class="custom-multiselect" style="margin-top: 5px; position: relative;" id="bilingual-chars-multiselect">
         <div class="select-box"> <span class="selected-options-text">-- 点击选择 --</span> <span class="arrow-down">▼</span> </div>
         <div id="bilingual-chars-checkboxes-container" class="checkboxes-container"> </div>
@@ -415,8 +610,146 @@
 
             <!-- 时间感知 -->
             <div class="settings-item" id="time-perception-group">
-                <label>时间感知</label>
+                <div style="min-width: 0; flex: 1; padding-right: 10px;">
+                    <label>时间感知</label>
+                    <div class="settings-desc time-awareness-inline-desc">让角色感知当前时间与互动间隔</div>
+                </div>
                 <label class="toggle-switch"> <input type="checkbox" id="time-perception-toggle"> <span class="slider"></span> </label>
+            </div>
+
+            <div id="time-awareness-settings" class="time-awareness-settings" style="display: none;">
+                <div class="settings-item time-awareness-compact-row">
+                    <label for="time-awareness-preset-select">感知方式</label>
+                    <select id="time-awareness-preset-select" class="settings-select time-awareness-select">
+                        <option value="adaptive">角色自主（推荐）</option>
+                        <option value="subtle">轻微</option>
+                        <option value="natural">自然</option>
+                        <option value="strong">强烈</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div id="time-awareness-preset-summary" class="time-awareness-summary"></div>
+
+                <button type="button" id="time-awareness-advanced-toggle" class="time-awareness-disclosure" aria-expanded="false">
+                    <span>高级时间感知设置</span>
+                    <span class="time-awareness-disclosure-state">展开</span>
+                </button>
+
+                <div id="time-awareness-advanced-panel" class="time-awareness-advanced-panel" hidden>
+                    <div class="time-awareness-subtitle">回来判定</div>
+                    <div class="settings-item time-awareness-compact-row">
+                        <label for="time-awareness-min-gap-input">至少离开</label>
+                        <div class="time-awareness-number-control">
+                            <input type="number" id="time-awareness-min-gap-input" class="settings-num-input" min="0" max="525600" step="1" value="180">
+                            <span>分钟</span>
+                        </div>
+                    </div>
+                    <div class="settings-item time-awareness-compact-row">
+                        <label for="time-awareness-duration-style-select">时长表达</label>
+                        <select id="time-awareness-duration-style-select" class="settings-select time-awareness-select">
+                            <option value="vague">模糊自然</option>
+                            <option value="approximate">大致时长</option>
+                            <option value="exact">准确时长</option>
+                        </select>
+                    </div>
+                    <div class="settings-item time-awareness-compact-row">
+                        <label for="time-awareness-frequency-select">回应频率</label>
+                        <select id="time-awareness-frequency-select" class="settings-select time-awareness-select">
+                            <option value="autonomous">角色自主</option>
+                            <option value="rare">偶尔</option>
+                            <option value="moderate">适中</option>
+                            <option value="frequent">经常</option>
+                            <option value="always">每次回来</option>
+                        </select>
+                    </div>
+                    <div id="time-awareness-group-options" hidden>
+                        <div class="settings-item time-awareness-compact-row">
+                            <label for="time-awareness-group-gap-basis">群聊间隔依据</label>
+                            <select id="time-awareness-group-gap-basis" class="settings-select time-awareness-select">
+                                <option value="groupSilence">群聊整体沉默</option>
+                                <option value="userAbsence">用户未在群里发言</option>
+                            </select>
+                        </div>
+                        <div class="settings-item time-awareness-compact-row">
+                            <label for="time-awareness-group-max-responders">最多回应角色</label>
+                            <div class="time-awareness-number-control">
+                                <input type="number" id="time-awareness-group-max-responders" class="settings-num-input" min="1" max="20" step="1" value="1">
+                                <span>人</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="time-awareness-subtitle">提供给角色的信息</div>
+                    <div class="time-awareness-toggle-grid">
+                        <label><input type="checkbox" id="time-awareness-fact-date"> 日期与星期</label>
+                        <label><input type="checkbox" id="time-awareness-fact-time"> 当前时刻</label>
+                        <label><input type="checkbox" id="time-awareness-fact-period"> 早晚时段</label>
+                        <label><input type="checkbox" id="time-awareness-fact-gap"> 离开时长</label>
+                        <label><input type="checkbox" id="time-awareness-fact-last-time"> 上次互动时间</label>
+                        <label><input type="checkbox" id="time-awareness-fact-cross-day"> 是否跨天</label>
+                    </div>
+
+                    <div class="time-awareness-subtitle">角色反应权限</div>
+                    <div class="time-awareness-toggle-list">
+                        <label><span>允许直接提到离开时间</span><input type="checkbox" id="time-awareness-allow-mention"></label>
+                        <label><span>允许用情绪、想念、担心或不满体现</span><input type="checkbox" id="time-awareness-allow-emotion"></label>
+                        <label><span>允许询问或分享最近的事情</span><input type="checkbox" id="time-awareness-allow-updates"></label>
+                        <label><span>允许在自然时开启新话题</span><input type="checkbox" id="time-awareness-allow-new-topic"></label>
+                        <label><span>允许继续尚未结束的话题</span><input type="checkbox" id="time-awareness-allow-continue"></label>
+                        <label><span>优先回应用户当前消息</span><input type="checkbox" id="time-awareness-prioritize-current"></label>
+                        <label><span>根据角色人设和双方关系调整</span><input type="checkbox" id="time-awareness-persona-aware"></label>
+                        <label><span>离开越久，允许反应越明显</span><input type="checkbox" id="time-awareness-scale-gap"></label>
+                        <label><span>避免机械使用“好久不见”</span><input type="checkbox" id="time-awareness-avoid-cliche"></label>
+                        <label><span>只在回来后的第一轮处理时间差</span><input type="checkbox" id="time-awareness-first-reply-only"></label>
+                    </div>
+
+                    <div class="time-awareness-subtitle">回来反应提示词</div>
+                    <div class="settings-item time-awareness-compact-row">
+                        <label for="time-awareness-prompt-mode-select">使用方式</label>
+                        <select id="time-awareness-prompt-mode-select" class="settings-select time-awareness-select">
+                            <option value="builtin">使用内置规则</option>
+                            <option value="append">内置规则＋我的补充</option>
+                            <option value="replace">完全替换反应规则</option>
+                        </select>
+                    </div>
+                    <div id="time-awareness-prompt-editor" class="time-awareness-prompt-editor" hidden>
+                        <div class="time-awareness-variable-hint">留空时自动回退内置规则。可用变量：{{当前时间}} {{时间段}} {{离开时长}} {{上次互动时间}} {{角色名}} {{用户昵称}} {{双方关系}} {{最近对话状态}}</div>
+                        <textarea id="time-awareness-custom-prompt" class="time-awareness-textarea" rows="7" placeholder="写下角色在用户回来时应如何反应……"></textarea>
+                        <div class="time-awareness-actions">
+                            <button type="button" id="time-awareness-reset-prompt-btn">恢复档位默认</button>
+                            <button type="button" id="time-awareness-copy-prompt-btn">复制</button>
+                        </div>
+                    </div>
+
+                    <div class="time-awareness-subtitle">模拟预览</div>
+                    <div class="time-awareness-preview-controls">
+                        <select id="time-awareness-preview-gap" class="settings-select">
+                            <option value="10">离开 10 分钟</option>
+                            <option value="180">离开 3 小时</option>
+                            <option value="2880">离开 2 天</option>
+                            <option value="43200">离开 30 天</option>
+                        </select>
+                        <button type="button" id="time-awareness-preview-btn">生成预览</button>
+                    </div>
+                    <pre id="time-awareness-preview-output" class="time-awareness-preview-output" hidden></pre>
+
+                    <div class="time-awareness-subtitle">暂停与后台</div>
+                    <div class="time-awareness-toggle-list">
+                        <label><span>世界时间暂停时不累计离开时长</span><input type="checkbox" id="time-awareness-pause-gap"></label>
+                        <label><span>世界时间暂停时暂停本聊天后台活动</span><input type="checkbox" id="time-awareness-pause-background"></label>
+                        <label><span>立即暂停本聊天后台活动</span><input type="checkbox" id="time-awareness-background-paused"></label>
+                        <label><span>后台主动行动也使用自定义回来规则</span><input type="checkbox" id="time-awareness-prompt-in-background"></label>
+                    </div>
+
+                    <div class="time-awareness-actions time-awareness-default-actions">
+                        <button type="button" id="time-awareness-save-default-btn">保存为全局默认</button>
+                        <button type="button" id="time-awareness-load-default-btn">载入全局默认</button>
+                        <button type="button" id="time-awareness-export-btn">导出配置</button>
+                        <button type="button" id="time-awareness-import-btn">导入配置</button>
+                        <input type="file" id="time-awareness-import-file" accept=".json" hidden>
+                        <button type="button" id="time-awareness-apply-all-btn">应用到全部聊天</button>
+                    </div>
+                </div>
             </div>
 
             <!-- 一起听时长感知 -->
@@ -473,6 +806,10 @@
                     <div style="font-size: 12px; color: #999; margin-top: 5px;">
                         当前设置：<span id="custom-time-preview" style="color: #007AFF; font-weight: 500;">未设置</span>
                     </div>
+                    <div class="time-awareness-clock-actions">
+                        <button type="button" id="custom-time-pause-btn">暂停世界时间</button>
+                        <span id="custom-time-pause-status">运行中</span>
+                    </div>
                 </div>
             </div>
              
@@ -511,11 +848,11 @@
             
             <div class="settings-item-block">
                 <label>气泡主题</label>
-                 <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                 <div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;">
                     <select id="theme-preset-select" class="settings-select" style="flex:1; margin-right:10px;"></select>
-                    <div style="display:flex; gap:5px;">
-                        <button id="save-theme-preset-btn" class="settings-icon-btn">💾</button>
-                        <button id="delete-theme-preset-btn" class="settings-icon-btn" style="color:#ff3b30;">🗑️</button>
+                    <div style="display:flex; gap:6px;">
+                        <button id="save-theme-preset-btn" class="settings-mini-btn" title="保存预设" style="padding: 4px 8px; font-size: 12px;">保存</button>
+                        <button id="delete-theme-preset-btn" class="settings-mini-btn" title="删除预设" style="padding: 4px 8px; font-size: 12px; color:#ff3b30;">删除</button>
                     </div>
                  </div>
                  <!-- 补全所有主题选项 -->
@@ -639,16 +976,34 @@
         <span class="back-btn" onclick="showScreen('home-screen')">‹</span> 
         <span data-lang-key="homeAppRenderer">渲染规则</span> 
         <div class="header-actions">
-            <span class="action-btn" id="import-rules-btn" title="导入规则">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <div class="rules-more-wrapper">
+                <span class="action-btn" id="rules-more-btn" title="更多操作" aria-haspopup="true" aria-expanded="false">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="1.5" fill="currentColor"></circle>
+                        <circle cx="19" cy="12" r="1.5" fill="currentColor"></circle>
+                        <circle cx="5" cy="12" r="1.5" fill="currentColor"></circle>
+                    </svg>
+                </span>
+                <div class="rules-dropdown-menu" id="rules-more-menu" style="display: none;">
+                    <button type="button" class="rules-dropdown-item" id="import-rules-btn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        <span>导入规则</span>
+                    </button>
+                    <button type="button" class="rules-dropdown-item" id="manage-rules-btn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                            <polyline points="9 11 12 14 22 4"></polyline>
+                        </svg>
+                        <span id="manage-rules-btn-text">批量管理</span>
+                    </button>
+                </div>
+            </div>
+            <span class="action-btn" id="rules-exit-manage-btn" title="完成管理" style="display: none;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
             </span>
-            <span class="action-btn" id="manage-rules-btn" title="管理/多选">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-        <polyline points="9 11 12 14 22 4"></polyline>
-    </svg>
-</span>
-            <span class="action-btn" id="add-new-rule-btn">+</span> 
+            <span class="action-btn" id="add-new-rule-btn" title="创建新规则">+</span> 
         </div>
       </div>
       <div id="rules-tabs"> </div>

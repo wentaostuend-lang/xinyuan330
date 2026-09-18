@@ -385,64 +385,263 @@
       <div id="browser-content" class="list-container"> </div>
     </div>
     <div id="font-settings-screen" class="screen">
-      <div class="header"> <span class="back-btn" onclick="showScreen('home-screen')">‹</span> <span data-lang-key="fontSettingsTitle">字体设置</span> <span style="width: 30px;"></span> </div>
-      <div class="form-container">
-        <h3 style="margin-top:0; border-bottom: 1px solid #eee; padding-bottom: 10px;"data-lang-key="fontPresetManagement">字体预设管理</h3>
-        <div class="form-group"> <label for="font-preset-select"data-lang-key="apiPresetSelectLabel">选择或切换预设</label>
-          <div style="display: flex; gap: 10px; align-items: center;"> <select id="font-preset-select" style="flex-grow: 1;"></select> <button id="save-font-preset-btn" class="form-button-secondary" style="margin-top: 0; padding: 12px;"data-lang-key="save">保存</button> <button id="delete-font-preset-btn"
-              class="form-button-secondary" style="margin-top: 0; padding: 12px; background-color: #ffebee; color: #d32f2f; border-color: #ffcdd2;"data-lang-key="delete">删除</button> </div>
-        </div>
-        <hr style="margin: 30px 0; opacity: 0.3;">
-        <div class="form-group"> <label for="font-url-input" data-lang-key="fontFileUrlLabel">字体文件URL (.ttf, .otf, .woff等)</label> <input type="text" id="font-url-input" placeholder="https://..../font.ttf"> </div>
-        <div class="form-group">
-          <label data-lang-key="fontLocalUploadLabel">或上传本地字体文件</label>
-          <div style="display: flex; gap: 10px; align-items: center;">
-            <button class="form-button-secondary" id="font-local-upload-btn" style="margin-top:0; flex-shrink:0;" data-lang-key="fontLocalUploadBtn">选择本地字体</button>
-            <span id="font-local-filename" style="font-size:13px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
-            <input type="file" id="font-local-file-input" accept=".ttf,.otf,.woff,.woff2,.eot" style="display:none;">
-          </div>
-          <p id="font-local-warning" style="font-size:12px; color:#e67e22; margin-top:6px; display:none;" data-lang-key="fontLocalSizeWarning">⚠️ 本地字体文件较大，可能导致应用卡顿或闪退。建议使用 5MB 以下的字体文件。</p>
-          <button id="font-local-clear-btn" class="form-button-secondary" style="margin-top:8px; display:none; background-color:#ffebee; color:#d32f2f; border-color:#ffcdd2;" data-lang-key="fontLocalClearBtn">清除本地字体</button>
-        </div>
-        <div class="form-group">
-          <label>字体大小 <span id="font-size-value">16</span>px</label>
-          <input type="range" id="font-size-slider" min="10" max="28" value="16" step="1" style="width:100%;">
-        </div>
-        <div class="form-group"> <label data-lang-key="fontPreviewLabel">实时预览</label>
-          <div id="font-preview">
-            <p style="font-size: 20px; margin: 0 0 10px 0;">你好世界 Hello World</p>
-            <p style="margin: 0;">这是字体预览效果，12345。</p>
-          </div>
-        </div>
-        <hr style="margin: 30px 0; opacity: 0.3;">
-        <div class="form-group">
-          <label>字体应用范围</label>
-          <div class="font-scope-container">
-            <label class="font-scope-item font-scope-all">
-              <input type="checkbox" id="font-scope-all" checked>
-              <span>全部应用</span>
-            </label>
-            <div id="font-scope-list" class="font-scope-list" style="display:none;">
-              <label class="font-scope-item"><input type="checkbox" data-scope="homeScreen" checked><span>主屏幕</span></label>
-              <label class="font-scope-item"><input type="checkbox" data-scope="qq" checked><span>QQ (聊天)</span></label>
-              <label class="font-scope-item"><input type="checkbox" data-scope="cphone" checked><span>Cphone</span></label>
-              <label class="font-scope-item"><input type="checkbox" data-scope="myphone" checked><span>Myphone</span></label>
-              <label class="font-scope-item"><input type="checkbox" data-scope="worldBook" checked><span>世界书</span></label>
-              <label class="font-scope-item"><input type="checkbox" data-scope="douban" checked><span>豆瓣</span></label>
-              <label class="font-scope-item"><input type="checkbox" data-scope="alipay" checked><span>支付宝</span></label>
-              <label class="font-scope-item"><input type="checkbox" data-scope="settings" checked><span>设置页面</span></label>
+      <!-- 1. iOS 原生毛玻璃顶部导航栏 -->
+      <div class="font-ios-header">
+        <button class="font-nav-back back-btn" onclick="showScreen('home-screen')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+          <span data-lang-key="back">设置</span>
+        </button>
+        <div class="font-nav-title" data-lang-key="fontSettingsTitle">字体设置</div>
+        <button class="font-header-save-btn" id="save-font-btn">保存</button>
+      </div>
+
+      <!-- 2. 主体滚动容器 (iOS Inset Grouped) -->
+      <div class="font-scroll-container">
+
+        <!-- 实时预览开关与效果展示舱 (默认折叠) -->
+        <div class="font-ios-group font-preview-group">
+          <div class="font-ios-group-card">
+            <div class="font-ios-cell font-preview-toggle-cell">
+              <div class="font-cell-left">
+                <div class="font-cell-icon" style="background: linear-gradient(135deg, #34c759, #30b0c7);">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                </div>
+                <div class="font-cell-texts">
+                  <span class="font-cell-main" data-lang-key="fontPreviewLabel">字体效果预览</span>
+                  <span class="font-cell-sub">跟随设置实时流体渲染</span>
+                </div>
+              </div>
+              <label class="ios-switch">
+                <input type="checkbox" id="font-preview-toggle">
+                <span class="ios-switch-slider"></span>
+              </label>
+            </div>
+            <div id="font-preview-container" class="font-preview-collapsible" style="display: none;">
+              <div class="font-preview-stage">
+                <div id="font-preview">
+                  <div class="preview-bubbles wechat-style-bubbles">
+                    <div class="preview-msg-wrap preview-msg-left">
+                      <div class="preview-msg ai">有些仿生人看起来很漂亮；她发现自己会被他们吸引。</div>
+                    </div>
+                    <div class="preview-msg-wrap preview-msg-right">
+                      <div class="preview-msg user">理智上明知道他们是机器，情感上却还是会作出反应。</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        <button class="form-button" id="save-font-btn"data-lang-key="fontSaveAndApply">保存并应用</button>
-        <button class="form-button form-button-secondary" id="reset-font-scope-btn">按区域恢复默认字体</button>
-        <button class="form-button form-button-secondary" id="reset-font-btn"data-lang-key="fontResetDefault">全部恢复默认字体</button>
+
+        <!-- 字级调节分组 -->
+        <div class="font-ios-group">
+          <div class="font-ios-group-title">文字大小</div>
+          <div class="font-ios-group-card">
+            <div class="font-slider-box">
+              <div class="font-slider-header">
+                <span class="font-cell-main">基准显示字号</span>
+                <div class="font-size-controls">
+                  <span class="font-size-badge"><span id="font-size-value">16</span> px</span>
+                  <button type="button" id="reset-font-size-btn" class="font-reset-pill-btn">重置</button>
+                </div>
+              </div>
+              <div class="font-slider-track">
+                <span class="slider-sym-sm">A</span>
+                <input type="range" id="font-size-slider" min="10" max="28" value="16" step="1">
+                <span class="slider-sym-lg">A</span>
+              </div>
+            </div>
+          </div>
+          <div class="font-ios-group-footer">拖动滑块调节全局及各应用模块的默认文字缩放比例。</div>
+        </div>
+
+        <!-- 预设管理分组 -->
+        <div class="font-ios-group">
+          <div class="font-ios-group-title" data-lang-key="fontPresetManagement">字体预设管理</div>
+          <div class="font-ios-group-card">
+            <div class="font-ios-cell">
+              <div class="font-select-wrapper">
+                <select id="font-preset-select"></select>
+                <span class="font-select-arrow">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </span>
+              </div>
+              <div class="font-action-pills">
+                <button id="save-font-preset-btn" data-lang-key="save">保存</button>
+                <button id="delete-font-preset-btn" data-lang-key="delete">删除</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 字体来源分组 (网络 URL 与 本地文件) -->
+        <div class="font-ios-group">
+          <div class="font-ios-group-title">自定义字体源</div>
+          <div class="font-ios-group-card">
+
+            <!-- 网络字体链接 -->
+            <div class="font-input-box">
+              <span class="font-input-label" data-lang-key="fontFileUrlLabel">字体文件网络链接 (.ttf, .otf, .woff, .woff2等)</span>
+              <div class="font-input-relative">
+                <span class="font-input-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                  </svg>
+                </span>
+                <input type="text" id="font-url-input" placeholder="https://..../font.ttf">
+              </div>
+            </div>
+
+            <!-- 分割线 -->
+            <div style="height: 0.5px; background: rgba(60, 60, 67, 0.12); margin: 2px 16px;"></div>
+
+            <!-- 本地文件上传 -->
+            <div class="font-local-row">
+              <div class="font-local-info">
+                <div class="font-format-badge">TTF</div>
+                <div class="font-local-texts">
+                  <span id="font-local-filename">未选择本地字体</span>
+                  <span class="font-local-desc" data-lang-key="fontLocalUploadLabel">或上传本地字体文件</span>
+                </div>
+              </div>
+              <div class="font-action-pills">
+                <button id="font-local-upload-btn" data-lang-key="fontLocalUploadBtn">选择文件</button>
+                <button id="font-local-clear-btn" style="display:none;" data-lang-key="fontLocalClearBtn">清除</button>
+                <input type="file" id="font-local-file-input" accept=".ttf,.otf,.woff,.woff2,.eot" style="display:none;">
+              </div>
+            </div>
+
+            <!-- 本地文件过大警示 -->
+            <div id="font-local-warning" data-lang-key="fontLocalSizeWarning">
+              ⚠️ 本地字体文件较大，可能导致应用卡顿或闪退。建议使用 5MB 以下的字体文件。
+            </div>
+
+          </div>
+          <div class="font-ios-group-footer">推荐优先使用网络 CDN 字体链接，加载更为迅速且不占用本地储存。</div>
+        </div>
+
+        <!-- 字体应用范围分组 -->
+        <div class="font-ios-group">
+          <div class="font-ios-group-title">字体应用范围</div>
+          <div class="font-ios-group-card font-scope-container">
+
+            <!-- 全部应用主开关 -->
+            <div class="font-ios-cell font-scope-item font-scope-all">
+              <div class="font-cell-left">
+                <div class="font-cell-icon" style="background: linear-gradient(135deg, #007aff, #5856d6);">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line></svg>
+                </div>
+                <div class="font-cell-texts">
+                  <span class="font-cell-main">全部应用</span>
+                  <span class="font-cell-sub">关闭后可按独立界面自主开关</span>
+                </div>
+              </div>
+              <label class="ios-switch">
+                <input type="checkbox" id="font-scope-all" checked>
+                <span class="ios-switch-slider"></span>
+              </label>
+            </div>
+
+            <!-- 子区域列表 -->
+            <div id="font-scope-list" class="font-scope-list" style="display:none;">
+
+              <label class="font-ios-cell clickable font-scope-item">
+                <div class="font-cell-left">
+                  <div class="font-cell-icon" style="background: #34c759;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg></div>
+                  <span class="font-cell-main">主屏幕</span>
+                </div>
+                <input type="checkbox" class="font-scope-real-cb" data-scope="homeScreen" checked>
+                <div class="font-scope-checkbox-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+              </label>
+
+              <label class="font-ios-cell clickable font-scope-item">
+                <div class="font-cell-left">
+                  <div class="font-cell-icon" style="background: #007aff;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div>
+                  <span class="font-cell-main">QQ (聊天)</span>
+                </div>
+                <input type="checkbox" class="font-scope-real-cb" data-scope="qq" checked>
+                <div class="font-scope-checkbox-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+              </label>
+
+              <label class="font-ios-cell clickable font-scope-item">
+                <div class="font-cell-left">
+                  <div class="font-cell-icon" style="background: #ff9500;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="5" y="2" width="14" height="20" rx="2"></rect></svg></div>
+                  <span class="font-cell-main">Cphone</span>
+                </div>
+                <input type="checkbox" class="font-scope-real-cb" data-scope="cphone" checked>
+                <div class="font-scope-checkbox-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+              </label>
+
+              <label class="font-ios-cell clickable font-scope-item">
+                <div class="font-cell-left">
+                  <div class="font-cell-icon" style="background: #af52de;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg></div>
+                  <span class="font-cell-main">Myphone</span>
+                </div>
+                <input type="checkbox" class="font-scope-real-cb" data-scope="myphone" checked>
+                <div class="font-scope-checkbox-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+              </label>
+
+              <label class="font-ios-cell clickable font-scope-item">
+                <div class="font-cell-left">
+                  <div class="font-cell-icon" style="background: #ff2d55;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path></svg></div>
+                  <span class="font-cell-main">世界书</span>
+                </div>
+                <input type="checkbox" class="font-scope-real-cb" data-scope="worldBook" checked>
+                <div class="font-scope-checkbox-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+              </label>
+
+              <label class="font-ios-cell clickable font-scope-item">
+                <div class="font-cell-left">
+                  <div class="font-cell-icon" style="background: #34c759;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path></svg></div>
+                  <span class="font-cell-main">豆瓣</span>
+                </div>
+                <input type="checkbox" class="font-scope-real-cb" data-scope="douban" checked>
+                <div class="font-scope-checkbox-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+              </label>
+
+              <label class="font-ios-cell clickable font-scope-item">
+                <div class="font-cell-left">
+                  <div class="font-cell-icon" style="background: #1677ff;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="4" width="20" height="16" rx="2"></rect></svg></div>
+                  <span class="font-cell-main">支付宝</span>
+                </div>
+                <input type="checkbox" class="font-scope-real-cb" data-scope="alipay" checked>
+                <div class="font-scope-checkbox-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+              </label>
+
+              <label class="font-ios-cell clickable font-scope-item">
+                <div class="font-cell-left">
+                  <div class="font-cell-icon" style="background: #8e8e93;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"></circle></svg></div>
+                  <span class="font-cell-main">设置页面</span>
+                </div>
+                <input type="checkbox" class="font-scope-real-cb" data-scope="settings" checked>
+                <div class="font-scope-checkbox-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+              </label>
+
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 恢复默认操作分组 (iOS 破坏性红字操作行) -->
+        <div class="font-ios-group">
+          <div class="font-ios-group-card">
+            <button id="reset-font-scope-btn">按区域恢复默认字体</button>
+            <div style="height: 0.5px; background: rgba(60, 60, 67, 0.12); margin: 0 16px;"></div>
+            <button id="reset-font-btn" data-lang-key="fontResetDefault">全部恢复默认字体</button>
+          </div>
+        </div>
+
       </div>
     </div>
     <style>
       #thought-chain-screen { background: #fff; color: #303136; }
       #thought-chain-screen .thought-chain-scroll { background: #fff; padding: 22px 16px 44px; }
-      .tc-page-header { display:flex; flex-direction:column; gap:12px; padding:16px 20px 18px; background:#fff; border-bottom:1px solid #dedfe3; }
+      .tc-page-header { display:flex; flex-direction:column; gap:12px; padding:calc(16px + var(--safe-top, 0px)) 20px 18px; background:#fff; border-bottom:1px solid #dedfe3; }
       .tc-header-nav { display:flex; justify-content:space-between; align-items:center; width:100%; }
       .tc-header-content { display:flex; flex-direction:column; gap:3px; }
       .tc-page-header h1 { margin:3px 0 2px; font:600 clamp(24px,6.5vw,32px)/1.15 Georgia,serif; letter-spacing:-.03em; }
@@ -480,7 +679,7 @@
       .tc-add-entry { display:flex; align-items:center; gap:12px; width:calc(100% - 5px); margin:4px 0 0 5px; padding:15px 16px; border:1px dashed #bcb9c1; background:transparent; color:#66636d; text-align:left; cursor:pointer; }.tc-add-entry > span:first-child { color:#928a99; font-size:22px; line-height:1; }.tc-add-entry strong,.tc-add-entry small { display:block; }.tc-add-entry strong { font-size:13px; font-weight:600; }.tc-add-entry small { margin-top:4px; color:#9998a0; font-size:10px; }
       #thought-chain-screen .thought-chain-compatibility-heading,#thought-chain-screen .thought-chain-advanced-settings,#thought-chain-screen .thought-chain-settings-card > .settings-item:not(.thought-chain-compatibility-heading) { font-size:12px; }
       #thought-chain-screen .thought-chain-settings-card { margin:0; border:0; box-shadow:none; }
-      @media (max-width:430px) { .tc-page-header { padding:14px 14px 16px; }.thought-chain-scroll { padding-left:10px !important; padding-right:10px !important; }.tc-control-sheet { margin-bottom:14px; }.tc-module { grid-template-columns:29px 1fr auto; gap:8px; padding-right:8px; }.is-organizing .tc-module { grid-template-columns:18px 17px 1fr auto; }.tc-module-topline h3 { font-size:15px; }.tc-module-state { margin-left:0; }.tc-module-summary { font-size:11px; }.tc-preset-actions-row > button { padding:7px 10px; } }
+      @media (max-width:430px) { .tc-page-header { padding:calc(14px + var(--safe-top, 0px)) 14px 16px; }.thought-chain-scroll { padding-left:10px !important; padding-right:10px !important; }.tc-control-sheet { margin-bottom:14px; }.tc-module { grid-template-columns:29px 1fr auto; gap:8px; padding-right:8px; }.is-organizing .tc-module { grid-template-columns:18px 17px 1fr auto; }.tc-module-topline h3 { font-size:15px; }.tc-module-state { margin-left:0; }.tc-module-summary { font-size:11px; }.tc-preset-actions-row > button { padding:7px 10px; } }
       #thought-chain-editor-modal .modal-content { max-width:520px; height:min(88%, 720px) !important; }
       #thought-chain-editor-modal .modal-body { overflow-y:auto; padding:18px; }
       #thought-chain-editor-modal textarea#tc-content-input { min-height:190px; resize:vertical; line-height:1.65; }
@@ -492,7 +691,7 @@
       #thought-chain-editor-modal,
       #thought-chain-tools-modal { background:rgba(35,34,40,.34); padding:16px; box-sizing:border-box; }
       #thought-chain-screen ~ #thought-chain-editor-modal,
-      #thought-chain-screen ~ #thought-chain-tools-modal { background:rgba(35,34,40,.34); padding:16px; box-sizing:border-box; }
+      #thought-chain-screen ~ #thought-chain-tools-modal { background:rgba(35,34,40,.34); padding:calc(16px + var(--safe-top, 0px)) calc(16px + var(--safe-right, 0px)) calc(16px + max(var(--safe-bottom, 0px), var(--keyboard-inset, 0px))) calc(16px + var(--safe-left, 0px)); box-sizing:border-box; }
       #thought-chain-editor-modal .modal-content,
       #thought-chain-tools-modal .modal-content { width:min(calc(100% - 32px), 500px); max-height:92vh; overflow:hidden; border:1px solid #d8d6dc; border-top:3px solid #4e5159; border-radius:0; background:#fff; box-shadow:8px 10px 0 rgba(72,68,78,.12); margin:0 auto; }
       #thought-chain-editor-modal .modal-header,

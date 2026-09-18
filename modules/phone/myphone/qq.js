@@ -2,6 +2,9 @@
   // MyPhone QQ 渲染函数（从 script.js 迁移）
   // ============================================================
 
+  let myPhoneConversationRenderVersion = 0;
+  window.invalidateMyPhoneConversationRender = () => { myPhoneConversationRenderVersion += 1; };
+
   async function renderMyPhoneSimulatedQQ() {
     const listEl = document.getElementById('myphone-chat-list');
     listEl.innerHTML = '';
@@ -97,7 +100,9 @@
   }
 
   async function openMyPhoneConversation(index) {
-    const char = state.chats[activeMyPhoneCharacterId];
+    const openedCharacterId = activeMyPhoneCharacterId;
+    const renderVersion = ++myPhoneConversationRenderVersion;
+    const char = state.chats[openedCharacterId];
     if (!char) return;
 
     // 保存当前对话索引
@@ -165,12 +170,15 @@
     document.getElementById('myphone-conversation-partner-name').textContent = partnerName;
 
     for (const msg of messages) {
+      if (renderVersion !== myPhoneConversationRenderVersion || activeMyPhoneCharacterId !== openedCharacterId) return;
       const messageEl = await createMessageElement(msg, tempChatObject);
+      if (renderVersion !== myPhoneConversationRenderVersion || activeMyPhoneCharacterId !== openedCharacterId) return;
       if (messageEl) {
         messagesEl.appendChild(messageEl);
       }
     }
 
+    if (renderVersion !== myPhoneConversationRenderVersion || activeMyPhoneCharacterId !== openedCharacterId) return;
     messagesEl.scrollTop = messagesEl.scrollHeight;
     switchToMyPhoneScreen('myphone-qq-conversation-screen');
   }

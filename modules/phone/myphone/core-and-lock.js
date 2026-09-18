@@ -177,6 +177,10 @@
   }
 
   function switchToMyPhoneScreen(screenId) {
+    const currentScreen = document.querySelector('#myphone-screen .char-screen.active');
+    if (currentScreen?.id === 'myphone-qq-conversation-screen' && screenId !== 'myphone-qq-conversation-screen') {
+      window.invalidateMyPhoneConversationRender?.();
+    }
     document.querySelectorAll('#myphone-screen .char-screen').forEach(s => s.classList.remove('active'));
     document.getElementById(screenId).classList.add('active');
   }
@@ -187,6 +191,7 @@
 
   function switchToCPhone() {
     // 从 MY Phone 切换回 CP Phone 角色选择
+    window.invalidateMyPhoneConversationRender?.();
     openCharacterSelector();
   }
 

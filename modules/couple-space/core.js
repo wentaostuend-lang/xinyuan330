@@ -313,6 +313,17 @@ function showCoupleSpaceSelect(mode) {
         container.appendChild(item);
       });
     }
+    const repairBtn = document.createElement('div');
+    repairBtn.className = 'character-select-item garden-repair-entry';
+    repairBtn.innerHTML = '<span class="name" style="color:inherit;">检查历史浇水奖励</span><span class="garden-repair-entry-count" hidden></span>';
+    repairBtn.addEventListener('click', () => openCoupleSpaceGardenRepairPreview());
+    container.appendChild(repairBtn);
+    countCoupleSpaceGardenRepairCandidates().then(count => {
+      if (!repairBtn.isConnected || count <= 0) return;
+      const badge = repairBtn.querySelector('.garden-repair-entry-count');
+      badge.textContent = count > 99 ? '99+' : String(count);
+      badge.hidden = false;
+    }).catch(error => console.error('[情侣树] 统计历史奖励修复项失败:', error));
     // 新建入口
     const addBtn = document.createElement('div');
     addBtn.className = 'character-select-item';
@@ -694,6 +705,9 @@ window.addEventListener('message', function(e) {
   }
   if (e.data && e.data.type === 'coupleSpaceGardenWaterReward') {
     handleCoupleSpaceGardenWaterReward(e.data);
+  }
+  if (e.data && e.data.type === 'coupleSpaceGardenRepairPreviewRequest') {
+    openCoupleSpaceGardenRepairPreview();
   }
 
   // --- Location requests ---

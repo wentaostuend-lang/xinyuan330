@@ -2,59 +2,168 @@
 // 用户状态/心声/角色资料 (原 script.js 第 33054~33351 行)
 // ============================================================
 
-  function applyCustomThoughtsUI() {
-    const chat = state.chats[state.activeChatId];
-    if (!chat) return;
+  let appliedThoughtsUIMode = null;
+  let appliedThoughtsHTML = null;
+  let appliedThoughtsCSS = null;
+  let thoughtsOpenRequestId = 0;
+  let thoughtsHistoryRequestId = 0;
+  let thoughtsModalTrigger = null;
+  const boundThoughtsHistoryLists = new WeakSet();
 
-    const modalContent = document.querySelector('#character-profile-modal .character-profile-content');
-    if (!modalContent) return;
+  function getThoughtsModal() {
+    return document.getElementById('character-profile-modal');
+  }
 
-    const uiEnabled = state.globalSettings.customThoughtsUIEnabled;
+  function getThoughtsElement(id) {
+    return getThoughtsModal()?.querySelector(`#${id}`) || null;
+  }
 
-    if (uiEnabled && state.globalSettings.customThoughtsHTML) {
-      modalContent.innerHTML = state.globalSettings.customThoughtsHTML;
-    } else if (typeof getDefaultThoughtsHTML === 'function') {
-      // 如果没有启用自定义UI或者没有自定义代码，则使用默认的
-      modalContent.innerHTML = getDefaultThoughtsHTML();
+  function handleThoughtsHistoryScroll(event) {
+    const listEl = event.currentTarget;
+    if (!listEl || isLoadingMoreThoughts) return;
+    if (listEl.scrollHeight - listEl.scrollTop > listEl.clientHeight + 80) return;
+
+    const totalItems = state.chats[state.activeChatId]?.thoughtsHistory?.length || 0;
+    if (totalItems > thoughtsHistoryRenderCount) loadMoreThoughts();
+  }
+
+  function bindThoughtsHistoryScroll(listEl) {
+    if (!listEl || boundThoughtsHistoryLists.has(listEl)) return;
+    boundThoughtsHistoryLists.add(listEl);
+    listEl.addEventListener('scroll', handleThoughtsHistoryScroll, { passive: true });
+  }
+
+  function setThoughtsCustomStylesEnabled(enabled) {
+    const modal = getThoughtsModal();
+    const shouldEnable = !!enabled && modal?.dataset.thoughtsUiMode === 'custom';
+    const styleEl = document.getElementById('custom-thoughts-style');
+    if (styleEl) styleEl.disabled = !shouldEnable;
+    modal?.querySelectorAll('.character-profile-content style').forEach(element => {
+      element.disabled = !shouldEnable;
+    });
+  }
+
+  function applyCustomThoughtsUI(force = false) {
+    const modal = getThoughtsModal();
+    const modalContent = modal?.querySelector('.character-profile-content');
+    if (!modalContent) return null;
+
+    const uiEnabled = !!state.globalSettings.customThoughtsUIEnabled;
+    const mode = uiEnabled && state.globalSettings.customThoughtsHTML ? 'custom' : 'default';
+    const html = mode === 'custom'
+      ? state.globalSettings.customThoughtsHTML
+      : (typeof getDefaultThoughtsHTML === 'function' ? getDefaultThoughtsHTML() : '');
+    const currentDefaultMarkupIsUsable = mode === 'default'
+      && getThoughtsElement('profile-heartfelt-voice')
+      && getThoughtsElement('profile-random-jottings');
+    const markupChanged = force
+      || appliedThoughtsUIMode !== mode
+      || appliedThoughtsHTML !== html;
+
+    // 初始默认 DOM 已由页面提供，直接接管，避免首次打开也进行一次无意义的整块重建。
+    if (markupChanged && !(appliedThoughtsUIMode === null && currentDefaultMarkupIsUsable && !force)) {
+      const template = document.createElement('template');
+      template.innerHTML = html;
+      modalContent.replaceChildren(template.content.cloneNode(true));
     }
 
-    // 重新绑定事件
-    const editBtn = document.getElementById('profile-edit-btn');
-    if (editBtn) editBtn.addEventListener('click', openThoughtEditor);
+    appliedThoughtsUIMode = mode;
+    appliedThoughtsHTML = html;
+    modal.dataset.thoughtsUiMode = mode;
 
-    const historyBtn = document.getElementById('profile-history-icon-btn');
-    if (historyBtn) historyBtn.addEventListener('click', showThoughtsHistory);
-
-    const backBtn = document.getElementById('history-back-btn');
-    if (backBtn) backBtn.addEventListener('click', hideThoughtsHistory);
-
-    const thoughtsList = document.getElementById('thoughts-history-list');
-    if (thoughtsList) {
-      thoughtsList.addEventListener('click', (e) => {
-        const deleteBtn = e.target.closest('.thought-delete-btn');
-        if (deleteBtn) {
-          const timestamp = parseInt(deleteBtn.dataset.timestamp);
-          if (!isNaN(timestamp)) {
-            handleDeleteThought(timestamp);
-          }
-        }
-      });
-    }
-
-    // 注入 CSS
     let styleEl = document.getElementById('custom-thoughts-style');
     if (!styleEl) {
       styleEl = document.createElement('style');
       styleEl.id = 'custom-thoughts-style';
       document.head.appendChild(styleEl);
     }
-    if (uiEnabled && state.globalSettings.customThoughtsCSS) {
-      styleEl.textContent = state.globalSettings.customThoughtsCSS;
-    } else {
-      styleEl.textContent = '';
+    const css = mode === 'custom' ? (state.globalSettings.customThoughtsCSS || '') : '';
+    if (appliedThoughtsCSS !== css || styleEl.textContent !== css) {
+      styleEl.textContent = css;
+      appliedThoughtsCSS = css;
+    }
+
+    bindThoughtsHistoryScroll(getThoughtsElement('thoughts-history-list'));
+    setThoughtsCustomStylesEnabled(modal.classList.contains('visible'));
+    return modalContent;
+  }
+
+  function invalidateCustomThoughtsUI(applyImmediately = false) {
+    appliedThoughtsUIMode = null;
+    appliedThoughtsHTML = null;
+    appliedThoughtsCSS = null;
+
+    if (!state.globalSettings.customThoughtsUIEnabled) {
+      const styleEl = document.getElementById('custom-thoughts-style');
+      if (styleEl) styleEl.textContent = '';
+    }
+
+    const modal = getThoughtsModal();
+    if (applyImmediately || modal?.classList.contains('visible')) {
+      applyCustomThoughtsUI(true);
     }
   }
+
+  function closeCharacterProfileModal() {
+    const modal = getThoughtsModal();
+    if (!modal) return;
+    thoughtsOpenRequestId++;
+    thoughtsHistoryRequestId++;
+    setThoughtsCustomStylesEnabled(false);
+    modal.classList.remove('visible');
+    modal.classList.add('thoughts-paused');
+    hideThoughtsHistory();
+    if (thoughtsModalTrigger?.isConnected && typeof thoughtsModalTrigger.focus === 'function') {
+      thoughtsModalTrigger.focus({ preventScroll: true });
+    }
+    thoughtsModalTrigger = null;
+  }
+
+  function bindThoughtsModalEvents() {
+    const modal = getThoughtsModal();
+    if (!modal || modal.dataset.thoughtsEventsBound === 'true') return;
+    modal.dataset.thoughtsEventsBound = 'true';
+
+    modal.addEventListener('click', event => {
+      if (event.target === modal) {
+        closeCharacterProfileModal();
+        return;
+      }
+
+      const target = event.target.closest([
+        '#profile-edit-btn',
+        '#profile-history-icon-btn',
+        '#history-back-btn',
+        '#manage-thoughts-btn',
+        '#delete-selected-thoughts-btn',
+        '#load-more-thoughts-btn',
+        '.thought-delete-btn',
+        '.thought-card'
+      ].join(','));
+      if (!target || !modal.contains(target)) return;
+      if (target.id === 'profile-edit-btn') openThoughtEditor();
+      else if (target.id === 'profile-history-icon-btn') showThoughtsHistory();
+      else if (target.id === 'history-back-btn') hideThoughtsHistory();
+      else if (target.id === 'manage-thoughts-btn') toggleThoughtsManagementMode();
+      else if (target.id === 'delete-selected-thoughts-btn') executeBatchDeleteThoughts();
+      else if (target.id === 'load-more-thoughts-btn') loadMoreThoughts();
+      else if (target.classList.contains('thought-delete-btn')) {
+        const timestamp = Number.parseInt(target.dataset.timestamp, 10);
+        if (Number.isFinite(timestamp)) handleDeleteThought(timestamp);
+      } else if (target.classList.contains('thought-card') && isThoughtsManagementMode) {
+        toggleThoughtCardSelection(target);
+      }
+    });
+
+    modal.addEventListener('change', event => {
+      if (event.target?.id === 'select-all-thoughts-checkbox') handleSelectAllThoughts();
+    });
+  }
+
+  bindThoughtsModalEvents();
   window.applyCustomThoughtsUI = applyCustomThoughtsUI;
+  window.invalidateCustomThoughtsUI = invalidateCustomThoughtsUI;
+  window.closeCharacterProfileModal = closeCharacterProfileModal;
 
   // USER状态修改弹窗 - 直接输入框
   async function showUserStatusModal(chatId) {
@@ -196,59 +305,53 @@
   async function showCharacterProfileModal(chatId) {
     const chat = state.chats[chatId];
     if (!chat || chat.isGroup) return;
+    const modal = getThoughtsModal();
+    if (!modal) return;
 
+    const requestId = ++thoughtsOpenRequestId;
+    thoughtsHistoryRequestId++;
+    thoughtsModalTrigger = document.activeElement;
+    applyCustomThoughtsUI();
+    hideThoughtsHistory();
 
-
-
-
-    const heartfeltVoiceEl = document.getElementById('profile-heartfelt-voice');
-    const randomJottingsEl = document.getElementById('profile-random-jottings');
-
-    // 检查心声功能是否开启
+    const heartfeltVoiceEl = getThoughtsElement('profile-heartfelt-voice');
+    const randomJottingsEl = getThoughtsElement('profile-random-jottings');
     const enableThoughts = chat.settings.enableThoughts !== null
       ? chat.settings.enableThoughts
       : state.globalSettings.enableThoughts;
+    const disabledMessage = '<span style="color: #999;">心声功能已关闭</span>';
 
-    if (!enableThoughts) {
-      // 功能关闭时显示提示
-      heartfeltVoiceEl.innerHTML = '<span style="color: #999;">心声功能已关闭</span>';
-      randomJottingsEl.innerHTML = '<span style="color: #999;">心声功能已关闭</span>';
-    } else {
-      // 功能开启时正常显示
-      heartfeltVoiceEl.innerHTML = await applyRenderingRules(chat.heartfeltVoice || '...', chatId);
-      randomJottingsEl.innerHTML = await applyRenderingRules(chat.randomJottings || '...', chatId);
-    }
-
-    const modal = document.getElementById('character-profile-modal');
-
-    // 动态应用自定义外观
-    if (typeof applyCustomThoughtsUI === 'function') {
-      applyCustomThoughtsUI();
-    }
-
-    // 更新内部的特定元素，因为可能被自定义 UI 覆盖了内容，需要再次渲染内容
-    const updatedHeartfeltVoiceEl = document.getElementById('profile-heartfelt-voice');
-    const updatedRandomJottingsEl = document.getElementById('profile-random-jottings');
-    
-    if (updatedHeartfeltVoiceEl && updatedRandomJottingsEl) {
-      if (!enableThoughts) {
-        updatedHeartfeltVoiceEl.innerHTML = '<span style="color: #999;">心声功能已关闭</span>';
-        updatedRandomJottingsEl.innerHTML = '<span style="color: #999;">心声功能已关闭</span>';
-      } else {
-        updatedHeartfeltVoiceEl.innerHTML = await applyRenderingRules(chat.heartfeltVoice || '...', chatId);
-        updatedRandomJottingsEl.innerHTML = await applyRenderingRules(chat.randomJottings || '...', chatId);
-      }
-    }
-
+    if (heartfeltVoiceEl) heartfeltVoiceEl.textContent = '';
+    if (randomJottingsEl) randomJottingsEl.textContent = '';
+    modal.classList.remove('thoughts-paused');
     modal.classList.add('visible');
+    setThoughtsCustomStylesEnabled(true);
+
+    if (!heartfeltVoiceEl || !randomJottingsEl) return;
+    if (!enableThoughts) {
+      heartfeltVoiceEl.innerHTML = disabledMessage;
+      randomJottingsEl.innerHTML = disabledMessage;
+      return;
+    }
+
+    const [renderedVoice, renderedJottings] = await Promise.all([
+      applyRenderingRules(chat.heartfeltVoice || '...', chatId),
+      applyRenderingRules(chat.randomJottings || '...', chatId)
+    ]);
+    if (requestId !== thoughtsOpenRequestId || !modal.classList.contains('visible')) return;
+
+    const currentHeartfeltVoiceEl = getThoughtsElement('profile-heartfelt-voice');
+    const currentRandomJottingsEl = getThoughtsElement('profile-random-jottings');
+    if (currentHeartfeltVoiceEl) currentHeartfeltVoiceEl.innerHTML = renderedVoice;
+    if (currentRandomJottingsEl) currentRandomJottingsEl.innerHTML = renderedJottings;
   }
 
-  // 全局定义或在此声明，避免重复绑定时丢失引用
-  let thoughtsManagementEventsBound = false;
-
-  async function showThoughtsHistory() { // <-- 1. 添加 async
-    document.getElementById('profile-main-content').style.display = 'none';
-    document.getElementById('profile-thoughts-history-view').style.display = 'flex';
+  async function showThoughtsHistory() {
+    const mainContent = getThoughtsElement('profile-main-content');
+    const historyView = getThoughtsElement('profile-thoughts-history-view');
+    if (!mainContent || !historyView) return;
+    mainContent.style.display = 'none';
+    historyView.style.display = 'flex';
     
     // 初始化管理模式状态为关闭
     if (isThoughtsManagementMode) {
@@ -262,34 +365,24 @@
   }
 
   function bindThoughtsManagementEvents() {
-    const manageBtn = document.getElementById('manage-thoughts-btn');
-    if (manageBtn) {
-      // 避免重复绑定
-      manageBtn.removeEventListener('click', toggleThoughtsManagementMode);
-      manageBtn.addEventListener('click', toggleThoughtsManagementMode);
-    }
-
-    const selectAllCheckbox = document.getElementById('select-all-thoughts-checkbox');
-    if (selectAllCheckbox) {
-      selectAllCheckbox.removeEventListener('change', handleSelectAllThoughts);
-      selectAllCheckbox.addEventListener('change', handleSelectAllThoughts);
-    }
-
-    const deleteBtn = document.getElementById('delete-selected-thoughts-btn');
-    if (deleteBtn) {
-      deleteBtn.removeEventListener('click', executeBatchDeleteThoughts);
-      deleteBtn.addEventListener('click', executeBatchDeleteThoughts);
-    }
+    bindThoughtsHistoryScroll(getThoughtsElement('thoughts-history-list'));
   }
 
 
   function hideThoughtsHistory() {
-    document.getElementById('profile-thoughts-history-view').style.display = 'none';
-    document.getElementById('profile-main-content').style.display = 'flex';
+    thoughtsHistoryRequestId++;
+    const historyView = getThoughtsElement('profile-thoughts-history-view');
+    const mainContent = getThoughtsElement('profile-main-content');
+    if (historyView) historyView.style.display = 'none';
+    if (mainContent) mainContent.style.display = 'flex';
     
     // 退出时恢复管理模式状态
     if (isThoughtsManagementMode) {
       toggleThoughtsManagementMode();
+      if (isThoughtsManagementMode) {
+        isThoughtsManagementMode = false;
+        selectedThoughts.clear();
+      }
     }
   }
 
@@ -298,11 +391,12 @@
   let selectedThoughts = new Set();
 
   function toggleThoughtsManagementMode() {
+    const listEl = getThoughtsElement('thoughts-history-list');
+    const actionBar = getThoughtsElement('thoughts-action-bar');
+    const manageBtn = getThoughtsElement('manage-thoughts-btn');
+    const selectAllCheckbox = getThoughtsElement('select-all-thoughts-checkbox');
+    if (!listEl || !actionBar || !manageBtn || !selectAllCheckbox) return;
     isThoughtsManagementMode = !isThoughtsManagementMode;
-    const listEl = document.getElementById('thoughts-history-list');
-    const actionBar = document.getElementById('thoughts-action-bar');
-    const manageBtn = document.getElementById('manage-thoughts-btn');
-    const selectAllCheckbox = document.getElementById('select-all-thoughts-checkbox');
 
     if (isThoughtsManagementMode) {
       listEl.classList.add('management-mode');
@@ -320,24 +414,16 @@
       selectedThoughts.clear();
       
       // 取消所有的选中状态样式
-      document.querySelectorAll('.thought-card.selected').forEach(card => {
+      listEl.querySelectorAll('.thought-card.selected').forEach(card => {
         card.classList.remove('selected');
         const cb = card.querySelector('.thought-checkbox');
         if (cb) cb.checked = false;
       });
     }
-    
-    // 切换卡片内复选框和删除按钮的显示状态
-    document.querySelectorAll('.thought-card').forEach(card => {
-      const cb = card.querySelector('.thought-checkbox');
-      const delBtn = card.querySelector('.thought-delete-btn');
-      if (cb) cb.style.display = isThoughtsManagementMode ? 'block' : 'none';
-      if (delBtn) delBtn.style.display = isThoughtsManagementMode ? 'none' : 'block';
-    });
   }
 
   function updateDeleteThoughtsButton() {
-    const btn = document.getElementById('delete-selected-thoughts-btn');
+    const btn = getThoughtsElement('delete-selected-thoughts-btn');
     if (btn) {
       btn.textContent = `删除 (${selectedThoughts.size})`;
       if (selectedThoughts.size > 0) {
@@ -353,8 +439,11 @@
   }
 
   function handleSelectAllThoughts() {
-    const isChecked = document.getElementById('select-all-thoughts-checkbox').checked;
-    const cards = document.querySelectorAll('#thoughts-history-list .thought-card');
+    const selectAllCheckbox = getThoughtsElement('select-all-thoughts-checkbox');
+    const listEl = getThoughtsElement('thoughts-history-list');
+    if (!selectAllCheckbox || !listEl) return;
+    const isChecked = selectAllCheckbox.checked;
+    const cards = listEl.querySelectorAll('.thought-card');
     
     cards.forEach(card => {
       const timestamp = parseInt(card.dataset.timestamp);
@@ -373,6 +462,18 @@
       }
     });
     
+    updateDeleteThoughtsButton();
+  }
+
+  function toggleThoughtCardSelection(card) {
+    const cb = card.querySelector('.thought-checkbox');
+    if (!cb) return;
+    cb.checked = !cb.checked;
+    const timestamp = Number.parseInt(card.dataset.timestamp, 10);
+    if (!Number.isFinite(timestamp)) return;
+    card.classList.toggle('selected', cb.checked);
+    if (cb.checked) selectedThoughts.add(timestamp);
+    else selectedThoughts.delete(timestamp);
     updateDeleteThoughtsButton();
   }
 
@@ -407,8 +508,8 @@
           chat.randomJottings = newLatestThought.randomJottings;
           chat.customThoughts = newLatestThought.customThoughts ? JSON.parse(JSON.stringify(newLatestThought.customThoughts)) : {};
 
-          const heartfeltVoiceEl = document.getElementById('profile-heartfelt-voice');
-          const randomJottingsEl = document.getElementById('profile-random-jottings');
+          const heartfeltVoiceEl = getThoughtsElement('profile-heartfelt-voice');
+          const randomJottingsEl = getThoughtsElement('profile-random-jottings');
           if (heartfeltVoiceEl) heartfeltVoiceEl.textContent = chat.heartfeltVoice;
           if (randomJottingsEl) randomJottingsEl.textContent = chat.randomJottings;
 
@@ -418,8 +519,8 @@
           chat.randomJottings = '...';
           chat.customThoughts = {};
 
-          const heartfeltVoiceEl = document.getElementById('profile-heartfelt-voice');
-          const randomJottingsEl = document.getElementById('profile-random-jottings');
+          const heartfeltVoiceEl = getThoughtsElement('profile-heartfelt-voice');
+          const randomJottingsEl = getThoughtsElement('profile-random-jottings');
           if (heartfeltVoiceEl) heartfeltVoiceEl.textContent = chat.heartfeltVoice;
           if (randomJottingsEl) randomJottingsEl.textContent = chat.randomJottings;
 
@@ -442,27 +543,38 @@
 
 
 
-  async function renderThoughtsHistory() { // <-- 1. 添加 async
-    const listEl = document.getElementById('thoughts-history-list');
+  function getThoughtsHistoryBatch(history, offset, limit) {
+    const endIndex = history.length - 1 - offset;
+    if (endIndex < 0) return [];
+    const startIndex = Math.max(0, endIndex - limit + 1);
+    const batch = [];
+    for (let index = endIndex; index >= startIndex; index--) batch.push(history[index]);
+    return batch;
+  }
+
+  async function renderThoughtsHistory() {
+    const listEl = getThoughtsElement('thoughts-history-list');
     const chat = state.chats[state.activeChatId];
-    listEl.innerHTML = '';
+    if (!listEl) return;
+    const requestId = ++thoughtsHistoryRequestId;
+    listEl.replaceChildren();
 
     if (!chat || !chat.thoughtsHistory || chat.thoughtsHistory.length === 0) {
       listEl.innerHTML = '<p style="text-align:center; color: #8a8a8a; padding: 30px 0;">这里还没有历史记录哦。</p>';
+      thoughtsHistoryRenderCount = 0;
       return;
     }
 
-    const history = [...chat.thoughtsHistory].reverse();
-    const initialItems = history.slice(0, THOUGHTS_RENDER_WINDOW);
-
-    const cardPromises = initialItems.map(thought => createThoughtCard(thought));
+    const initialItems = getThoughtsHistoryBatch(chat.thoughtsHistory, 0, THOUGHTS_RENDER_WINDOW);
+    const cardPromises = initialItems.map(thought => createThoughtCard(thought, chat.id));
     const cards = await Promise.all(cardPromises);
-    cards.forEach(card => listEl.appendChild(card));
-
-
+    if (requestId !== thoughtsHistoryRequestId || listEl !== getThoughtsElement('thoughts-history-list')) return;
+    const fragment = document.createDocumentFragment();
+    cards.forEach(card => fragment.appendChild(card));
+    listEl.appendChild(fragment);
     thoughtsHistoryRenderCount = initialItems.length;
 
-    if (history.length > thoughtsHistoryRenderCount) {
+    if (chat.thoughtsHistory.length > thoughtsHistoryRenderCount) {
       appendLoadMoreThoughtsButton(listEl);
     }
   }
@@ -474,14 +586,6 @@
     button.className = 'load-more-btn';
     button.textContent = '加载更多...';
     button.style.cssText = 'display:block;margin:15px auto;padding:10px 30px;border:none;border-radius:20px;background:var(--bg-secondary, #f0f0f0);color:var(--text-secondary, #666);font-size:14px;cursor:pointer;';
-    button.addEventListener('click', async () => {
-      await loadMoreThoughts();
-      // 检查是否还有更多
-      const chat = state.chats[state.activeChatId];
-      if (chat && chat.thoughtsHistory && thoughtsHistoryRenderCount >= chat.thoughtsHistory.length) {
-        button.remove();
-      }
-    });
     container.appendChild(button);
   }
 
@@ -489,54 +593,63 @@
     if (isLoadingMoreThoughts) return;
     isLoadingMoreThoughts = true;
 
-    const listEl = document.getElementById('thoughts-history-list');
+    const listEl = getThoughtsElement('thoughts-history-list');
     const chat = state.chats[state.activeChatId];
-    if (!chat) {
+    if (!listEl || !chat?.thoughtsHistory) {
       isLoadingMoreThoughts = false;
       return;
     }
 
+    const requestId = thoughtsHistoryRequestId;
+    const expectedOffset = thoughtsHistoryRenderCount;
     showLoader(listEl, 'bottom');
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      // 先让加载反馈完成一次绘制，再进行下一批内容创建。
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      const itemsToAppend = getThoughtsHistoryBatch(
+        chat.thoughtsHistory,
+        expectedOffset,
+        THOUGHTS_RENDER_WINDOW
+      );
+      const cardPromises = itemsToAppend.map(thought => createThoughtCard(thought, chat.id));
+      const cards = await Promise.all(cardPromises);
+      if (requestId !== thoughtsHistoryRequestId || listEl !== getThoughtsElement('thoughts-history-list')) return;
 
-    const history = [...chat.thoughtsHistory].reverse();
-    const totalItems = history.length;
-
-    const nextSliceStart = thoughtsHistoryRenderCount;
-    const nextSliceEnd = thoughtsHistoryRenderCount + THOUGHTS_RENDER_WINDOW;
-    const itemsToAppend = history.slice(nextSliceStart, nextSliceEnd);
-
-
-    hideLoader(listEl);
-
-
-    const cardPromises = itemsToAppend.map(thought => createThoughtCard(thought));
-    const cards = await Promise.all(cardPromises);
-    cards.forEach(card => listEl.appendChild(card));
-
-    thoughtsHistoryRenderCount += itemsToAppend.length;
-
-    isLoadingMoreThoughts = false;
+      hideLoader(listEl);
+      listEl.querySelector('#load-more-thoughts-btn')?.remove();
+      const fragment = document.createDocumentFragment();
+      cards.forEach(card => fragment.appendChild(card));
+      listEl.appendChild(fragment);
+      thoughtsHistoryRenderCount += itemsToAppend.length;
+      if (thoughtsHistoryRenderCount < chat.thoughtsHistory.length) appendLoadMoreThoughtsButton(listEl);
+    } finally {
+      hideLoader(listEl);
+      isLoadingMoreThoughts = false;
+    }
   }
 
 
 
-  async function createThoughtCard(thought) { // <-- 1. 添加 async
+  async function createThoughtCard(thought, chatId = state.activeChatId) {
     const card = document.createElement('div');
     card.className = 'thought-card';
     const date = new Date(thought.timestamp);
     const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 
 
-    const chatId = state.activeChatId;
-    const renderedVoice = await applyRenderingRules(thought.heartfeltVoice || '...', chatId);
-    const renderedJottings = await applyRenderingRules(thought.randomJottings || '...', chatId);
+    const [renderedVoice, renderedJottings] = await Promise.all([
+      applyRenderingRules(thought.heartfeltVoice || '...', chatId),
+      applyRenderingRules(thought.randomJottings || '...', chatId)
+    ]);
 
 
     let customThoughtsHtml = '';
     if (thought.customThoughts && Object.keys(thought.customThoughts).length > 0) {
-      for (const [key, value] of Object.entries(thought.customThoughts)) {
-        const renderedCustom = await applyRenderingRules(value || '...', chatId);
+      const renderedCustomEntries = await Promise.all(Object.entries(thought.customThoughts).map(async ([key, value]) => [
+        key,
+        await applyRenderingRules(value || '...', chatId)
+      ]));
+      for (const [key, renderedCustom] of renderedCustomEntries) {
         customThoughtsHtml += `
             <div class="custom-thought-item" style="margin-top: 10px;">
                 <div class="label" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
@@ -551,13 +664,9 @@
 
     card.dataset.timestamp = thought.timestamp; // 添加 timestamp 到 card 数据属性，方便多选获取
     
-    // 初始化时根据是否在管理模式来决定显示复选框还是删除按钮
-    const displayCheckbox = isThoughtsManagementMode ? 'block' : 'none';
-    const displayDeleteBtn = isThoughtsManagementMode ? 'none' : 'block';
-    
     card.innerHTML = `
-        <input type="checkbox" class="thought-checkbox" style="display: ${displayCheckbox}; position: absolute; right: 15px; top: 15px; z-index: 2; transform: scale(1.3); cursor: pointer; margin: 0; pointer-events: none;">
-        <button class="thought-delete-btn" data-timestamp="${thought.timestamp}" title="删除此条记录" style="display: ${displayDeleteBtn};">×</button>
+        <input type="checkbox" class="thought-checkbox" style="position: absolute; right: 15px; top: 15px; z-index: 2; transform: scale(1.3); cursor: pointer; margin: 0; pointer-events: none;">
+        <button class="thought-delete-btn" data-timestamp="${thought.timestamp}" title="删除此条记录">×</button>
         <div class="thought-header">${dateString}</div>
         <div class="thought-content">
             <div class="voice">
@@ -578,25 +687,6 @@
         </div>
     `;
     
-    // 添加点击卡片本身选中复选框的功能
-    card.addEventListener('click', (e) => {
-      if (isThoughtsManagementMode) {
-        const cb = card.querySelector('.thought-checkbox');
-        if (cb) {
-           cb.checked = !cb.checked;
-           const timestamp = parseInt(card.dataset.timestamp);
-           if (cb.checked) {
-              card.classList.add('selected');
-              selectedThoughts.add(timestamp);
-           } else {
-              card.classList.remove('selected');
-              selectedThoughts.delete(timestamp);
-           }
-           updateDeleteThoughtsButton();
-        }
-      }
-    });
-
     return card;
   }
 

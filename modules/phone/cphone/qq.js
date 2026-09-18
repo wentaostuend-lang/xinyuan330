@@ -1,4 +1,9 @@
+  let cphoneConversationRenderVersion = 0;
+  window.invalidateCPhoneConversationRender = () => { cphoneConversationRenderVersion += 1; };
+
   async function renderCharSimulatedQQ() {
+    const renderVersion = ++cphoneConversationRenderVersion;
+    const renderedCharacterId = activeCharacterId;
     const listEl = document.getElementById('char-chat-list');
     listEl.innerHTML = '';
     const char = state.chats[activeCharacterId];
@@ -54,6 +59,7 @@
 
 
     const allNpcs = await db.npcs.toArray();
+    if (renderVersion !== cphoneConversationRenderVersion || activeCharacterId !== renderedCharacterId) return;
     const npcMap = new Map(allNpcs.map(npc => [npc.name, npc]));
     const conversations = char.simulatedConversations || [];
 
@@ -146,9 +152,7 @@
 
     const userDisplayNameForAI = state.qzoneSettings.nickname === '{{user}}' || !state.qzoneSettings.nickname ? '用户' : state.qzoneSettings.nickname;
     const userNicknameInThisChat = chat.settings.myNickname || userDisplayNameForAI;
-    const longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0 ?
-      chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n') :
-      '无';
+    const longTermMemoryContext = getMemoryContextForPrompt(chat) || '无';
     const maxMemory = chat.settings.maxMemory || 10;
     const recentHistoryWithUser_RAW = chat.history.slice(-maxMemory);
     const filteredHistory = await filterHistoryWithDoNotSendRules(recentHistoryWithUser_RAW, activeCharacterId);
@@ -331,10 +335,7 @@ ${stickerContext}
       const userPersona = chat.settings.myPersona || '用户';
 
 
-      const longTermMemoryContext = `# 长期记忆 (必须严格遵守)\n${chat.longTermMemory && chat.longTermMemory.length > 0
-          ? chat.longTermMemory.map(mem => `- ${mem.content}`).join('\n')
-          : '- (暂无)'
-        }`;
+      const longTermMemoryContext = `# 长期记忆 (必须严格遵守)\n${getMemoryContextForPrompt(chat) || '- (暂无)'}`;
 
 
       let worldBookContext = '';
@@ -655,7 +656,9 @@ ${historySlice.map(msg => `${msg.role === 'user' ? myNickname : chat.name}: ${St
   }
 
   async function openCharSimulatedConversation(conversationIndex) {
-    const mainChar = state.chats[activeCharacterId];
+    const openedCharacterId = activeCharacterId;
+    const renderVersion = ++cphoneConversationRenderVersion;
+    const mainChar = state.chats[openedCharacterId];
     if (!mainChar) return;
 
     cphoneActiveConversationType = (conversationIndex === -1) ? 'private_user' : mainChar.simulatedConversations[conversationIndex]?.type;
@@ -669,6 +672,7 @@ ${historySlice.map(msg => `${msg.role === 'user' ? myNickname : chat.name}: ${St
     let tempChatObjectForRendering;
     let messagesToRender = [];
     const allNpcs = await db.npcs.toArray();
+    if (renderVersion !== cphoneConversationRenderVersion || activeCharacterId !== openedCharacterId) return;
     const npcMap = new Map(allNpcs.map(npc => [npc.name, npc]));
 
     if (conversationIndex === -1) {
@@ -773,6 +777,7 @@ ${historySlice.map(msg => `${msg.role === 'user' ? myNickname : chat.name}: ${St
 
 
     for (const msg of messagesToRender) {
+      if (renderVersion !== cphoneConversationRenderVersion || activeCharacterId !== openedCharacterId) return;
       let role = msg.role;
       if (conversationIndex !== -1) {
         const isFromMainChar = msg.sender === (mainChar.originalName || mainChar.name);
@@ -806,13 +811,18 @@ ${historySlice.map(msg => `${msg.role === 'user' ? myNickname : chat.name}: ${St
       }
 
       const bubbleElement = await createMessageElement(tempMessageObject, tempChatObjectForRendering);
+      if (renderVersion !== cphoneConversationRenderVersion || activeCharacterId !== openedCharacterId) return;
       if (bubbleElement) {
         bodyEl.appendChild(bubbleElement);
       }
     }
 
     switchToCharScreen('char-qq-conversation-screen');
-    setTimeout(() => bodyEl.scrollTop = bodyEl.scrollHeight, 0); // 渲染完成后滚动到底部
+    setTimeout(() => {
+      if (renderVersion === cphoneConversationRenderVersion && activeCharacterId === openedCharacterId) {
+        bodyEl.scrollTop = bodyEl.scrollHeight;
+      }
+    }, 0); // 渲染完成后滚动到底部
   }
 
   function closeSimulatedTranscriptModal() {

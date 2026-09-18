@@ -288,12 +288,17 @@
     });
     bindApiSettingsListener(document.getElementById('reset-thoughts-prompt-btn'), 'click', function() {
       customThoughtsTextarea.value = getDefaultThoughtsPrompt();
+      window.PromptEntryManager?.replaceWithDefault('thoughts');
     });
 
     // 心声提示词 - 导出
     bindApiSettingsListener(document.getElementById('export-thoughts-prompt-btn'), 'click', function() {
       const content = customThoughtsTextarea.value || '';
-      const data = JSON.stringify({ type: 'thoughts_prompt', content: content }, null, 2);
+      const data = JSON.stringify({
+        type: 'thoughts_prompt',
+        content: content,
+        entries: window.PromptEntryManager?.exportScope('thoughts') || undefined
+      }, null, 2);
       const blob = new Blob([data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -314,8 +319,12 @@
       reader.onload = function(ev) {
         try {
           const data = JSON.parse(ev.target.result);
-          if (data.content) {
+          if (Array.isArray(data.entries) && window.PromptEntryManager) {
+            window.PromptEntryManager.replaceWithItems('thoughts', data.entries);
+            showToast('心声提示词导入成功');
+          } else if (data.content) {
             customThoughtsTextarea.value = data.content;
+            window.PromptEntryManager?.replaceWithLegacy('thoughts', data.content);
             showToast('心声提示词导入成功');
           } else {
             showToast('文件格式不正确');
@@ -323,6 +332,7 @@
         } catch (err) {
           // 如果不是JSON，当作纯文本导入
           customThoughtsTextarea.value = ev.target.result;
+          window.PromptEntryManager?.replaceWithLegacy('thoughts', ev.target.result);
           showToast('心声提示词导入成功');
         }
       };
@@ -339,8 +349,10 @@
     customThoughtsUISwitch.checked = state.globalSettings.customThoughtsUIEnabled || false;
     customThoughtsUIContainer.style.display = customThoughtsUISwitch.checked ? 'block' : 'none';
     
-    customThoughtsHTMLTextarea.value = state.globalSettings.customThoughtsHTML || getDefaultThoughtsHTML();
-    customThoughtsCSSTextarea.value = state.globalSettings.customThoughtsCSS || getDefaultThoughtsCSS();
+    const savedThoughtsHTML = state.globalSettings.customThoughtsHTML || getDefaultThoughtsHTML();
+    const savedThoughtsCSS = state.globalSettings.customThoughtsCSS || getDefaultThoughtsCSS();
+    if (customThoughtsHTMLTextarea.value !== savedThoughtsHTML) customThoughtsHTMLTextarea.value = savedThoughtsHTML;
+    if (customThoughtsCSSTextarea.value !== savedThoughtsCSS) customThoughtsCSSTextarea.value = savedThoughtsCSS;
     
     bindApiSettingsListener(customThoughtsUISwitch, 'change', function() {
       customThoughtsUIContainer.style.display = this.checked ? 'block' : 'none';
@@ -416,12 +428,17 @@
     });
     bindApiSettingsListener(document.getElementById('reset-summary-prompt-btn'), 'click', function() {
       customSummaryTextarea.value = getDefaultSummaryPrompt();
+      window.PromptEntryManager?.replaceWithDefault('summary');
     });
 
     // 结构化总结提示词 - 导出
     bindApiSettingsListener(document.getElementById('export-summary-prompt-btn'), 'click', function() {
       const content = customSummaryTextarea.value || '';
-      const data = JSON.stringify({ type: 'summary_prompt', content: content }, null, 2);
+      const data = JSON.stringify({
+        type: 'summary_prompt',
+        content: content,
+        entries: window.PromptEntryManager?.exportScope('summary') || undefined
+      }, null, 2);
       const blob = new Blob([data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -442,14 +459,19 @@
       reader.onload = function(ev) {
         try {
           const data = JSON.parse(ev.target.result);
-          if (data.content) {
+          if (Array.isArray(data.entries) && window.PromptEntryManager) {
+            window.PromptEntryManager.replaceWithItems('summary', data.entries);
+            showToast('结构化总结提示词导入成功');
+          } else if (data.content) {
             customSummaryTextarea.value = data.content;
+            window.PromptEntryManager?.replaceWithLegacy('summary', data.content);
             showToast('结构化总结提示词导入成功');
           } else {
             showToast('文件格式不正确');
           }
         } catch (err) {
           customSummaryTextarea.value = ev.target.result;
+          window.PromptEntryManager?.replaceWithLegacy('summary', ev.target.result);
           showToast('结构化总结提示词导入成功');
         }
       };
@@ -473,6 +495,7 @@
     customChatPromptGroupTextarea.value = state.globalSettings.customChatPromptGroup || getDefaultChatPrompt('group');
     customChatPromptOfflineTextarea.value = state.globalSettings.customChatPromptOffline || getDefaultChatPrompt('offline');
     customChatPromptGroupOfflineTextarea.value = state.globalSettings.customChatPromptGroupOffline || getDefaultChatPrompt('group_offline');
+    window.PromptEntryManager?.mountAll(state.globalSettings);
     
     bindApiSettingsListener(customChatPromptSwitch, 'change', function() {
       customChatPromptContainer.style.display = this.checked ? 'block' : 'none';
@@ -496,18 +519,21 @@
     // 单聊提示词 - 恢复默认
     bindApiSettingsListener(document.getElementById('reset-chat-prompt-single-btn'), 'click', function() {
       customChatPromptSingleTextarea.value = getDefaultChatPrompt('single');
+      window.PromptEntryManager?.replaceWithDefault('single');
       showToast('已恢复单聊默认提示词');
     });
     
     // 群聊提示词 - 恢复默认
     bindApiSettingsListener(document.getElementById('reset-chat-prompt-group-btn'), 'click', function() {
       customChatPromptGroupTextarea.value = getDefaultChatPrompt('group');
+      window.PromptEntryManager?.replaceWithDefault('group');
       showToast('已恢复群聊默认提示词');
     });
     
     // 线下模式提示词 - 恢复默认
     bindApiSettingsListener(document.getElementById('reset-chat-prompt-offline-btn'), 'click', function() {
       customChatPromptOfflineTextarea.value = getDefaultChatPrompt('offline');
+      window.PromptEntryManager?.replaceWithDefault('offline');
       showToast('已恢复线下模式默认提示词');
       showToast('已清空线下模式提示词，将使用默认提示词');
     });
@@ -515,6 +541,7 @@
     // 群聊线下模式提示词 - 恢复默认
     bindApiSettingsListener(document.getElementById('reset-chat-prompt-group-offline-btn'), 'click', function() {
       customChatPromptGroupOfflineTextarea.value = getDefaultChatPrompt('group_offline');
+      window.PromptEntryManager?.replaceWithDefault('group_offline');
       showToast('已恢复群聊线下模式默认提示词');
     });
     
@@ -525,7 +552,13 @@
         single: customChatPromptSingleTextarea.value || '',
         group: customChatPromptGroupTextarea.value || '',
         offline: customChatPromptOfflineTextarea.value || '',
-        group_offline: customChatPromptGroupOfflineTextarea.value || ''
+        group_offline: customChatPromptGroupOfflineTextarea.value || '',
+        entries: window.PromptEntryManager ? {
+          single: window.PromptEntryManager.exportScope('single'),
+          group: window.PromptEntryManager.exportScope('group'),
+          offline: window.PromptEntryManager.exportScope('offline'),
+          group_offline: window.PromptEntryManager.exportScope('group_offline')
+        } : undefined
       };
       const dataStr = JSON.stringify(data, null, 2);
       const blob = new Blob([dataStr], { type: 'application/json' });
@@ -549,10 +582,20 @@
         try {
           const data = JSON.parse(ev.target.result);
           if (data.type === 'chat_prompts') {
+            const importedEntries = data.entries && typeof data.entries === 'object' ? data.entries : null;
             if (data.single !== undefined) customChatPromptSingleTextarea.value = data.single;
             if (data.group !== undefined) customChatPromptGroupTextarea.value = data.group;
             if (data.offline !== undefined) customChatPromptOfflineTextarea.value = data.offline;
             if (data.group_offline !== undefined) customChatPromptGroupOfflineTextarea.value = data.group_offline;
+            if (Array.isArray(importedEntries?.single)) window.PromptEntryManager?.replaceWithItems('single', importedEntries.single);
+            else if (data.single !== undefined) window.PromptEntryManager?.replaceWithLegacy('single', data.single);
+            if (Array.isArray(importedEntries?.group)) window.PromptEntryManager?.replaceWithItems('group', importedEntries.group);
+            else if (data.group !== undefined) window.PromptEntryManager?.replaceWithLegacy('group', data.group);
+            if (Array.isArray(importedEntries?.offline)) window.PromptEntryManager?.replaceWithItems('offline', importedEntries.offline);
+            else if (data.offline !== undefined) window.PromptEntryManager?.replaceWithLegacy('offline', data.offline);
+            if (Array.isArray(importedEntries?.group_offline)) window.PromptEntryManager?.replaceWithItems('group_offline', importedEntries.group_offline);
+            else if (data.group_offline !== undefined) window.PromptEntryManager?.replaceWithLegacy('group_offline', data.group_offline);
+            window.PromptEntryManager?.syncAll();
             showToast('聊天提示词导入成功');
           } else {
             showToast('文件格式不正确');

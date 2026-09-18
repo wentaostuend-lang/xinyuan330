@@ -15,8 +15,8 @@ async function checkAndTriggerAutoSummary(chatId) {
     const vm = window.vectorMemoryManager.getVariableMemory(chat);
     const lastIdx = vm.settings.lastExtractedMsgIndex !== undefined ? vm.settings.lastExtractedMsgIndex : -1;
     const historyLen = chat.history ? chat.history.length : 0;
-    // 排除隐藏消息但包含内心独白（使用与 vector-memory 相同的过滤方式或简单使用总消息索引差）
-    const unextractedMessages = Math.max(0, historyLen - 1 - lastIdx);
+    const unextractedMessages = (chat.history || []).slice(lastIdx + 1)
+      .filter(message => !message?.isHidden || (message?.role === 'system' && typeof message?.content === 'string' && message.content.includes('内心独白'))).length;
     const autoInterval = vm.settings.autoExtractionMsgInterval || 20;
 
     if (unextractedMessages >= autoInterval) {
@@ -818,21 +818,21 @@ async function triggerAutoSummary(chatId, force = false, customRange = null) {
 
   if (customRange) {
     // 手动总结：使用自定义范围
-    const allMessages = chat.history.filter(m => !m.isHidden || (m.role === 'system' && m.content.includes('内心独白')));
+    const allMessages = (chat.history || []).filter(m => !m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白')));
     const startIndex = Math.max(0, customRange.start - 1);
     const endIndex = Math.min(allMessages.length, customRange.end);
     messagesToSummarize = allMessages.slice(startIndex, endIndex);
   } else if (force && chat.settings.enableDiaryMode) {
     // 日记模式：总结上次总结之后的所有消息，不受 autoMemoryInterval 限制
-    messagesToSummarize = chat.history.filter(m => m.timestamp > lastSummaryTimestamp && (!m.isHidden || (m.role === 'system' && m.content.includes('内心独白'))));
+    messagesToSummarize = (chat.history || []).filter(m => Number(m?.timestamp) > lastSummaryTimestamp && (!m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白'))));
     if (messagesToSummarize.length < 5) {
-      messagesToSummarize = chat.history.filter(m => !m.isHidden || (m.role === 'system' && m.content.includes('内心独白'))).slice(-(chat.settings.autoMemoryInterval || 20));
+      messagesToSummarize = (chat.history || []).filter(m => !m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白'))).slice(-(chat.settings.autoMemoryInterval || 20));
     }
   } else {
     // 原有逻辑
     messagesToSummarize = force ?
-      chat.history.filter(m => !m.isHidden || (m.role === 'system' && m.content.includes('内心独白'))).slice(-(chat.settings.autoMemoryInterval || 20)) :
-      chat.history.filter(m => m.timestamp > lastSummaryTimestamp && (!m.isHidden || (m.role === 'system' && m.content.includes('内心独白'))));
+      (chat.history || []).filter(m => !m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白'))).slice(-(chat.settings.autoMemoryInterval || 20)) :
+      (chat.history || []).filter(m => Number(m?.timestamp) > lastSummaryTimestamp && (!m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白'))));
   }
 
   if (messagesToSummarize.length < 5) {
@@ -852,7 +852,7 @@ async function triggerAutoSummary(chatId, force = false, customRange = null) {
 
   const timeRangeStr = `${formatDateTime(startMsg.timestamp)} 至 ${formatDateTime(endMsg.timestamp)}`;
   const formattedHistory = messagesToSummarize.map(msg => {
-    if (msg.isHidden && msg.role === 'system' && msg.content.includes('内心独白')) {
+    if (msg.isHidden && msg.role === 'system' && typeof msg.content === 'string' && msg.content.includes('内心独白')) {
       return msg.content;
     }
     if (msg.isHidden) return null; // 过滤掉其他隐藏消息

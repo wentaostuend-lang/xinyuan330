@@ -279,6 +279,8 @@
 
     // 停止观影
     function stopWatchTogether() {
+      watchTogetherState.isStopping = true;
+      closeWatchTogetherFloatingPlayer();
       stopMonitoring();
 
       // 销毁 HLS 实例
@@ -304,8 +306,13 @@
       restoreNormalMessageActionsFromWatchTogether();
 
       watchTogetherState.isActive = false;
+      watchTogetherState.isStopping = false;
       watchTogetherState.videoUrl = null;
       watchTogetherState.messages = [];
+
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = null;
+      }
     }
 
     // ========== 影视搜索功能 ==========

@@ -37,18 +37,7 @@ window.openTokenBreakdown = async function() {
 
   // 2. 记忆（与发请求一致：尊重「限制长期记忆读取数量」）
   let memoryStr = '';
-  const memMode = chat.settings.memoryMode || (chat.settings.enableStructuredMemory ? 'structured' : 'diary');
-  if (memMode === 'vector' && window.vectorMemoryManager) {
-    memoryStr = window.vectorMemoryManager.serializeCoreMemories(chat);
-    const vm = window.vectorMemoryManager.getVariableMemory(chat);
-    const topN = vm?.settings?.topN || 10;
-    const frags = [...(vm?.fragments || [])].sort((a, b) => (b.importance || 5) - (a.importance || 5)).slice(0, topN);
-    memoryStr += frags.map(f => f.content).join('\n');
-  } else if ((memMode === 'structured' || chat.settings.enableStructuredMemory) && window.structuredMemoryManager) {
-    memoryStr = window.structuredMemoryManager.serializeForPrompt(chat);
-  } else if (chat.longTermMemory && chat.longTermMemory.length > 0) {
-    memoryStr = getMemoryContextForPrompt(chat);
-  }
+  memoryStr = getMemoryContextForPrompt(chat);
   parts.push({ name: '长期记忆', tokens: estimateTokens(memoryStr) });
 
   // 3. 关联记忆

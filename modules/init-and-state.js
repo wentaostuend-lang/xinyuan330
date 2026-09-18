@@ -126,6 +126,7 @@ if (!window.__appBootstrapStarted) {
       customChatPromptGroup: '',           // 自定义群聊提示词内容
       customChatPromptOffline: '',         // 自定义线下模式提示词内容
       customChatPromptGroupOffline: '',    // 自定义群聊线下模式提示词内容
+      customPromptCollections: null,       // 条目式提示词；为空时继续读取上述旧字符串
       enableQzoneActions: false,          // 新增：全局动态开关，默认关闭
       enableViewMyPhone: false,           // 新增：全局查看User手机开关，默认关闭
       enableCrossChat: true,              // 新增：全局跨聊天消息开关（群聊↔私聊），默认开启
@@ -222,10 +223,30 @@ if (!window.__appBootstrapStarted) {
       };
     }
 
+    // 强制清除并更新 CPhone 和 豆瓣 的旧缓存或旧图床链接
+    let hasUpdatedAppIcons = false;
+    if (state.globalSettings.appIcons) {
+      const currentCharPhone = state.globalSettings.appIcons['char-phone'];
+      const currentDouban = state.globalSettings.appIcons['douban'];
+      // 只要不是最新的代码矢量图标，就强制重置为最新代码矢量图标
+      if (currentCharPhone !== defaultGlobalSettings.appIcons['char-phone']) {
+        state.globalSettings.appIcons['char-phone'] = defaultGlobalSettings.appIcons['char-phone'];
+        hasUpdatedAppIcons = true;
+      }
+      if (currentDouban !== defaultGlobalSettings.appIcons['douban']) {
+        state.globalSettings.appIcons['douban'] = defaultGlobalSettings.appIcons['douban'];
+        hasUpdatedAppIcons = true;
+      }
+    }
+
     state.globalSettings.appIcons = {
       ...defaultGlobalSettings.appIcons,
       ...(state.globalSettings.appIcons || {})
     };
+
+    if (hasUpdatedAppIcons) {
+      db.globalSettings.put(state.globalSettings).catch(console.error);
+    }
     state.globalSettings.cphoneAppIcons = {
       ...defaultGlobalSettings.cphoneAppIcons,
       ...(state.globalSettings.cphoneAppIcons || {})
@@ -244,6 +265,12 @@ if (!window.__appBootstrapStarted) {
     chatsArr.forEach(chat => {
       if (!chat) return;
       if (!chat.settings) chat.settings = {};
+      if (!chat.isGroup && window.CharacterBond) {
+        window.CharacterBond.ensureChat(chat);
+      } else if (!chat.isGroup) {
+        if (typeof chat.settings.enableCharacterSpark !== 'boolean') chat.settings.enableCharacterSpark = false;
+        if (typeof chat.settings.enableSharedPet !== 'boolean') chat.settings.enableSharedPet = false;
+      }
       if (typeof chat.settings.enableTimePerception === 'undefined') {
         chat.settings.enableTimePerception = true;
       }

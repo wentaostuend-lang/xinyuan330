@@ -18,6 +18,7 @@
   
   let isDoubanDetailSelectMode = false;
   let selectedDoubanComments = new Set();
+  let doubanRenderVersion = 0;
 
   function toggleDoubanSelectMode() {
     isDoubanSelectMode = !isDoubanSelectMode;
@@ -95,10 +96,12 @@
   }
 
   async function renderDoubanScreen() {
+    const renderVersion = ++doubanRenderVersion;
     const listEl = document.getElementById('douban-posts-list');
     listEl.innerHTML = '';
 
     const posts = await db.doubanPosts.orderBy('timestamp').reverse().toArray();
+    if (renderVersion !== doubanRenderVersion) return;
 
     if (posts.length === 0) {
       listEl.innerHTML = '<p style="text-align:center; color: var(--text-secondary); padding: 50px 0;">这里空空如也，<br>点击右上角刷新按钮，看看大家都在聊什么吧！</p>';
@@ -106,6 +109,7 @@
     }
 
     posts.forEach(post => {
+      if (renderVersion !== doubanRenderVersion) return;
       let avatarUrl;
 
 
@@ -294,15 +298,7 @@
     for (const charId of activeCharacterIds) {
       const c = state.chats[charId];
       if (c) {
-        let longTermMemory = '';
-        const memMode = c.settings?.memoryMode || (c.settings?.enableStructuredMemory ? 'structured' : 'diary');
-        if (memMode === 'vector' && window.vectorMemoryManager) {
-          longTermMemory = window.vectorMemoryManager.serializeCoreMemories(c) || '无';
-        } else if (memMode === 'structured' && window.structuredMemoryManager) {
-          longTermMemory = window.structuredMemoryManager.serializeForPrompt(c) || '无';
-        } else {
-          longTermMemory = c.longTermMemory && c.longTermMemory.length > 0 ? c.longTermMemory.map(m => m.content).join('; ') : '无';
-        }
+        const longTermMemory = getMemoryContextForPrompt(c) || '无';
         const recentHistory = c.history.slice(-10).map(msg =>
           `${msg.role === 'user' ? userNickname : c.name}: ${String(msg.content).substring(0, 30)}...`
         ).join('\n');

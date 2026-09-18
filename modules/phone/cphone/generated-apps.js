@@ -17,9 +17,7 @@
 
     const userDisplayNameForAI = (state.qzoneSettings.nickname === '{{user}}' || !state.qzoneSettings.nickname) ? '用户' : state.qzoneSettings.nickname;
 
-    const longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0 ?
-      chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n') :
-      '无';
+    const longTermMemoryContext = getMemoryContextForPrompt(chat) || '无';
     const maxMemory = chat.settings.maxMemory || 10;
     const recentHistory_RAW = chat.history.slice(-maxMemory);
     const filteredHistory = await filterHistoryWithDoNotSendRules(recentHistory_RAW, activeCharacterId);
@@ -176,9 +174,7 @@ ${recentHistoryWithUser}
     }
 
     const userDisplayNameForAI = (state.qzoneSettings.nickname === '{{user}}' || !state.qzoneSettings.nickname) ? '用户' : state.qzoneSettings.nickname;
-    const longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0 ?
-      chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n') :
-      '无';
+    const longTermMemoryContext = getMemoryContextForPrompt(chat) || '无';
     const maxMemory = chat.settings.maxMemory || 10;
     const recentHistory_RAW = chat.history.slice(-maxMemory);
     const filteredHistory = await filterHistoryWithDoNotSendRules(recentHistory_RAW, activeCharacterId);
@@ -381,9 +377,7 @@ ${recentHistoryWithUser}
 
     const userDisplayNameForAI = (state.qzoneSettings.nickname === '{{user}}' || !state.qzoneSettings.nickname) ? '用户' : state.qzoneSettings.nickname;
 
-    const longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0 ?
-      chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n') :
-      '无';
+    const longTermMemoryContext = getMemoryContextForPrompt(chat) || '无';
     const maxMemory = chat.settings.maxMemory || 10;
     const recentHistory_RAW = chat.history.slice(-maxMemory);
     const filteredHistory = await filterHistoryWithDoNotSendRules(recentHistory_RAW, activeCharacterId);
@@ -564,16 +558,7 @@ ${recentHistoryWithUser}
     const recentHistoryWithUser = filteredHistory.map(msg => `${msg.role === 'user' ? userDisplayNameForAI : chat.name}: ${String(msg.content).substring(0, 30)}...`).join('\n');
 
     // 3. 准备世界书
-    let longTermMemoryContext = '';
-    const memMode = chat.settings?.memoryMode || (chat.settings?.enableStructuredMemory ? 'structured' : 'diary');
-    if (memMode === 'vector' && window.vectorMemoryManager) {
-      longTermMemoryContext = await window.vectorMemoryManager.serializeCoreMemories(chat) || '无';
-    } else if (memMode === 'structured' && window.structuredMemoryManager) {
-      longTermMemoryContext = window.structuredMemoryManager.serializeForPrompt(chat) || '无';
-    } else {
-      longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0 ?
-        chat.longTermMemory.map(mem => `- ${mem.content}`).join('\n') : '无';
-    }
+    const longTermMemoryContext = await getMemoryContextForPromptAsync(chat, { queryText: recentHistoryWithUser }) || '无';
 
     const worldBookContext = (chat.settings.linkedWorldBookIds || [])
       .map(bookId => state.worldBooks.find(wb => wb.id === bookId))
@@ -798,9 +783,7 @@ ${recentHistoryWithUser}
 
     const userDisplayNameForAI = (state.qzoneSettings.nickname === '{{user}}' || !state.qzoneSettings.nickname) ? '用户' : state.qzoneSettings.nickname;
 
-    const longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0 ?
-      chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n') :
-      '无';
+    const longTermMemoryContext = getMemoryContextForPrompt(chat) || '无';
     const maxMemory = chat.settings.maxMemory || 10;
     const recentHistory_RAW = chat.history.slice(-maxMemory);
     const filteredHistory = await filterHistoryWithDoNotSendRules(recentHistory_RAW, activeCharacterId);

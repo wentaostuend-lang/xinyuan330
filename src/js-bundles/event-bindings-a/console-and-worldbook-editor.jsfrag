@@ -381,6 +381,7 @@
       if (!state.activeChatId) return;
       const chat = state.chats[state.activeChatId];
       const isGroup = chat.isGroup;
+      if (window.CharacterBond) window.CharacterBond.loadSettingsUi(chat);
       const mcpEditor = document.getElementById('chat-mcp-permission-editor');
       const groupMcpNote = document.getElementById('group-mcp-permission-note');
       if (mcpEditor && groupMcpNote) {
@@ -519,6 +520,7 @@
       const timeZoneGroup = document.getElementById('time-zone-group');
       timePerceptionToggle.checked = chat.settings.enableTimePerception;
       timeZoneGroup.style.display = timePerceptionToggle.checked ? 'block' : 'none';
+      if (window.TimeAwareness) window.TimeAwareness.loadSettingsUi(chat);
 
 
       const timezoneSelect = document.getElementById('time-zone-select');
@@ -541,6 +543,7 @@
       document.getElementById('bilingual-display-mode-select').value = chat.settings.bilingualDisplayMode || 'outside';
       document.getElementById('bilingual-display-mode-group').style.display = 
         (chat.settings.enableBilingualMode) ? 'flex' : 'none';
+      if (window.languagePolicy) window.languagePolicy.loadSettingsUi(chat);
       
       if (isGroup) {
         document.getElementById('bilingual-characters-group').style.display = 
@@ -564,7 +567,7 @@
           const displayText = document.querySelector('#bilingual-chars-multiselect .selected-options-text');
 
           if (checkedBoxes.length === 0) {
-            displayText.textContent = '全员双语';
+            displayText.textContent = '全员生效';
           } else if (checkedBoxes.length > 2) {
             displayText.textContent = `已选择 ${checkedBoxes.length} 个角色`;
           } else {
@@ -582,7 +585,7 @@
         newBilingualSelectBox.addEventListener('click', (e) => {
           e.stopPropagation();
           if (state.globalSettings.dropdownPopupMode) {
-            showMultiselectPopup('生效双语角色', bilingualCharsContainer, updateBilingualSelectionDisplay);
+            showMultiselectPopup('语言与翻译生效角色', bilingualCharsContainer, updateBilingualSelectionDisplay);
           } else {
             bilingualCharsContainer.classList.toggle('visible');
             newBilingualSelectBox.classList.toggle('expanded');
@@ -734,6 +737,18 @@
         document.getElementById('ai-voice-lang-select').value = chat.settings.ttsLanguage || '';
         document.getElementById('chat-show-seconds-switch').checked = chat.settings.showSeconds !== undefined ? chat.settings.showSeconds : (state.globalSettings.showSeconds || false);
         document.getElementById('enable-tts-switch').checked = chat.settings.enableTts !== false;
+        document.getElementById('enable-real-voice-switch').checked = chat.settings.enableRealVoice !== false;
+        document.getElementById('real-voice-operation-select').value = chat.settings.realVoiceOperation || 'tap';
+        document.getElementById('voice-understanding-mode-select').value = chat.settings.voiceUnderstandingMode || 'auto';
+        document.getElementById('voice-transcription-url-input').value = chat.settings.voiceTranscriptionUrl || '';
+        document.getElementById('voice-transcription-model-input').value = chat.settings.voiceTranscriptionModel || 'whisper-1';
+        document.getElementById('voice-transcription-key-input').value = chat.settings.voiceTranscriptionKey || '';
+        document.getElementById('voice-max-duration-select').value = String(chat.settings.voiceMaxDuration || 60);
+        document.getElementById('voice-confirm-transcript-switch').checked = chat.settings.voiceConfirmTranscript !== false;
+        document.getElementById('voice-call-input-mode-select').value = chat.settings.voiceCallInputMode || 'text';
+        document.getElementById('voice-call-understanding-select').value = chat.settings.voiceCallUnderstandingMode || 'same';
+        document.getElementById('voice-call-text-fallback-switch').checked = chat.settings.voiceCallTextFallback !== false;
+        if (window.voiceRecording?.refreshSettingsUi) window.voiceRecording.refreshSettingsUi();
         document.getElementById('ai-persona').value = chat.settings.aiPersona;
         
         // 动态年龄设置回显

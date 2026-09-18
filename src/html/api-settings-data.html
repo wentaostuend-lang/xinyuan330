@@ -333,45 +333,39 @@
             系统级通知会在设备通知中心显示，支持横幅弹窗。需要授予通知权限。
         </div>
 
-        <!-- 数据管理 (危险区域) -->
-        <div class="settings-header" data-api-category="data">数据管理</div>
-        
+        <!-- 数据管理：存储与空间清理 -->
+        <div class="settings-header" data-api-category="data">存储与缓存清理</div>
         <div class="settings-section">
-            <!-- 1. 图片占用 + 压缩按钮 (同一行) -->
+            <!-- 图片占用 + 压缩按钮 (同一行) -->
             <div class="settings-item">
-                <!-- 左侧标题 -->
                 <label style="flex-shrink: 0;">本地图片占用</label>
-                
-                <!-- 右侧区域：数值 + 按钮 -->
                 <div class="data-row-right">
-                    <!-- 数值 (由JS填充，CSS会隐藏多余文字只留MB) -->
                     <span id="total-image-size-display">计算中...</span>
-                    
-                    <!-- 压缩按钮 -->
                     <button id="compress-images-btn" class="settings-mini-btn">压缩</button>
                 </div>
             </div>
             
-            <!-- 列表按钮：黑色左对齐 -->
+            <button class="settings-full-btn" id="view-data-distribution-btn" data-lang-key="apiViewDataDistributionBtn">查看数据分布</button>
+            <button class="settings-full-btn" id="cleanup-data-btn">清理冗余数据</button>
             <button class="settings-full-btn" id="clear-chat-images-btn">清空聊天的本地图片</button>
             <button class="settings-full-btn" id="clear-chat-html-btn">清空聊天的HTML内容</button>
             <button class="settings-full-btn" id="clear-api-history-btn">清空所有API历史记录</button>
             <button class="settings-full-btn" id="clear-stickers-btn">一键清空表情包</button>
-            <button class="settings-full-btn" id="view-data-distribution-btn" data-lang-key="apiViewDataDistributionBtn">查看数据分布</button>
-            <button class="settings-full-btn" id="export-data-btn" data-lang-key="apiExportDataBtn">导出所有数据</button>
-            <button class="settings-full-btn" id="advanced-export-btn">高级导出导入</button>
-            <button class="settings-full-btn" id="import-btn" data-lang-key="apiImportDataBtn">导入备份文件</button>
-            <input id="advanced-import-input" type="file" accept="application/json" hidden>
-            <input id="import-data-input" type="file" accept="application/json" hidden>
-            
-            <button class="settings-full-btn" id="cleanup-data-btn">清理冗余数据</button>
-            <button class="settings-full-btn" id="delete-world-books-btn">删除世界书</button>
-            <button class="settings-full-btn" id="clear-specific-data-btn">高级数据清理</button>
-            <button class="settings-full-btn" id="check-and-fix-data-btn">数据检查与修复</button>
-            <button class="settings-full-btn" id="emergency-reset-appearance-btn" >重置当前外观</button>
-            <button class="settings-full-btn" id="factory-reset-btn" > 初始化所有内容 (慎用)</button>
         </div>
 
+        <!-- 数据管理：备份与恢复 -->
+        <div class="settings-header" data-api-category="data">数据备份与迁移</div>
+        <div class="settings-section">
+            <button class="settings-full-btn" id="export-data-btn" data-lang-key="apiExportDataBtn">导出所有数据</button>
+            <button class="settings-full-btn" id="import-btn" data-lang-key="apiImportDataBtn">导入备份文件</button>
+            <button class="settings-full-btn" id="advanced-export-btn">高级导出导入</button>
+            <button class="settings-full-btn" id="advanced-import-btn">导入分类备份</button>
+            <input id="advanced-import-input" type="file" accept="application/json" hidden>
+            <input id="import-data-input" type="file" accept="application/json" hidden>
+        </div>
+
+        <!-- 数据管理：高级维护与重置 -->
+        <div class="settings-header" data-api-category="data">高级维护与重置</div>
         <div class="settings-section">
             <div class="settings-item">
                 <label>持久化存储保护</label>
@@ -379,8 +373,13 @@
                     <button id="check-storage-persistence-btn" class="settings-mini-btn">检查状态</button>
                 </div>
             </div>
-            <div id="storage-persistence-info" style="display:none; padding: 10px 15px; font-size: 13px; color: #666; line-height: 1.6;">
-            </div>
+            <div id="storage-persistence-info" style="display:none; padding: 10px 15px; font-size: 13px; color: #666; line-height: 1.6;"></div>
+            
+            <button class="settings-full-btn" id="check-and-fix-data-btn">数据检查与修复</button>
+            <button class="settings-full-btn" id="clear-specific-data-btn">高级数据清理向导</button>
+            <button class="settings-full-btn" id="emergency-reset-appearance-btn" style="color: #ff9500;">重置当前外观</button>
+            <button class="settings-full-btn" id="delete-world-books-btn" style="color: #ff3b30;">删除世界书</button>
+            <button class="settings-full-btn" id="factory-reset-btn" style="color: #ff3b30;">初始化所有内容 (慎用)</button>
         </div>
         
         <!-- 检查更新 -->

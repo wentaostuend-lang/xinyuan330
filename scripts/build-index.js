@@ -50,11 +50,11 @@ const embeddedAssets = [
   'archive/330--main/index.html'
 ];
 
-const generatedFragmentScripts = fragmentScripts.map(fragment => ({
+const generatedFragmentScripts = fragmentScripts.map((fragment, index) => ({
   ...fragment,
-  contents: `window.__EPHONE_HTML_PARTS.push(${JSON.stringify(fragment.source)
+  contents: `window.__EPHONE_HTML_PARTS[${index}] = ${JSON.stringify(fragment.source)
     .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029')});\n`
+    .replace(/\u2029/g, '\\u2029')};\n`
 }));
 
 const generatedScriptManifest = `window.__EPHONE_HTML_FRAGMENT_SCRIPTS = ${JSON.stringify(
@@ -67,7 +67,7 @@ const generatedShell = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">

@@ -126,7 +126,9 @@
                 <label>好友分组</label>
                 <div class="settings-right"> 
                     <select id="assign-group-select" class="settings-select"></select> 
-                    <button id="manage-groups-btn" class="settings-icon-btn">⚙️</button> 
+                    <button type="button" id="manage-groups-btn" class="settings-icon-btn" title="管理分组" aria-label="管理分组">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    </button> 
                 </div>
             </div>
         </div>
@@ -234,8 +236,8 @@
                         <input type="number" id="max-reply-count-input" min="1" max="20" value="5" class="settings-num-input" style="width: 60px;">
                         <span style="font-size: 13px; color: #666;">条</span>
                     </div>
-                    <div style="font-size: 11px; color: #999; line-height: 1.5;">
-                        💡 AI会根据对话情境，在设定范围内自然地分成多条消息发送，让对话更生动。建议设置2-5条。
+                    <div style="font-size: 11px; color: #8e8e93; line-height: 1.5;">
+                        AI会根据对话情境，在设定范围内自然地分成多条消息发送，让对话更生动。建议设置2-5条。
                     </div>
                 </div>
                 
@@ -474,6 +476,29 @@
                 </label>
             </div>
 
+            <div id="character-bond-settings-group" style="display: none;">
+                <div class="settings-item">
+                    <div>
+                        <label>角色火花</label>
+                        <div class="settings-desc" id="character-spark-settings-summary">关闭后不记录角色互动天数</div>
+                    </div>
+                    <div class="character-bond-switch-actions">
+                        <button type="button" id="character-spark-details-btn" class="character-bond-action">详情</button>
+                        <label class="toggle-switch"><input type="checkbox" id="character-spark-switch"><span class="slider"></span></label>
+                    </div>
+                </div>
+                <div class="settings-item">
+                    <div>
+                        <label>共同宠物</label>
+                        <div class="settings-desc" id="shared-pet-settings-summary">关闭后宠物不出现、不回复</div>
+                    </div>
+                    <div class="character-bond-switch-actions">
+                        <button type="button" id="shared-pet-manage-btn" class="character-bond-action">设置</button>
+                        <label class="toggle-switch"><input type="checkbox" id="shared-pet-switch"><span class="slider"></span></label>
+                    </div>
+                </div>
+            </div>
+
             <!-- Token 统计 -->
             <div class="settings-section">
                 <div class="settings-item">
@@ -569,9 +594,8 @@
             </div>
             
             <div class="settings-item" id="ai-behavior-status-item">
-                <div style="font-size: 12px; color: #666; padding: 10px; background: #f5f5f5; border-radius: 6px; width: 100%;">
-                    💡 当前全局设置：心声功能 <span id="global-thoughts-status">关闭</span>，动态功能 <span id="global-qzone-status">关闭</span>，查看手机 <span id="global-view-myphone-status">关闭</span>，跨聊天消息 <span id="global-cross-chat-status">开启</span>
+                <div style="font-size: 12px; color: #8e8e93; padding: 10px; background: #f8f8fa; border-radius: 8px; width: 100%;">
+                    当前全局设置：心声功能 <span id="global-thoughts-status">关闭</span>，动态功能 <span id="global-qzone-status">关闭</span>，查看手机 <span id="global-view-myphone-status">关闭</span>，跨聊天消息 <span id="global-cross-chat-status">开启</span>
                 </div>
             </div>
         </div>
-

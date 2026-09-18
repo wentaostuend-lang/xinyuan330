@@ -58,7 +58,8 @@ async function executeVectorExtraction(chat, messages, updateTimestamp = false) 
   let processedLastIndex = -1;
   if (chat.history) {
     const lastMsg = messages[messages.length - 1];
-    processedLastIndex = chat.history.findIndex(m => m.timestamp === lastMsg.timestamp);
+    processedLastIndex = chat.history.lastIndexOf(lastMsg);
+    if (processedLastIndex < 0) processedLastIndex = chat.history.findLastIndex(m => m.timestamp === lastMsg.timestamp);
   }
 
   const extracted = window.vectorMemoryManager.parseExtractionResult(rawText);
@@ -70,8 +71,6 @@ async function executeVectorExtraction(chat, messages, updateTimestamp = false) 
       const vm = window.vectorMemoryManager.getVariableMemory(chat);
       if (processedLastIndex !== -1) {
         vm.settings.lastExtractedMsgIndex = processedLastIndex;
-      } else if (window.vectorMemoryManager._tempLastMsgIndex !== undefined && window.vectorMemoryManager._tempLastMsgIndex !== -1) {
-        vm.settings.lastExtractedMsgIndex = window.vectorMemoryManager._tempLastMsgIndex;
       }
     }
     await db.chats.put(chat);
@@ -84,8 +83,6 @@ async function executeVectorExtraction(chat, messages, updateTimestamp = false) 
       const vm = window.vectorMemoryManager.getVariableMemory(chat);
       if (processedLastIndex !== -1) {
         vm.settings.lastExtractedMsgIndex = processedLastIndex;
-      } else if (window.vectorMemoryManager._tempLastMsgIndex !== undefined && window.vectorMemoryManager._tempLastMsgIndex !== -1) {
-        vm.settings.lastExtractedMsgIndex = window.vectorMemoryManager._tempLastMsgIndex;
       }
       await db.chats.put(chat);
       console.log('[变量记忆] 虽未提取到新记忆，但已更新消息索引以避免重复处理');
@@ -201,7 +198,7 @@ async function handleVectorNewMessagesSummary(chat) {
     return;
   }
 
-  const newMessages = chat.history.slice(lastIdx + 1);
+  const newMessages = chat.history.slice(lastIdx + 1).filter(m => !m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白')));
 
   if (newMessages.length < 5) {
     const confirmed = await showCustomConfirm(
@@ -328,30 +325,34 @@ async function handleVectorResetTimestamp(chat) {
 async function triggerVectorMemorySummary(chatId, force = false) {
   const chat = state.chats[chatId];
   if (!chat || !window.vectorMemoryManager) return;
-
-  const vm = window.vectorMemoryManager.getVariableMemory(chat);
-  const lastIdx = vm.settings.lastExtractedMsgIndex !== undefined ? vm.settings.lastExtractedMsgIndex : -1;
-  const historyLen = chat.history ? chat.history.length : 0;
-
-  let messagesToProcess;
-  if (force) {
-    const autoInterval = vm.settings.autoExtractionMsgInterval || 20;
-    messagesToProcess = chat.history.filter(m => !m.isHidden || (m.role === 'system' && m.content && m.content.includes('内心独白'))).slice(-autoInterval);
-  } else {
-    if (lastIdx + 1 >= historyLen) return; // 没有新消息
-    messagesToProcess = chat.history.slice(lastIdx + 1);
-  }
-
-  if (messagesToProcess.length === 0) {
-    if (force) showToast('没有新的对话需要提取', 'info');
-    return;
-  }
+  if (window.vectorMemoryManager._extractionLocks.get(chat)) return;
+  window.vectorMemoryManager._extractionLocks.set(chat, true);
 
   try {
+    const vm = window.vectorMemoryManager.getVariableMemory(chat);
+    const lastIdx = vm.settings.lastExtractedMsgIndex !== undefined ? vm.settings.lastExtractedMsgIndex : -1;
+    const historyLen = chat.history ? chat.history.length : 0;
+
+    let messagesToProcess;
+    if (force) {
+      const autoInterval = vm.settings.autoExtractionMsgInterval || 20;
+      messagesToProcess = chat.history.filter(m => !m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白'))).slice(-autoInterval);
+    } else {
+      if (lastIdx + 1 >= historyLen) return;
+      messagesToProcess = chat.history.slice(lastIdx + 1).filter(m => !m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白')));
+    }
+
+    if (messagesToProcess.length === 0) {
+      if (force) showToast('没有新的对话需要提取', 'info');
+      return;
+    }
+
     await executeVectorExtraction(chat, messagesToProcess, !force);
   } catch (e) {
     console.error('[变量记忆] 提取失败:', e);
     showToast('变量记忆提取失败: ' + e.message, 'error');
+  } finally {
+    window.vectorMemoryManager._extractionLocks.delete(chat);
   }
 }
 
@@ -565,8 +566,9 @@ async function handleManualSummary() {
       await triggerAutoSummary(state.activeChatId, true);
       // 结构化模式或兼容旧开关
       if ((memoryMode === 'structured' || chat.settings.enableStructuredMemory) && window.structuredMemoryManager) {
-        await triggerStructuredMemorySummary(state.activeChatId, true);
-        showToast('结构化记忆已同步更新', 'success');
+        const structuredCount = await triggerStructuredMemorySummary(state.activeChatId, true);
+        if (structuredCount > 0) showToast(`结构化记忆已同步更新（${structuredCount} 条）`, 'success');
+        else if (structuredCount === 0) showToast('结构化记忆检查完成，没有需要新增的内容', 'info');
       }
     }
   }

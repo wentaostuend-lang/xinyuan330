@@ -40,15 +40,7 @@
       if (p.type === 'character') {
         const char = state.chats[p.id];
         if (char) {
-          const memMode = char.settings?.memoryMode || (char.settings?.enableStructuredMemory ? 'structured' : 'diary');
-          let memoryContent = '';
-          if (memMode === 'vector' && window.vectorMemoryManager) {
-            memoryContent = window.vectorMemoryManager.serializeCoreMemories(char);
-          } else if (memMode === 'structured' && window.structuredMemoryManager) {
-            memoryContent = window.structuredMemoryManager.serializeForPrompt(char);
-          } else if (char.longTermMemory && char.longTermMemory.length > 0) {
-            memoryContent = char.longTermMemory.map(mem => mem.content).join('; ');
-          }
+          const memoryContent = getMemoryContextForPrompt(char);
           if (memoryContent && memoryContent.trim() !== '') {
             charactersAndPlayersDossier += `- **长期记忆 (必须参考)**: ${memoryContent}\n`;
           }

@@ -94,18 +94,23 @@
     const myNickname = chat.settings.myNickname || '我';
     const wrapper = document.createElement('div');
     wrapper.className = `message-wrapper ${isUser ? 'user' : 'ai'}`;
+    if (msg.actorType === 'pet') wrapper.classList.add('pet-message');
     if (msg.isHidden) {
       wrapper.classList.add('hidden-revealed');
     }
     if (msg.isExcluded) {
       wrapper.classList.add('msg-excluded');
     }
-    if (chat.isGroup && !isUser) {
-      const member = chat.members.find(m => m.originalName === msg.senderName)
-                  || chat.members.find(m => m.groupNickname === msg.senderName);
+    if ((chat.isGroup && !isUser) || (!isUser && msg.actorType === 'pet')) {
+      const member = chat.isGroup
+        ? (chat.members.find(m => m.originalName === msg.senderName)
+          || chat.members.find(m => m.groupNickname === msg.senderName))
+        : null;
       const senderNameDiv = document.createElement('div');
       senderNameDiv.className = 'sender-name';
-      senderNameDiv.textContent = member ? member.groupNickname : (msg.senderName || '未知成员');
+      senderNameDiv.textContent = msg.actorType === 'pet'
+        ? (msg.senderName || chat.sharedPet?.name || '小精灵')
+        : (member ? member.groupNickname : (msg.senderName || '未知成员'));
       wrapper.appendChild(senderNameDiv);
     }
 
@@ -122,7 +127,10 @@
       avatarSrc = chat.settings.myAvatar || (chat.isGroup ? defaultMyGroupAvatar : defaultAvatar);
       avatarFrameSrc = chat.settings.myAvatarFrame || '';
     } else {
-      if (chat.isGroup) {
+      if (msg.actorType === 'pet') {
+        avatarSrc = msg.avatarSnapshot || chat.sharedPet?.avatar || defaultAvatar;
+        avatarFrameSrc = '';
+      } else if (chat.isGroup) {
         const member = chat.members.find(m => m.originalName === msg.senderName)
                     || chat.members.find(m => m.groupNickname === msg.senderName);
         if (member) {
@@ -408,8 +416,10 @@
             .replace(/[\u200B-\u200D\uFEFF]/g, '')  // 清理零宽字符
             .replace(/【/g, '〖').replace(/】/g, '〗');  // 统一符号
           
-          // 播放时只用外语部分（过滤掉〖〗中的翻译内容）
-          voicePlayContent = voiceContent.replace(/[〖【][^〗】]*[〗】]/g, '');
+          // 默认保持旧行为；用户也可以选择朗读译文或依次朗读两者。
+          voicePlayContent = window.languagePolicy
+            ? window.languagePolicy.getTtsText(voiceContent, chat)
+            : voiceContent.replace(/[〖【][^〗】]*[〗】]/g, '');
         }
 
         // 优先使用真实音频时长，否则根据文字内容估算
@@ -853,7 +863,9 @@
             plainText = cleanedContent.replace(/[〖【][^〗】]*[〗】]/g, '');
           }
           
-          contentHtml = parseMarkdown(plainText).replace(/\n/g, '<br>');
+          contentHtml = typeof window.renderSafeRichText === 'function'
+            ? window.renderSafeRichText(plainText)
+            : parseMarkdown(plainText).replace(/\n/g, '<br>');
         }
       }
     }

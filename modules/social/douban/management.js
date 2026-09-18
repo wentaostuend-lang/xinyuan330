@@ -365,6 +365,7 @@
   window.openDoubanSettingsModal = openDoubanSettingsModal;
   window.openDeleteDoubanPostsModal = openDeleteDoubanPostsModal;
   window.renderDoubanScreen = renderDoubanScreen;
+  window.invalidateDoubanRender = () => { doubanRenderVersion += 1; };
   window.saveDoubanSettings = saveDoubanSettings;
   window.addNpcAvatarFromURL = addNpcAvatarFromURL;
   window.addNpcAvatarFromLocal = addNpcAvatarFromLocal;

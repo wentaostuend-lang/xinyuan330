@@ -110,6 +110,8 @@
 .custom-thoughts-actions {
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-top: 10px;
 }
 
@@ -136,6 +138,30 @@
 
 #phone-screen.dark-mode .custom-thoughts-reset-btn:active {
     background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 420px) {
+    .custom-thoughts-textarea {
+        min-width: 0;
+        padding: 10px 12px;
+        font-size: 16px;
+    }
+
+    .custom-thoughts-actions > button {
+        flex: 0 1 auto;
+        min-height: 36px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .custom-thoughts-body {
+        animation: none;
+    }
+
+    .custom-thoughts-reset-btn,
+    .custom-thoughts-textarea {
+        transition: none;
+    }
 }
 
 /* ============================================

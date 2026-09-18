@@ -16,6 +16,22 @@
   let selectedRules = new Set();
   let editingRuleId = null;
   let ruleCache = {};
+  const renderingResultCache = new Map();
+  const MAX_RENDERING_RESULT_CACHE = 300;
+
+  function resetRenderingRuleCache() {
+    ruleCache = {};
+    renderingResultCache.clear();
+    window.ruleCache = ruleCache;
+  }
+
+  function rememberRenderingResult(key, value) {
+    if (renderingResultCache.has(key)) renderingResultCache.delete(key);
+    renderingResultCache.set(key, value);
+    if (renderingResultCache.size > MAX_RENDERING_RESULT_CACHE) {
+      renderingResultCache.delete(renderingResultCache.keys().next().value);
+    }
+  }
 
   // ========== 来源：script.js 第 3402~3416 行 ==========
 
@@ -49,9 +65,12 @@
     const allRules = await db.renderingRules.toArray();
 
     if (allRules.length === 0) {
+      tabsContainer.style.display = 'none';
       contentContainer.innerHTML = '<p style="text-align:center; color: var(--text-secondary); margin-top: 50px;">还没有任何渲染规则。点击右上角"+"创建第一个吧！</p>';
       return;
     }
+
+    tabsContainer.style.display = 'flex';
 
     // 1. 创建"公用规则" Tab
     const globalTab = document.createElement('button');
@@ -147,36 +166,92 @@
     isRuleManagementMode = !isRuleManagementMode;
     const container = document.getElementById('rules-content-container');
     const actionBar = document.getElementById('rules-action-bar');
-    const manageBtn = document.getElementById('manage-rules-btn');
+    const moreWrapper = document.querySelector('.rules-more-wrapper');
+    const exitBtn = document.getElementById('rules-exit-manage-btn');
+    const manageText = document.getElementById('manage-rules-btn-text');
 
-    const manageIconSVG = `
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-            <polyline points="9 11 12 14 22 4"></polyline>
-        </svg>`;
-
-    const doneIconSVG = `
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-color);">
-             <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>`;
-
+    closeRulesMoreMenu();
 
     if (isRuleManagementMode) {
-      container.classList.add('management-mode');
-      actionBar.style.display = 'flex';
-      manageBtn.innerHTML = doneIconSVG;
+      container?.classList.add('management-mode');
+      if (actionBar) actionBar.style.display = 'flex';
+      if (moreWrapper) moreWrapper.style.display = 'none';
+      if (exitBtn) exitBtn.style.display = 'inline-flex';
+      if (manageText) manageText.textContent = '完成管理';
     } else {
-      container.classList.remove('management-mode');
-      actionBar.style.display = 'none';
-      manageBtn.innerHTML = manageIconSVG;
-      manageBtn.style.color = '';
+      container?.classList.remove('management-mode');
+      if (actionBar) actionBar.style.display = 'none';
+      if (moreWrapper) moreWrapper.style.display = 'inline-flex';
+      if (exitBtn) exitBtn.style.display = 'none';
+      if (manageText) manageText.textContent = '批量管理';
 
       selectedRules.clear();
       updateRuleActionBar();
-      renderRulesList();
     }
 
     renderRulesList();
+  }
+
+  function closeRulesMoreMenu() {
+    const menu = document.getElementById('rules-more-menu');
+    const moreBtn = document.getElementById('rules-more-btn');
+    if (menu) menu.style.display = 'none';
+    if (moreBtn) moreBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleRulesMoreMenu(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('rules-more-menu');
+    const moreBtn = document.getElementById('rules-more-btn');
+    if (!menu) return;
+    const isOpen = menu.style.display === 'flex';
+    if (isOpen) {
+      closeRulesMoreMenu();
+    } else {
+      menu.style.display = 'flex';
+      if (moreBtn) moreBtn.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  // 初始化更多菜单与按钮交互
+  function initRulesHeaderEvents() {
+    const moreBtn = document.getElementById('rules-more-btn');
+    const exitBtn = document.getElementById('rules-exit-manage-btn');
+    const manageBtn = document.getElementById('manage-rules-btn');
+    const menu = document.getElementById('rules-more-menu');
+
+    if (moreBtn && !moreBtn.dataset.bound) {
+      moreBtn.dataset.bound = 'true';
+      moreBtn.addEventListener('click', toggleRulesMoreMenu);
+    }
+
+    if (exitBtn && !exitBtn.dataset.bound) {
+      exitBtn.dataset.bound = 'true';
+      exitBtn.addEventListener('click', () => {
+        if (isRuleManagementMode) toggleRuleManagementMode();
+      });
+    }
+
+    if (manageBtn && !manageBtn.dataset.bound) {
+      manageBtn.dataset.bound = 'true';
+      manageBtn.addEventListener('click', () => {
+        closeRulesMoreMenu();
+        toggleRuleManagementMode();
+      });
+    }
+
+    document.addEventListener('click', (e) => {
+      const moreWrapper = document.querySelector('.rules-more-wrapper');
+      if (moreWrapper && !moreWrapper.contains(e.target)) {
+        closeRulesMoreMenu();
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initRulesHeaderEvents);
+  } else {
+    initRulesHeaderEvents();
   }
 
   function toggleRuleSelection(ruleId) {
@@ -293,7 +368,7 @@
           addedCount++;
         }
 
-        ruleCache = {};
+        resetRenderingRuleCache();
         await renderRulesList();
         await showCustomAlert("成功", `已成功导入 ${addedCount} 条规则！`);
       }
@@ -317,7 +392,7 @@
 
     if (confirmed) {
       await db.renderingRules.bulkDelete([...selectedRules]);
-      ruleCache = {};
+      resetRenderingRuleCache();
       selectedRules.clear();
 
       toggleRuleManagementMode();
@@ -336,7 +411,7 @@
       if (oldSelect) {
         scopeContainer = document.createElement('div');
         scopeContainer.id = 'rule-scope-checkboxes';
-        scopeContainer.style.cssText = "max-height: 150px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px; background: #f9f9f9;";
+        scopeContainer.style.cssText = "max-height: 160px; overflow-y: auto; border: 1px solid rgba(0, 0, 0, 0.08); padding: 8px; border-radius: 12px; background: #ffffff;";
         oldSelect.parentNode.insertBefore(scopeContainer, oldSelect);
         oldSelect.style.display = 'none';
       }
@@ -478,7 +553,7 @@
       await db.renderingRules.add(ruleData);
     }
 
-    ruleCache = {};
+    resetRenderingRuleCache();
 
     document.getElementById('rule-editor-modal').classList.remove('visible');
     await renderRulesList();
@@ -491,6 +566,7 @@
     });
     if (confirmed) {
       await db.renderingRules.delete(ruleId);
+      resetRenderingRuleCache();
       await renderRulesList();
     }
   }
@@ -561,49 +637,77 @@
       return rawContent;
     }
 
-    if (!ruleCache['active_rules_list']) {
-      const allRules = await db.renderingRules.toArray();
-      ruleCache['active_rules_list'] = allRules.filter(r => r.isEnabled);
+    if (!ruleCache.activeRules) {
+      const cacheToPopulate = ruleCache;
+      if (!cacheToPopulate.activeRulesPromise) {
+        cacheToPopulate.activeRulesPromise = db.renderingRules.toArray().then(allRules => {
+          cacheToPopulate.activeRules = allRules.filter(r => r.isEnabled).map(rule => {
+            const regexString = rule.regex || rule.findRegex;
+            let compiledRegex = null;
+            if (regexString) {
+              try {
+                if (regexString.startsWith('/') && regexString.lastIndexOf('/') > 0) {
+                  const lastSlash = regexString.lastIndexOf('/');
+                  try {
+                    compiledRegex = new RegExp(
+                      regexString.substring(1, lastSlash),
+                      regexString.substring(lastSlash + 1)
+                    );
+                  } catch (_) {
+                    compiledRegex = new RegExp(regexString, 'g');
+                  }
+                } else {
+                  compiledRegex = new RegExp(regexString, 'g');
+                }
+              } catch (error) {
+                console.error(`渲染规则 [${rule.name}] 编译出错:`, error);
+              }
+            }
+            return {
+              ...rule,
+              _compiledRegex: compiledRegex,
+              _replacementString: rule.template ?? rule.replaceString
+            };
+          });
+          cacheToPopulate.applicableRulesByChat = new Map();
+        });
+      }
+      await cacheToPopulate.activeRulesPromise;
+      if (ruleCache !== cacheToPopulate) return applyRenderingRules(rawContent, chatId);
     }
 
-    const allActiveRules = ruleCache['active_rules_list'];
+    const canCacheResult = rawContent.length <= 50000;
+    const cacheKey = canCacheResult ? `${String(chatId)}\u0000${rawContent}` : null;
+    if (cacheKey && renderingResultCache.has(cacheKey)) {
+      const cachedResult = renderingResultCache.get(cacheKey);
+      rememberRenderingResult(cacheKey, cachedResult);
+      return cachedResult;
+    }
 
-    const applicableRules = allActiveRules.filter(rule => {
-      const scope = Array.isArray(rule.chatId) ? rule.chatId : [rule.chatId];
-
-      return scope.includes('global') || scope.includes(chatId);
-    });
+    let applicableRules = ruleCache.applicableRulesByChat.get(chatId);
+    if (!applicableRules) {
+      applicableRules = ruleCache.activeRules.filter(rule => {
+        const scope = Array.isArray(rule.chatId) ? rule.chatId : [rule.chatId];
+        return scope.includes('global') || scope.includes(chatId);
+      });
+      ruleCache.applicableRulesByChat.set(chatId, applicableRules);
+    }
 
     let processedContent = rawContent;
 
     for (const rule of applicableRules) {
       try {
-        let regex;
-        const regexString = rule.regex || rule.findRegex;
-        const replacementString = rule.template ?? rule.replaceString;
-
-        if (!regexString) continue;
-
-        if (regexString.startsWith('/') && regexString.lastIndexOf('/') > 0) {
-          const lastSlash = regexString.lastIndexOf('/');
-          const pattern = regexString.substring(1, lastSlash);
-          const flags = regexString.substring(lastSlash + 1);
-          try {
-            regex = new RegExp(pattern, flags);
-          } catch (e) {
-            regex = new RegExp(regexString, 'g');
-          }
-        } else {
-          regex = new RegExp(regexString, 'g');
-        }
-
-        processedContent = processedContent.replace(regex, replacementString);
+        const regex = rule._compiledRegex;
+        if (!regex) continue;
+        regex.lastIndex = 0;
+        processedContent = processedContent.replace(regex, rule._replacementString);
 
       } catch (e) {
         console.error(`渲染规则 [${rule.name}] 执行出错:`, e);
       }
     }
 
+    if (cacheKey) rememberRenderingResult(cacheKey, processedContent);
     return processedContent;
   }
 
@@ -624,6 +728,7 @@
   window.deleteRenderingRule = deleteRenderingRule;
   window.filterHistoryWithDoNotSendRules = filterHistoryWithDoNotSendRules;
   window.applyRenderingRules = applyRenderingRules;
+  window.invalidateRenderingRuleCache = resetRenderingRuleCache;
   window.switchRuleCategory = switchRuleCategory;
   window.ruleCache = ruleCache;
 

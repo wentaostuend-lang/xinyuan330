@@ -121,15 +121,7 @@ function buildDiaryAiContext(chat) {
 
   // Memory: pick one based on memoryMode setting
   let memoryContext = '';
-  const memoryMode = chat.settings.memoryMode || (chat.settings.enableStructuredMemory ? 'structured' : 'diary');
-  if (memoryMode === 'vector' && typeof vectorMemoryManager !== 'undefined') {
-    // 向量记忆：同步获取核心记忆，异步检索在调用处处理
-    try { memoryContext = vectorMemoryManager.serializeCoreMemories(chat); } catch(e) {}
-  } else if ((memoryMode === 'structured' || chat.settings.enableStructuredMemory) && typeof structuredMemoryManager !== 'undefined') {
-    try { memoryContext = structuredMemoryManager.serializeForPrompt(chat); } catch(e) {}
-  } else if (chat.longTermMemory && chat.longTermMemory.length > 0) {
-    memoryContext = chat.longTermMemory.map(m => '- ' + m.content).join('\n');
-  }
+  try { memoryContext = getMemoryContextForPrompt(chat); } catch(e) {}
 
   // Short-term memory (recent chat)
   const maxMemory = parseInt(chat.settings.maxMemory) || 10;

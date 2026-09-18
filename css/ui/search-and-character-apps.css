@@ -338,6 +338,8 @@
            #thoughts-history-list {
                flex-grow: 1;
                overflow-y: auto;
+               overscroll-behavior: contain;
+               -webkit-overflow-scrolling: touch;
                padding-right: 5px;
                margin-right: -10px;
                display: flex;
@@ -509,6 +511,71 @@
            .thought-delete-btn:hover {
                background-color: #ff3b30;
                color: white;
+           }
+
+           #character-profile-modal #thoughts-history-list .thought-checkbox {
+               display: none;
+           }
+
+           #character-profile-modal #thoughts-history-list.management-mode .thought-checkbox {
+               display: block;
+           }
+
+           #character-profile-modal #thoughts-history-list.management-mode .thought-delete-btn {
+               display: none;
+           }
+
+           #character-profile-modal.thoughts-paused .character-profile-content *,
+           #character-profile-modal:not(.visible) .character-profile-content * {
+               animation-play-state: paused !important;
+           }
+
+           @media (hover: none), (pointer: coarse) {
+               #character-profile-modal {
+                   -webkit-backdrop-filter: none;
+                   backdrop-filter: none;
+               }
+
+               #character-profile-modal .thought-delete-btn {
+                   opacity: 1;
+               }
+           }
+
+           @media (max-width: 420px) {
+               #character-profile-modal {
+                   padding-top: max(12px, var(--safe-top, 0px));
+                   padding-right: max(12px, var(--safe-right, 0px));
+                   padding-bottom: max(12px, var(--safe-bottom, 0px), var(--keyboard-inset, 0px));
+                   padding-left: max(12px, var(--safe-left, 0px));
+               }
+
+               #character-profile-modal .character-profile-content {
+                   width: 100%;
+                   max-width: 320px;
+                   height: min(75vh, calc(var(--app-viewport-height, 100vh) - 24px));
+                   max-height: 580px;
+               }
+           }
+
+           @media (max-height: 520px) and (orientation: landscape) {
+               #character-profile-modal .character-profile-content {
+                   height: calc(var(--app-viewport-height, 100vh) - 16px);
+                   max-height: none;
+               }
+           }
+
+           @media (prefers-reduced-motion: reduce) {
+               #character-profile-modal {
+                   -webkit-backdrop-filter: none;
+                   backdrop-filter: none;
+               }
+
+               #character-profile-modal .character-profile-content * {
+                   scroll-behavior: auto !important;
+                   transition-duration: 0.01ms !important;
+                   animation-duration: 0.01ms !important;
+                   animation-iteration-count: 1 !important;
+               }
            }
 
            .search-result-item {

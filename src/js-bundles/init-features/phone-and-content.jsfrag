@@ -760,23 +760,6 @@
     });
 
 
-    const thoughtsHistoryList = document.getElementById('thoughts-history-list');
-    thoughtsHistoryList.addEventListener('scroll', () => {
-      const {
-        scrollTop,
-        scrollHeight,
-        clientHeight
-      } = thoughtsHistoryList;
-
-      if (scrollHeight - scrollTop <= clientHeight + 50 && !isLoadingMoreThoughts) {
-        const totalItems = state.chats[state.activeChatId]?.thoughtsHistory.length || 0;
-        if (totalItems > thoughtsHistoryRenderCount) {
-          loadMoreThoughts();
-        }
-      }
-    });
-
-
     const qzoneContent = document.querySelector('#qzone-screen .qzone-content');
     qzoneContent.addEventListener('scroll', () => {
       const {

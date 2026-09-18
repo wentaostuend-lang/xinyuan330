@@ -321,7 +321,8 @@
                     </label>
                 </div>
                 <div id="custom-thoughts-prompt-container" class="custom-thoughts-body" style="display: none;">
-                    <textarea id="custom-thoughts-prompt-textarea" class="custom-thoughts-textarea" placeholder="在此输入自定义的心声提示词..."></textarea>
+                    <textarea id="custom-thoughts-prompt-textarea" class="custom-thoughts-textarea prompt-entry-backing-input" aria-hidden="true" tabindex="-1" placeholder="在此输入自定义的心声提示词..."></textarea>
+                    <div id="prompt-entry-thoughts-root" class="prompt-entry-root" data-prompt-scope="thoughts"></div>
                     <div class="custom-thoughts-actions">
                         <button id="export-thoughts-prompt-btn" class="custom-thoughts-io-btn">📤 导出</button>
                         <button id="import-thoughts-prompt-btn" class="custom-thoughts-io-btn">📥 导入</button>
@@ -376,7 +377,8 @@
                     <div class="custom-summary-hint" style="font-size: 12px; color: var(--text-secondary, #8e8e93); margin-bottom: 8px; line-height: 1.5;">
                         可用变量：<code>{{角色名}}</code> <code>{{用户昵称}}</code> <code>{{用户人设}}</code> <code>{{角色人设}}</code> <code>{{现有记忆}}</code> <code>{{时间范围}}</code> <code>{{分类说明}}</code> <code>{{对话记录}}</code> <code>{{总结设定}}</code>
                     </div>
-                    <textarea id="custom-summary-prompt-textarea" class="custom-thoughts-textarea" style="min-height: 220px;" placeholder="在此输入自定义的结构化总结提示词..."></textarea>
+                    <textarea id="custom-summary-prompt-textarea" class="custom-thoughts-textarea prompt-entry-backing-input" aria-hidden="true" tabindex="-1" placeholder="在此输入自定义的结构化总结提示词..."></textarea>
+                    <div id="prompt-entry-summary-root" class="prompt-entry-root" data-prompt-scope="summary"></div>
                     <div class="custom-thoughts-actions">
                         <button id="export-summary-prompt-btn" class="custom-thoughts-io-btn">📤 导出</button>
                         <button id="import-summary-prompt-btn" class="custom-thoughts-io-btn">📥 导入</button>
@@ -409,7 +411,8 @@
                         <div class="custom-summary-hint" style="font-size: 12px; color: var(--text-secondary, #8e8e93); margin-bottom: 8px; line-height: 1.5;">
                             单聊提示词：用于一对一聊天场景。下方显示的是完整的默认提示词，你可以直接修改。
                         </div>
-                        <textarea id="custom-chat-prompt-single-textarea" class="custom-thoughts-textarea" style="min-height: 300px;" placeholder="加载中..."></textarea>
+                        <textarea id="custom-chat-prompt-single-textarea" class="custom-thoughts-textarea prompt-entry-backing-input" aria-hidden="true" tabindex="-1" placeholder="加载中..."></textarea>
+                        <div id="prompt-entry-single-root" class="prompt-entry-root" data-prompt-scope="single"></div>
                         <div class="custom-thoughts-actions">
                             <button id="reset-chat-prompt-single-btn" class="custom-thoughts-reset-btn">恢复默认</button>
                         </div>
@@ -419,7 +422,8 @@
                         <div class="custom-summary-hint" style="font-size: 12px; color: var(--text-secondary, #8e8e93); margin-bottom: 8px; line-height: 1.5;">
                             群聊提示词：用于群聊场景（有用户参与）。下方显示的是完整的默认提示词，你可以直接修改。
                         </div>
-                        <textarea id="custom-chat-prompt-group-textarea" class="custom-thoughts-textarea" style="min-height: 300px;" placeholder="加载中..."></textarea>
+                        <textarea id="custom-chat-prompt-group-textarea" class="custom-thoughts-textarea prompt-entry-backing-input" aria-hidden="true" tabindex="-1" placeholder="加载中..."></textarea>
+                        <div id="prompt-entry-group-root" class="prompt-entry-root" data-prompt-scope="group"></div>
                         <div class="custom-thoughts-actions">
                             <button id="reset-chat-prompt-group-btn" class="custom-thoughts-reset-btn">恢复默认</button>
                         </div>
@@ -429,7 +433,8 @@
                         <div class="custom-summary-hint" style="font-size: 12px; color: var(--text-secondary, #8e8e93); margin-bottom: 8px; line-height: 1.5;">
                             单人线下模式提示词：用于单人线下剧情模式。下方显示的是完整的默认提示词，你可以直接修改。
                         </div>
-                        <textarea id="custom-chat-prompt-offline-textarea" class="custom-thoughts-textarea" style="min-height: 300px;" placeholder="加载中..."></textarea>
+                        <textarea id="custom-chat-prompt-offline-textarea" class="custom-thoughts-textarea prompt-entry-backing-input" aria-hidden="true" tabindex="-1" placeholder="加载中..."></textarea>
+                        <div id="prompt-entry-offline-root" class="prompt-entry-root" data-prompt-scope="offline"></div>
                         <div class="custom-thoughts-actions">
                             <button id="reset-chat-prompt-offline-btn" class="custom-thoughts-reset-btn">恢复默认</button>
                         </div>
@@ -439,7 +444,8 @@
                         <div class="custom-summary-hint" style="font-size: 12px; color: var(--text-secondary, #8e8e93); margin-bottom: 8px; line-height: 1.5;">
                             群聊线下模式提示词：用于群聊线下剧情模式。下方显示的是完整的默认提示词，你可以直接修改。
                         </div>
-                        <textarea id="custom-chat-prompt-group-offline-textarea" class="custom-thoughts-textarea" style="min-height: 300px;" placeholder="加载中..."></textarea>
+                        <textarea id="custom-chat-prompt-group-offline-textarea" class="custom-thoughts-textarea prompt-entry-backing-input" aria-hidden="true" tabindex="-1" placeholder="加载中..."></textarea>
+                        <div id="prompt-entry-group-offline-root" class="prompt-entry-root" data-prompt-scope="group_offline"></div>
                         <div class="custom-thoughts-actions">
                             <button id="reset-chat-prompt-group-offline-btn" class="custom-thoughts-reset-btn">恢复默认</button>
                         </div>

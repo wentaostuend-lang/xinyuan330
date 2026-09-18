@@ -13,15 +13,18 @@
   <link rel="stylesheet" href="css/media/music-settings-and-groups.css?v=0.0.36">
   <link rel="stylesheet" href="css/video-voice-call.css?v=0.0.36">
   <link rel="stylesheet" href="css/settings-font.css?v=0.0.36">
+  <link rel="stylesheet" href="css/core/shared-components.css?v=0.0.39-restored-components">
   <link rel="stylesheet" href="css/core/feedback-and-chat.css?v=0.0.36">
   <link rel="stylesheet" href="css/chat/content-and-settings.css?v=0.0.36">
+  <link rel="stylesheet" href="css/chat/time-awareness.css?v=0.0.40">
   <link rel="stylesheet" href="css/ui/search-and-character-apps.css?v=0.0.36">
   <link rel="stylesheet" href="css/phone/character-details.css?v=0.0.36">
   <link rel="stylesheet" href="css/ui/home-and-voice.css?v=0.0.36">
-  <link rel="stylesheet" href="css/voice-recording.css?v=0.0.36">
+  <link rel="stylesheet" href="css/voice-recording.css?v=0.0.37-real-voice">
   <link rel="stylesheet" href="css/phone/frame-and-minimal-chat.css?v=0.0.36">
   <link rel="stylesheet" href="css/media/nai-gallery.css?v=0.0.36">
   <link rel="stylesheet" href="css/chat/settings.css?v=0.0.36">
+  <link rel="stylesheet" href="css/chat/language-settings.css?v=0.0.38">
   <link rel="stylesheet" href="css/settings/ios-controls.css?v=0.0.36">
   <link rel="stylesheet" href="css/media/reading-and-home.css?v=0.0.36">
   <link rel="stylesheet" href="css/finance/alipay.css?v=0.0.36">
@@ -31,9 +34,10 @@
   <link rel="stylesheet" href="css/finance/auction.css?v=0.0.36">
   <link rel="stylesheet" href="css/todo/todo-list.css?v=0.0.36">
   <link rel="stylesheet" href="css/social/green-river.css?v=0.0.36">
-  <link rel="stylesheet" href="css/mail/mail-app.css?v=0.0.36">
+  <link rel="stylesheet" href="css/mail/mail-app.css?v=0.0.37-mail-ecosystem">
   <link rel="stylesheet" href="css/chat/rendering-and-images.css?v=0.0.36">
   <link rel="stylesheet" href="css/social/green-river-comments.css?v=0.0.36">
+  <link rel="stylesheet" href="css/social/character-bond.css?v=0.0.42">
   <link rel="stylesheet" href="css/social/reddit.css?v=0.0.36">
   <link rel="stylesheet" href="css/components/toast.css?v=0.0.36">
   <link rel="stylesheet" href="css/settings/layout.css?v=0.0.36">
@@ -58,12 +62,13 @@
   <link rel="stylesheet" href="css/douban-menu.css?v=0.0.36">
   <link rel="stylesheet" href="update-notification.css?v=0.0.36">
   <link rel="stylesheet" href="css/memory/structured-memory.css?v=0.0.36">
-  <link rel="stylesheet" href="css/memory/vector-memory.css?v=0.0.36">
+  <link rel="stylesheet" href="css/memory/vector-memory.css?v=0.0.37-multilingual-memory">
   <link rel="stylesheet" href="css/online/app.css?v=0.0.36">
   <link rel="stylesheet" href="css/mcp/app.css?v=0.0.36">
   <link rel="stylesheet" href="css/health/period-tracker.css?v=0.0.36">
-  <link rel="stylesheet" href="css/productivity/focus-timer.css?v=0.0.36">
+  <link rel="stylesheet" href="css/productivity/focus-timer.css?v=0.0.41-focus">
   <link rel="stylesheet" href="css/core/extra.css?v=0.0.36">
+  <link rel="stylesheet" href="css/settings/prompt-entries.css?v=0.0.43">
   <meta name="theme-color" content="#000000">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="manifest" href="manifest.json?v=0.0.36-pwa2">
@@ -90,7 +95,8 @@
   <script src="modules/notifications/manager.js?v=0.0.36" defer></script>
   <script src="modules/character/generator.js?v=0.0.36" defer></script>
   <script src="modules/memory/structured-memory.js?v=0.0.36" defer></script>
-  <script src="modules/memory/vector-memory.js?v=0.0.36-perf1" defer></script>
+  <script src="modules/memory/vector-memory.js?v=0.0.37-multilingual-memory" defer></script>
+  <script src="modules/memory/memory-transfer.js?v=0.0.36" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <!-- 拆分后的模块（按依赖顺序加载） -->
@@ -99,14 +105,16 @@
   <script src="modules/translations.js?v=0.0.36" defer></script>
   <!-- 第二层：UI 通用组件 -->
   <script src="modules/ui-modals.js?v=0.0.36" defer></script>
-  <script src="modules/ui-loaders.js?v=0.0.36" defer></script>
+  <script src="modules/ui-loaders.js?v=0.0.41-richtext" defer></script>
   <!-- 第三层：核心聊天功能 -->
   <script src="modules/chat-list.js?v=0.0.36-perf1" defer></script>
-  <script src="modules/chat/interface-core.js?v=0.0.36-perf1" defer></script>
-  <script src="modules/chat/message-element.js?v=0.0.36-perf1" defer></script>
+  <script src="modules/chat/interface-core.js?v=0.0.37-real-voice" defer></script>
+  <script src="modules/chat/language-policy.js?v=0.0.38" defer></script>
+  <script src="modules/chat/message-element.js?v=0.0.41-richtext" defer></script>
   <script src="modules/chat/message-lifecycle.js?v=0.0.36-perf1" defer></script>
   <script src="modules/chat/interface-settings.js?v=0.0.36-perf1" defer></script>
   <script src="modules/chat-input.js?v=0.0.36" defer></script>
+  <script src="modules/social/character-bond.js?v=0.0.42" defer></script>
   <!-- 第四层：AI 核心 -->
   <script src="modules/ai/context-and-uploads.js?v=0.0.36" defer></script>
   <script src="modules/ai/response-parser.js?v=0.0.36" defer></script>
@@ -123,14 +131,14 @@
   <script src="modules/sticker-manager.js?v=0.0.36" defer></script>
   <script src="modules/memory/token-breakdown.js?v=0.0.36" defer></script>
   <script src="modules/memory/long-term-memory.js?v=0.0.36" defer></script>
-  <script src="modules/memory/vector-memory-view.js?v=0.0.36" defer></script>
+  <script src="modules/memory/vector-memory-view.js?v=0.0.37-multilingual-memory" defer></script>
   <script src="modules/memory/variable-memory-summary.js?v=0.0.36" defer></script>
-  <script src="modules/memory/legacy-memory-conversion.js?v=0.0.36" defer></script>
+  <script src="modules/memory/legacy-memory-conversion.js?v=0.0.37-multilingual-memory" defer></script>
   <script src="modules/memory/structured-memory-conversion.js?v=0.0.36" defer></script>
   <script src="modules/memory/structured-summary-menu.js?v=0.0.36" defer></script>
   <script src="modules/memory/summary-orchestration.js?v=0.0.36" defer></script>
   <script src="modules/memory/memory-screen.js?v=0.0.36" defer></script>
-  <script src="modules/video-voice-call.js?v=0.0.36" defer></script>
+  <script src="modules/video-voice-call.js?v=0.0.37-real-voice" defer></script>
   <script src="modules/message-actions.js?v=0.0.36" defer></script>
   <script src="modules/media/image/nai-presets.js?v=0.0.36-perf1" defer></script>
   <script src="modules/media/image/generation-providers.js?v=0.0.36-perf1" defer></script>
@@ -147,6 +155,7 @@
   <script src="modules/data/backup/github-large-data.js?v=0.0.36" defer></script>
   <script src="modules/data/backup/automatic-backup.js?v=0.0.36" defer></script>
   <script src="modules/settings/prompt-templates.js?v=0.0.36" defer></script>
+  <script src="modules/settings/prompt-entry-manager.js?v=0.0.43" defer></script>
   <script src="modules/settings/api-presets.js?v=0.0.36" defer></script>
   <script src="modules/settings/sound-presets.js?v=0.0.36" defer></script>
   <script src="modules/settings/appearance-screen.js?v=0.0.36" defer></script>
@@ -195,7 +204,7 @@
   <script src="modules/games/werewolf/prompt-and-summary.js?v=0.0.36" defer></script>
   <script src="modules/games/werewolf/discussion.js?v=0.0.36" defer></script>
   <script src="modules/games/werewolf/voting-and-endgame.js?v=0.0.36" defer></script>
-  <script src="modules/reading-room.js?v=0.0.36" defer></script>
+  <script src="modules/reading-room.js?v=0.0.37-book-title" defer></script>
   <script src="modules/social/douban/feed.js?v=0.0.36" defer></script>
   <script src="modules/social/douban/post-detail.js?v=0.0.36" defer></script>
   <script src="modules/social/douban/context-settings.js?v=0.0.36" defer></script>
@@ -240,7 +249,7 @@
   <script src="modules/character/npc-manager.js?v=0.0.36" defer></script>
   <script src="modules/social/album.js?v=0.0.36" defer></script>
   <script src="modules/chat/group-manager.js?v=0.0.36" defer></script>
-  <script src="modules/mail/mail-app.js?v=0.0.36" defer></script>
+  <script src="modules/mail/mail-app.js?v=0.0.37-mail-ecosystem" defer></script>
   <script src="modules/todo/todo-list.js?v=0.0.36" defer></script>
   <script src="modules/chat/quick-replies.js?v=0.0.36" defer></script>
   <script src="modules/memory/manual-summary.js?v=0.0.36" defer></script>
@@ -249,7 +258,7 @@
   <!-- 第八层：初始化（必须在所有模块之后） -->
   <!-- 数据定义（无依赖） -->
   <script src="modules/init-avatar-frames.js?v=0.0.36" defer></script>
-  <script src="modules/init-db-schema.js?v=0.0.36" defer></script>
+  <script src="modules/init-db-schema.js?v=0.0.41-focus" defer></script>
   <script src="modules/mcp/manager.js?v=0.0.36" defer></script>
   <script src="modules/ai/reply-task-store.js?v=0.0.36" defer></script>
   <script src="modules/keep-alive/reply-guardian.js?v=0.0.36" defer></script>
@@ -260,8 +269,8 @@
   <!-- PIN/城市（依赖 DOM） -->
   <script src="modules/init-pin-city.js?v=0.0.36" defer></script>
   <!-- 事件绑定和功能（依赖 state, db） -->
-  <script src="modules/init-event-bindingsA.js?v=0.0.36-perf1" defer></script>
-  <script src="modules/init-event-bindingsB.js?v=0.0.36-perf1" defer></script>
+  <script src="modules/init-event-bindingsA.js?v=0.0.37-real-voice" defer></script>
+  <script src="modules/init-event-bindingsB.js?v=0.0.37-real-voice" defer></script>
   <script src="modules/init-features.js?v=0.0.36-perf1" defer></script>
   <!-- 主入口（最后加载，调用 init） -->
   <script src="modules/init-and-state.js?v=0.0.36-perf1" defer></script>
@@ -270,9 +279,9 @@
   <script src="modules/clean-chat-detail.js?v=0.0.36" defer></script>
   <script src="modules/clean-api-settings.js?v=0.0.36" defer></script>
   <script src="modules/api-style-beautify.js?v=0.0.36" defer></script>
-  <script src="modules/voice-recording.js?v=0.0.36-perf1" defer></script>
+  <script src="modules/voice-recording.js?v=0.0.37-real-voice" defer></script>
   <script src="modules/health/period-tracker.js?v=0.0.36" defer></script>
-  <script src="modules/productivity/focus-timer.js?v=0.0.36" defer></script>
+  <script src="modules/productivity/focus-timer.js?v=0.0.41-focus" defer></script>
   <!-- 情侣空间（从内联 script 拆分） -->
   <script src="modules/couple-space/core.js?v=0.0.36"></script>
   <script src="modules/couple-space/diary.js?v=0.0.36"></script>

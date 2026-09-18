@@ -177,6 +177,12 @@
       waimaiModal.classList.add('visible');
     });
 
+    const waimaiCloseBtn = document.getElementById('waimai-close-btn');
+    if (waimaiCloseBtn) {
+      waimaiCloseBtn.addEventListener('click', () => {
+        waimaiModal.classList.remove('visible');
+      });
+    }
 
     waimaiModal.addEventListener('click', (e) => {
 

@@ -12,7 +12,50 @@
   }
 
 
+  // 世界书顶栏“更多”菜单初始化
+  function initWorldBookHeaderMenu() {
+    const moreBtn = document.getElementById('world-book-more-btn');
+    const menu = document.getElementById('world-book-dropdown-menu');
+    if (!moreBtn || !menu) return;
+
+    if (moreBtn.dataset.menuBound === 'true') return;
+    moreBtn.dataset.menuBound = 'true';
+
+    moreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = menu.classList.contains('show');
+      // 关闭其他可能存在的菜单
+      document.querySelectorAll('.myphone-dropdown-menu.show, .worldbook-dropdown-menu.show').forEach(m => {
+        m.classList.remove('show');
+      });
+      if (!isVisible) {
+        menu.classList.add('show');
+      }
+    });
+
+    // 点击菜单项内部按钮时自动关闭菜单
+    menu.querySelectorAll('.worldbook-dropdown-item').forEach(item => {
+      item.addEventListener('click', () => {
+        menu.classList.remove('show');
+      });
+    });
+
+    // 点击页面任意外部空白处关闭
+    document.addEventListener('click', (e) => {
+      if (!menu.contains(e.target) && !moreBtn.contains(e.target)) {
+        menu.classList.remove('show');
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initWorldBookHeaderMenu);
+  } else {
+    initWorldBookHeaderMenu();
+  }
+
   async function renderWorldBookScreen() {
+    initWorldBookHeaderMenu();
     const tabsContainer = document.getElementById('world-book-tabs');
     const contentContainer = document.getElementById('world-book-content-container');
 
@@ -253,34 +296,41 @@
     enabled: true
   }) {
     const block = document.createElement('div');
-
     block.className = 'message-editor-block';
-
 
     const isChecked = entry.enabled !== false ? 'checked' : '';
 
     block.innerHTML = `
-                <div style="display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-bottom: 5px;">
-                    <label class="toggle-switch" title="启用/禁用此条目">
-                        <input type="checkbox" class="entry-enabled-switch" ${isChecked}>
-                        <span class="slider"></span>
-                    </label>
-                    <button class="delete-block-btn" title="删除此条目">×</button>
+                <div class="entry-header-actions" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 4px;">
+                    <div class="entry-badge-title" style="font-size: 13px; font-weight: 600; color: var(--text-secondary); letter-spacing: -0.1px;">
+                        词条配置
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label class="ios-toggle-container" style="transform: scale(0.85);" title="启用/禁用此条目">
+                            <input type="checkbox" class="entry-enabled-switch" ${isChecked}>
+                            <span class="ios-toggle-track"></span>
+                        </label>
+                        <button class="delete-block-btn" title="删除此条目">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-                <div class="form-group" style="margin-bottom: 10px;">
-                    <label style="font-size: 0.8em;">备注 (可选)</label>
-                    <input type="text" class="entry-comment-input" value="${entry.comment || ''}" placeholder="例如：关于角色的童年" style="padding: 8px;">
+                <div class="form-subgroup">
+                    <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">备注 (可选)</label>
+                    <input type="text" class="entry-comment-input" value="${entry.comment || ''}" placeholder="例如：关于角色的童年">
                 </div>
-                <div class="form-group" style="margin-bottom: 10px;">
-                    <label style="font-size: 0.8em;">关键词 (用英文逗号,分隔)</label>
-                    <input type="text" class="entry-keys-input" value="${(entry.keys || []).join(', ')}" placeholder="例如: key1, key2, key3" style="padding: 8px;">
+                <div class="form-subgroup">
+                    <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">关键词 (用英文逗号,分隔)</label>
+                    <input type="text" class="entry-keys-input" value="${(entry.keys || []).join(', ')}" placeholder="例如: key1, key2, key3">
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="font-size: 0.8em;">内容</label>
-                    <textarea class="entry-content-textarea" rows="5" style="width: 100%; font-size: 14px;">${entry.content || ''}</textarea>
+                <div class="form-subgroup">
+                    <label style="font-size: 11px; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">内容</label>
+                    <textarea class="entry-content-textarea" rows="4" placeholder="填写触发词注入内容...">${entry.content || ''}</textarea>
                 </div>
             `;
-
 
     block.querySelector('.delete-block-btn').addEventListener('click', () => {
       block.remove();
@@ -288,5 +338,3 @@
 
     return block;
   }
-
-

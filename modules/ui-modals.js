@@ -307,15 +307,17 @@
         modalFooter.style.flexDirection = 'row';
         modalFooter.style.justifyContent = 'flex-end';
 
-        // 暴力重置：把按钮塞回去
+        // 暴力重置：把取消、重置清空、确定按钮塞回去
         modalFooter.innerHTML = `
             <button id="custom-modal-cancel">取消</button>
+            <button id="custom-modal-reset">重置</button>
             <button id="custom-modal-confirm" class="confirm-btn">确定</button>
           `;
       }
       // --- 【核心修复结束】 ---
 
       const confirmBtn = document.getElementById('custom-modal-confirm');
+      const resetBtn = document.getElementById('custom-modal-reset');
       const cancelBtn = document.getElementById('custom-modal-cancel');
 
       // 确保按钮存在后再操作
@@ -327,6 +329,17 @@
         confirmBtn.onclick = () => {
           resolve(input.value);
           hideCustomModal();
+        };
+      }
+
+      if (resetBtn) {
+        resetBtn.textContent = '重置';
+        resetBtn.style.display = 'block';
+        resetBtn.onclick = () => {
+          if (input) {
+            input.value = '';
+            input.focus();
+          }
         };
       }
 
@@ -751,4 +764,42 @@
   window.showSpectatorMemorySelectionModal = showSpectatorMemorySelectionModal;
   window.showChoiceModal = showChoiceModal;
   window.showCategoryPickerModal = showCategoryPickerModal;
+
+  let safeViewportFrame = 0;
+  let lastSafeViewportHeight = -1;
+  let lastKeyboardInset = -1;
+
+  function syncSafeViewportVariables() {
+    safeViewportFrame = 0;
+    const viewport = window.visualViewport;
+    const viewportHeight = viewport?.height || window.innerHeight;
+    const keyboardInset = viewport
+      ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+      : 0;
+    const roundedViewportHeight = Math.round(viewportHeight);
+    const roundedKeyboardInset = Math.round(keyboardInset);
+    if (roundedViewportHeight !== lastSafeViewportHeight) {
+      lastSafeViewportHeight = roundedViewportHeight;
+      document.documentElement.style.setProperty('--app-viewport-height', `${roundedViewportHeight}px`);
+    }
+    if (roundedKeyboardInset !== lastKeyboardInset) {
+      lastKeyboardInset = roundedKeyboardInset;
+      document.documentElement.style.setProperty('--keyboard-inset', `${roundedKeyboardInset}px`);
+    }
+  }
+
+  function scheduleSafeViewportSync() {
+    if (safeViewportFrame) return;
+    safeViewportFrame = requestAnimationFrame(syncSafeViewportVariables);
+  }
+
+  if (!window.__safeViewportBindingsInstalled) {
+    window.__safeViewportBindingsInstalled = true;
+    syncSafeViewportVariables();
+    window.addEventListener('resize', scheduleSafeViewportSync, { passive: true });
+    window.addEventListener('orientationchange', scheduleSafeViewportSync, { passive: true });
+    window.addEventListener('pageshow', scheduleSafeViewportSync, { passive: true });
+    window.visualViewport?.addEventListener('resize', scheduleSafeViewportSync, { passive: true });
+    window.visualViewport?.addEventListener('scroll', scheduleSafeViewportSync, { passive: true });
+  }
 })();

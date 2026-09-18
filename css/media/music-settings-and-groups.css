@@ -95,35 +95,103 @@
 
            .post-actions-btn {
                margin-left: auto;
-               padding: 5px 10px;
-               font-size: 20px;
-               font-weight: bold;
+               width: 32px;
+               height: 32px;
+               padding: 0;
+               font-size: 18px;
+               font-weight: 700;
+               letter-spacing: -1px;
                color: var(--text-secondary);
                cursor: pointer;
                border-radius: 50%;
-               line-height: 1;
+               display: flex;
+               align-items: center;
+               justify-content: center;
+               transition: background-color 0.2s ease, transform 0.15s ease, color 0.15s ease;
+               user-select: none;
+               -webkit-tap-highlight-color: transparent;
+           }
+
+           .post-actions-btn svg {
+               pointer-events: none;
            }
 
            .post-actions-btn:hover {
-               background-color: #f0f0f0;
+               background-color: rgba(0, 0, 0, 0.05);
+               color: var(--text-primary);
+           }
+
+           .post-actions-btn:active {
+               background-color: rgba(0, 0, 0, 0.09);
+               transform: scale(0.92);
+           }
+
+           #post-actions-modal #custom-modal {
+               width: 240px;
+               border-radius: 18px;
+               background: rgba(255, 255, 255, 0.92);
+               backdrop-filter: blur(20px);
+               -webkit-backdrop-filter: blur(20px);
+               box-shadow: 0 16px 36px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.06);
+               border: 1px solid rgba(255, 255, 255, 0.6);
+               overflow: hidden;
+               padding: 8px;
+               box-sizing: border-box;
+           }
+
+           #post-actions-modal .custom-modal-footer {
+               display: flex;
+               flex-direction: column;
+               gap: 4px;
+               border-top: none;
+               background: transparent;
+               width: 100%;
+               box-sizing: border-box;
            }
 
            #post-actions-modal .custom-modal-footer button {
                width: 100%;
                border: none;
-               border-bottom: 1px solid #dbdbdb;
-               padding: 14px;
-               font-size: 18px;
+               border-radius: 12px;
+               padding: 12px 16px;
+               font-size: 15px;
+               font-weight: 500;
+               color: var(--text-primary);
+               background: transparent;
+               cursor: pointer;
+               display: flex;
+               align-items: center;
+               justify-content: center;
+               transition: background-color 0.15s ease, transform 0.1s ease, color 0.15s ease;
+               user-select: none;
+               -webkit-tap-highlight-color: transparent;
            }
 
-           #post-actions-modal .custom-modal-footer button:last-child {
-               border-bottom: none;
+           #post-actions-modal .custom-modal-footer button:hover {
+               background-color: rgba(0, 0, 0, 0.05);
+           }
+
+           #post-actions-modal .custom-modal-footer button:active {
+               background-color: rgba(0, 0, 0, 0.08);
+               transform: scale(0.98);
            }
 
            #post-actions-modal #cancel-post-action-btn {
-               margin-top: 8px;
-               border-radius: 8px;
-               background-color: #f0f0f0;
+               margin-top: 4px;
+               border-radius: 12px;
+               background-color: rgba(0, 0, 0, 0.04);
+               color: var(--text-secondary);
+               font-weight: 500;
+           }
+
+           #post-actions-modal #cancel-post-action-btn:hover {
+               background-color: rgba(0, 0, 0, 0.07);
+               color: var(--text-primary);
+           }
+
+           #post-actions-modal #cancel-post-action-btn:active {
+               background-color: rgba(0, 0, 0, 0.1);
+               transform: scale(0.98);
            }
 
            #chat-messages .transfer-card .transfer-title,
@@ -523,9 +591,9 @@
            #memories-view,
            #contact-picker-screen,
            #member-management-screen,
-           #world-book-editor-screen {
-               background-color: var(--secondary-bg);
-           }
+#world-book-editor-screen {
+    background-color: #ffffff !important;
+}
 
            #api-settings-screen .form-container,
            #font-settings-screen .form-container,

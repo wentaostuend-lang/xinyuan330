@@ -1,39 +1,41 @@
            /* --- 渲染规则绑定范围美化 --- */
 
-           /* 1. 容器美化：类似 iOS 分组卡片 */
+           /* 1. 容器美化：纯白清爽分组卡片 */
            #rule-scope-checkboxes {
                max-height: 250px;
                overflow-y: auto;
-               background-color: var(--secondary-bg);
-               /* 适配暗黑模式 */
-               border: 1px solid var(--border-color);
-               border-radius: 10px;
-               padding: 5px;
+               background-color: #ffffff !important;
+               /* 适配纯白风格 */
+               border: 1px solid rgba(0, 0, 0, 0.08) !important;
+               border-radius: 12px;
+               padding: 6px;
                margin-top: 5px;
                display: flex;
                flex-direction: column;
-               gap: 2px;
+               gap: 4px;
            }
 
            /* 2. 单行列表项美化 */
            .rule-scope-item {
                display: flex;
                align-items: center;
-               padding: 10px 12px;
+               padding: 8px 10px;
                border-radius: 8px;
                cursor: pointer;
-               transition: background-color 0.2s ease;
+               background-color: #ffffff;
+               border: 1px solid rgba(0, 0, 0, 0.04);
+               transition: all 0.2s ease;
                user-select: none;
-               /* 防止双击选中文字 */
            }
 
            /* 悬停和点击效果 */
            .rule-scope-item:hover {
-               background-color: rgba(0, 0, 0, 0.05);
+               background-color: #f8fafc;
+               border-color: rgba(0, 122, 255, 0.2);
            }
 
            .rule-scope-item:active {
-               background-color: rgba(0, 0, 0, 0.1);
+               background-color: #f1f5f9;
            }
 
            /* 3. 复选框美化：变大一点，并增加右边距 */
@@ -129,6 +131,132 @@
                background-color: rgba(255, 255, 255, 0.1);
            }
 
+           /* --- 渲染规则顶栏与下拉菜单美化 --- */
+           #rendering-rules-screen .header {
+               position: relative;
+               display: flex;
+               align-items: center;
+               justify-content: space-between;
+           }
+
+           #rendering-rules-screen .header > span[data-lang-key="homeAppRenderer"],
+           #rendering-rules-screen .header > span:nth-child(2) {
+               position: absolute;
+               left: 50%;
+               transform: translateX(-50%);
+               max-width: calc(100% - 160px);
+               white-space: nowrap;
+               overflow: hidden;
+               text-overflow: ellipsis;
+               pointer-events: none;
+               font-weight: 600;
+           }
+
+           #rendering-rules-screen .header-actions {
+               display: flex;
+               align-items: center;
+               gap: 8px;
+               z-index: 2;
+           }
+
+           .rules-more-wrapper {
+               position: relative;
+               display: inline-flex;
+           }
+
+           .rules-dropdown-menu {
+               position: absolute;
+               top: calc(100% + 8px);
+               right: 0;
+               min-width: 150px;
+               background: rgba(255, 255, 255, 0.95);
+               backdrop-filter: blur(20px);
+               -webkit-backdrop-filter: blur(20px);
+               border: 1px solid rgba(0, 0, 0, 0.08);
+               box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04);
+               border-radius: 12px;
+               padding: 6px;
+               z-index: 100;
+               display: flex;
+               flex-direction: column;
+               gap: 2px;
+               transform-origin: top right;
+               animation: rulesMenuFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+           }
+
+           @keyframes rulesMenuFadeIn {
+               from {
+                   opacity: 0;
+                   transform: scale(0.92) translateY(-4px);
+               }
+               to {
+                   opacity: 1;
+                   transform: scale(1) translateY(0);
+               }
+           }
+
+           .rules-dropdown-item {
+               display: flex;
+               align-items: center;
+               gap: 10px;
+               width: 100%;
+               padding: 9px 12px;
+               border: none;
+               background: transparent;
+               border-radius: 8px;
+               font-size: 14px;
+               font-weight: 500;
+               color: var(--text-primary, #1c1c1e);
+               cursor: pointer;
+               text-align: left;
+               transition: background-color 0.15s ease, color 0.15s ease;
+               box-sizing: border-box;
+               user-select: none;
+           }
+
+           .rules-dropdown-item svg {
+               flex-shrink: 0;
+               color: var(--text-secondary, #666);
+               transition: color 0.15s ease;
+           }
+
+           .rules-dropdown-item:hover {
+               background-color: rgba(0, 122, 255, 0.08);
+               color: var(--accent-color, #007aff);
+           }
+
+           .rules-dropdown-item:hover svg {
+               color: var(--accent-color, #007aff);
+           }
+
+           .rules-dropdown-item:active {
+               background-color: rgba(0, 122, 255, 0.15);
+           }
+
+           /* 暗黑模式适配 */
+           #phone-screen.dark-mode .rules-dropdown-menu {
+               background: rgba(36, 36, 38, 0.95);
+               border-color: rgba(255, 255, 255, 0.12);
+               box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+           }
+
+           #phone-screen.dark-mode .rules-dropdown-item {
+               color: #f2f2f7;
+           }
+
+           #phone-screen.dark-mode .rules-dropdown-item svg {
+               color: #a1a1a6;
+           }
+
+           #phone-screen.dark-mode .rules-dropdown-item:hover {
+               background-color: rgba(255, 255, 255, 0.1);
+               color: #fff;
+           }
+
+           #phone-screen.dark-mode .rules-dropdown-item:hover svg {
+               color: #fff;
+           }
+
            /* --- 渲染规则管理模式样式 --- */
 
            /* 1. 规则卡片容器调整 */
@@ -190,8 +318,9 @@
            }
 
            #rules-content-container.management-mode .rule-card.selected {
-               background-color: rgba(0, 122, 255, 0.05);
-               border-color: var(--accent-color);
+               background-color: #ffffff !important;
+               border-color: var(--accent-color) !important;
+               box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2) !important;
            }
 
            /* 暗黑模式适配 */
@@ -295,6 +424,3 @@
                background-color: rgba(0, 0, 0, 0.85);
                transform: scale(1.1);
            }
-
-
-

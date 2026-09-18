@@ -15,7 +15,7 @@
       '金融系统': ['userWallet', 'userTransactions', 'funds'],
       'NPC与故事': ['npcs', 'npcGroups', 'grAuthors', 'grStories'],
       '快捷回复': ['quickReplies', 'quickReplyCategories'],
-      '邮件系统': ['emails'],
+      '邮件系统': ['emails', 'mailThreads', 'mailContacts', 'mailAccounts', 'mailEvents', 'mailPublicBoxes', 'mailSettings'],
       'MCP连接': ['mcpConnections', 'mcpActivities', 'mcpSettings'],
       '外观设置': ['appearancePresets']
     };
@@ -476,6 +476,10 @@
     await showCustomAlert("正在准备...", "正在读取选定的数据，请稍候...");
 
     try {
+      const sanitizeMemorySecrets = value => JSON.parse(JSON.stringify(value, (key, child) => {
+        if (key === 'embeddingApiKey' || key === '_retrievalCache') return undefined;
+        return child;
+      }));
       const isFiltered = selectedChatIds.length > 0;
       const backupData = {
         version: 3,
@@ -500,12 +504,39 @@
           // 导出时移除API历史记录
           if (tableName === 'chats') {
             tableData = removeApiHistoryFromChats(tableData);
+            tableData = tableData.map(sanitizeMemorySecrets);
           }
           
           backupData.data[tableName] = tableData;
           totalRecords += tableData.length;
           console.log(`已打包表: ${tableName}, 记录数: ${tableData.length}${isFiltered ? ' (已过滤)' : ''}`);
         }
+      }
+
+      // 长期/结构化/向量记忆存放在 chats 记录内部，记忆分类需单独提取，
+      // 避免为了迁移记忆而覆盖聊天记录和角色设置。
+      if (categoryNames.includes('记忆与记录')) {
+        const selectedSet = new Set(selectedChatIds);
+        const memoryChats = Object.values(state.chats).filter(chat => !isFiltered || selectedSet.has(chat.id));
+        backupData.data.chatMemories = memoryChats.map(chat => ({
+          chatId: chat.id,
+          chatName: chat.name,
+          longTermMemory: JSON.parse(JSON.stringify(chat.longTermMemory || [])),
+          structuredMemory: chat.structuredMemory ? JSON.parse(JSON.stringify(chat.structuredMemory)) : null,
+          variableMemory: chat.variableMemory ? (() => { const value = JSON.parse(JSON.stringify(chat.variableMemory)); if (value.settings) delete value.settings.embeddingApiKey; delete value._retrievalCache; return value; })() : null,
+          vectorMemory: chat.vectorMemory ? (() => { const value = JSON.parse(JSON.stringify(chat.vectorMemory)); if (value.settings) delete value.settings.embeddingApiKey; delete value._retrievalCache; return value; })() : null,
+          lastMemorySummaryTimestamp: chat.lastMemorySummaryTimestamp || 0,
+          lastStructuredMemoryTimestamp: chat.lastStructuredMemoryTimestamp || 0,
+          memoryArchives: chat.memoryArchives ? sanitizeMemorySecrets(chat.memoryArchives) : [],
+          memorySettings: {
+            memoryMode: chat.settings?.memoryMode,
+            enableStructuredMemory: chat.settings?.enableStructuredMemory,
+            enableAutoMemory: chat.settings?.enableAutoMemory,
+            autoMemoryInterval: chat.settings?.autoMemoryInterval,
+            longTermMemoryLimit: chat.settings?.longTermMemoryLimit
+          }
+        }));
+        totalRecords += backupData.data.chatMemories.length;
       }
 
       const blob = new Blob(
@@ -732,6 +763,46 @@
 
       for (const tableName in data) {
         if (tableName === 'mcpSecrets') continue;
+        if (tableName === 'chatMemories') {
+          const records = Array.isArray(data.chatMemories) ? data.chatMemories : [];
+          for (const record of records) {
+            const chat = state.chats[record.chatId];
+            if (!chat) continue;
+            chat.longTermMemory = Array.isArray(chat.longTermMemory) ? chat.longTermMemory : [];
+            const existingMemoryKeys = new Set(chat.longTermMemory.map(item => `${item.timestamp || ''}\u0000${String(item.content || '').trim()}`));
+            for (const item of (record.longTermMemory || [])) {
+              const key = `${item.timestamp || ''}\u0000${String(item.content || '').trim()}`;
+              if (!existingMemoryKeys.has(key)) {
+                chat.longTermMemory.push(JSON.parse(JSON.stringify(item)));
+                existingMemoryKeys.add(key);
+              }
+            }
+            if (record.structuredMemory && window.structuredMemoryManager) {
+              const structuredPayload = { version: '1.0', type: 'structured-memory', ...record.structuredMemory };
+              window.structuredMemoryManager.importMemory(chat, JSON.stringify(structuredPayload), 'merge');
+            }
+            const variablePayload = record.variableMemory || record.vectorMemory;
+            if (variablePayload && window.vectorMemoryManager) {
+              const vectorPayload = variablePayload.type ? variablePayload : { type: 'variable-memory-full', version: 2, ...variablePayload };
+              await window.vectorMemoryManager.importMemory(chat, JSON.stringify(vectorPayload), 'merge');
+            }
+            chat.memoryArchives = Array.isArray(chat.memoryArchives) ? chat.memoryArchives : [];
+            const archiveIds = new Set(chat.memoryArchives.map(item => item.id));
+            for (const archive of (record.memoryArchives || [])) {
+              if (!archiveIds.has(archive.id)) chat.memoryArchives.push(JSON.parse(JSON.stringify(archive)));
+            }
+            chat.settings = chat.settings || {};
+            for (const [key, value] of Object.entries(record.memorySettings || {})) {
+              if (value !== undefined) chat.settings[key] = value;
+            }
+            if (record.lastMemorySummaryTimestamp !== undefined) chat.lastMemorySummaryTimestamp = record.lastMemorySummaryTimestamp || 0;
+            if (record.lastStructuredMemoryTimestamp !== undefined) chat.lastStructuredMemoryTimestamp = record.lastStructuredMemoryTimestamp || 0;
+            await db.chats.put(chat);
+            importedRecords++;
+          }
+          if (records.length) importedTables++;
+          continue;
+        }
         if (db[tableName]) {
           const tableData = data[tableName];
           if (Array.isArray(tableData) && tableData.length > 0) {

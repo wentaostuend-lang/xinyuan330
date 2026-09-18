@@ -367,11 +367,16 @@ class StructuredMemoryManager {
 
       // 检查是否有用户自定义的结构化总结提示词
       if (window.state && window.state.globalSettings &&
-          window.state.globalSettings.customSummaryPromptEnabled &&
-          window.state.globalSettings.customSummaryPrompt &&
-          window.state.globalSettings.customSummaryPrompt.trim()) {
+          window.state.globalSettings.customSummaryPromptEnabled) {
+        const entriesPrompt = typeof window.composeStoredPromptEntries === 'function'
+          ? window.composeStoredPromptEntries('summary')
+          : null;
+        const customSummaryPrompt = entriesPrompt && entriesPrompt.trim()
+          ? entriesPrompt
+          : window.state.globalSettings.customSummaryPrompt;
+        if (customSummaryPrompt && customSummaryPrompt.trim()) {
         // 使用用户自定义提示词，替换占位符变量
-        return window.state.globalSettings.customSummaryPrompt
+        return customSummaryPrompt
           .replace(/\{\{角色名\}\}/g, chat.originalName)
           .replace(/\{\{用户昵称\}\}/g, userNickname)
           .replace(/\{\{用户人设\}\}/g, chat.settings.myPersona || '未设置')
@@ -381,6 +386,7 @@ class StructuredMemoryManager {
           .replace(/\{\{分类说明\}\}/g, categoryDocs)
           .replace(/\{\{对话记录\}\}/g, formattedHistory)
           .replace(/\{\{总结设定\}\}/g, summarySettingContext);
+        }
       }
 
       return `${summarySettingContext}
@@ -739,7 +745,7 @@ class StructuredMemoryManager {
     // 只统计非隐藏消息（与聊天详情保持一致）
     const totalMessages = chat.history ? chat.history.filter(m => !m.isHidden).length : 0;
     // 统计上次总结后的非隐藏消息（除了内心独白）
-    const messagesAfterTimestamp = chat.history ? chat.history.filter(m => m.timestamp > lastTimestamp && (!m.isHidden || (m.role === 'system' && m.content && m.content.includes('内心独白')))).length : 0;
+    const messagesAfterTimestamp = chat.history ? chat.history.filter(m => Number(m?.timestamp) > lastTimestamp && (!m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白')))).length : 0;
     
     return {
       lastTimestamp,
@@ -759,6 +765,7 @@ class StructuredMemoryManager {
       type: 'structured-memory',
       exportedAt: Date.now(),
       characterName: chat.originalName || chat.name,
+      lastStructuredMemoryTimestamp: chat.lastStructuredMemoryTimestamp || 0,
       facts: mem.facts,
       events: mem.events,
       decisions: mem.decisions,
@@ -818,7 +825,19 @@ class StructuredMemoryManager {
   importMemory(chat, jsonString, mode = 'merge') {
     try {
       const data = JSON.parse(jsonString);
-      if (!data.version) throw new Error('无效的结构化记忆导出文件');
+      if (!data.version || !['structured-memory', 'structured-memory-partial'].includes(data.type)) throw new Error('无效的结构化记忆导出文件');
+
+      if (data.type === 'structured-memory-partial') {
+        if (!Array.isArray(data.items) || data.items.some(item => !item || typeof item.category !== 'string' || typeof item.content !== 'string')) {
+          throw new Error('结构化记忆条目格式不正确');
+        }
+      } else if ((data.facts !== undefined && (!data.facts || Array.isArray(data.facts) || typeof data.facts !== 'object')) ||
+        (data.events !== undefined && (!data.events || Array.isArray(data.events) || typeof data.events !== 'object')) ||
+        ['decisions', 'plans', 'emotions'].some(key => data[key] !== undefined && (!Array.isArray(data[key]) || data[key].some(item => typeof item !== 'string'))) ||
+        (data.events && Object.values(data.events).some(value => typeof value !== 'string')) ||
+        (data.relationship !== undefined && typeof data.relationship !== 'string')) {
+        throw new Error('结构化记忆分类格式不正确');
+      }
 
       const mem = this.getStructuredMemory(chat);
 
@@ -840,6 +859,7 @@ class StructuredMemoryManager {
         mem.emotions = data.emotions || [];
         mem._customCategories = data._customCategories || {};
         mem._custom = data._custom || {};
+        if (data.lastStructuredMemoryTimestamp !== undefined) chat.lastStructuredMemoryTimestamp = Number(data.lastStructuredMemoryTimestamp) || 0;
       } else {
         // 合并模式
         if (data.facts) Object.assign(mem.facts, data.facts);

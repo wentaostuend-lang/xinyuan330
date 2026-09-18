@@ -1039,6 +1039,175 @@
     };
   }
 
+  function ensureToolsModal() {
+    let modal = document.getElementById('mcp-tools-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'mcp-tools-modal';
+      modal.className = 'modal mcp-tools-modal';
+      modal.innerHTML = `
+        <div class="modal-content mcp-tools-modal-content">
+          <div class="modal-header mcp-tools-modal-header">
+            <span id="mcp-tools-modal-title">配置工具权限</span>
+            <span class="close-btn" id="mcp-tools-modal-close" style="cursor:pointer;font-size:24px;line-height:1;color:var(--text-secondary,#888);">&times;</span>
+          </div>
+          <div class="mcp-tools-modal-search">
+            <div class="mcp-tools-search-wrap">
+              <svg class="mcp-tools-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="mcp-tools-search-input" class="mcp-tools-search-input" placeholder="搜索工具名称或描述..." autocomplete="off">
+              <button type="button" id="mcp-tools-search-clear" class="mcp-tools-search-clear" style="display:none;" title="清除">&times;</button>
+            </div>
+          </div>
+          <div class="mcp-tools-modal-toolbar">
+            <span id="mcp-tools-modal-count" class="mcp-tools-modal-count">已选 0 项</span>
+            <div class="mcp-tools-modal-actions">
+              <button type="button" id="mcp-tools-select-all" class="mcp-small-btn">全选</button>
+              <button type="button" id="mcp-tools-deselect-all" class="mcp-small-btn">清空</button>
+            </div>
+          </div>
+          <div class="modal-body mcp-tools-modal-body" id="mcp-tools-modal-list"></div>
+          <div class="modal-footer mcp-tools-modal-footer">
+            <button type="button" class="save" id="mcp-tools-modal-confirm" style="width:100%;">完成</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+    }
+    return modal;
+  }
+
+  function openToolsPickerModal(connection, row) {
+    const modal = ensureToolsModal();
+    const titleEl = modal.querySelector('#mcp-tools-modal-title');
+    const countEl = modal.querySelector('#mcp-tools-modal-count');
+    const listEl = modal.querySelector('#mcp-tools-modal-list');
+    const closeBtn = modal.querySelector('#mcp-tools-modal-close');
+    const confirmBtn = modal.querySelector('#mcp-tools-modal-confirm');
+    const selectAllBtn = modal.querySelector('#mcp-tools-select-all');
+    const deselectAllBtn = modal.querySelector('#mcp-tools-deselect-all');
+    const searchInput = modal.querySelector('#mcp-tools-search-input');
+    const searchClear = modal.querySelector('#mcp-tools-search-clear');
+    const storage = row.querySelector('.mcp-permission-tools-storage');
+    if (!storage) return;
+
+    const tools = connection.capabilities && Array.isArray(connection.capabilities.tools)
+      ? connection.capabilities.tools
+      : [];
+
+    titleEl.textContent = `${connection.name} · 工具配置`;
+
+    const updateModalCount = () => {
+      const allCheckboxes = listEl.querySelectorAll('.mcp-modal-tool-checkbox');
+      const checkedCount = Array.from(allCheckboxes).filter(cb => cb.checked).length;
+      const query = (searchInput.value || '').trim();
+      if (query) {
+        const visibleItems = listEl.querySelectorAll('.mcp-modal-tool-item:not([style*="display: none"])');
+        const visibleChecked = Array.from(visibleItems).filter(item => {
+          const cb = item.querySelector('.mcp-modal-tool-checkbox');
+          return cb && cb.checked;
+        }).length;
+        countEl.textContent = `匹配 ${visibleItems.length}/${tools.length} 项，已选 ${visibleChecked} 项`;
+      } else {
+        countEl.textContent = `共 ${tools.length} 项，已选 ${checkedCount} 项`;
+      }
+    };
+
+    const filterTools = () => {
+      const query = (searchInput.value || '').trim().toLowerCase();
+      searchClear.style.display = query ? 'flex' : 'none';
+      const items = listEl.querySelectorAll('.mcp-modal-tool-item');
+      items.forEach(item => {
+        const text = item.dataset.searchKeywords || '';
+        if (!query || text.includes(query)) {
+          item.style.display = 'flex';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+      updateModalCount();
+    };
+
+    // 渲染工具列表
+    listEl.innerHTML = tools.map(tool => {
+      const savedInput = storage.querySelector(`input[data-mcp-permission-tool="${CSS.escape(tool.name)}"]`);
+      const checked = savedInput ? savedInput.checked : true;
+      const title = tool.title || tool.name;
+      const desc = tool.description ? `<div class="mcp-modal-tool-desc">${escapeHtml(tool.description)}</div>` : '';
+      const searchKeywords = `${tool.name} ${title} ${tool.description || ''}`.toLowerCase();
+      return `
+        <label class="mcp-modal-tool-item" data-search-keywords="${escapeHtml(searchKeywords)}">
+          <input type="checkbox" class="mcp-modal-tool-checkbox" data-tool-name="${escapeHtml(tool.name)}" ${checked ? 'checked' : ''}>
+          <div class="mcp-modal-tool-info">
+            <div class="mcp-modal-tool-name">${escapeHtml(title)}</div>
+            ${desc}
+          </div>
+        </label>`;
+    }).join('');
+
+    if (searchInput) {
+      searchInput.value = '';
+      searchClear.style.display = 'none';
+      searchInput.oninput = filterTools;
+      searchClear.onclick = () => {
+        searchInput.value = '';
+        filterTools();
+        searchInput.focus();
+      };
+    }
+
+    updateModalCount();
+
+    listEl.onchange = updateModalCount;
+
+    selectAllBtn.onclick = () => {
+      const targetCheckboxes = listEl.querySelectorAll('.mcp-modal-tool-item:not([style*="display: none"]) .mcp-modal-tool-checkbox');
+      targetCheckboxes.forEach(cb => { cb.checked = true; });
+      updateModalCount();
+    };
+
+    deselectAllBtn.onclick = () => {
+      const targetCheckboxes = listEl.querySelectorAll('.mcp-modal-tool-item:not([style*="display: none"]) .mcp-modal-tool-checkbox');
+      targetCheckboxes.forEach(cb => { cb.checked = false; });
+      updateModalCount();
+    };
+
+    const saveAndClose = () => {
+      listEl.querySelectorAll('.mcp-modal-tool-checkbox').forEach(cb => {
+        const name = cb.dataset.toolName;
+        const targetInput = storage.querySelector(`input[data-mcp-permission-tool="${CSS.escape(name)}"]`);
+        if (targetInput) {
+          targetInput.checked = cb.checked;
+        }
+      });
+      // 更新行摘要
+      updateConnectionToolsSummary(row);
+      modal.classList.remove('visible');
+    };
+
+    closeBtn.onclick = saveAndClose;
+    confirmBtn.onclick = saveAndClose;
+    modal.onclick = (e) => {
+      if (e.target === modal) saveAndClose();
+    };
+
+    modal.classList.add('visible');
+  }
+
+  function updateConnectionToolsSummary(row) {
+    const storage = row.querySelector('.mcp-permission-tools-storage');
+    const badge = row.querySelector('.mcp-permission-badge');
+    if (!storage || !badge) return;
+    const total = storage.querySelectorAll('input[data-mcp-permission-tool]').length;
+    const checked = storage.querySelectorAll('input[data-mcp-permission-tool]:checked').length;
+    if (total === 0) {
+      badge.textContent = '暂无工具';
+    } else {
+      badge.textContent = `已选 ${checked}/${total} 项工具`;
+    }
+  }
+
   function renderPermissionEditor(container, target) {
     if (!container) return;
     const settings = getChatMcpSettings(target);
@@ -1048,22 +1217,37 @@
         : [];
       const connectionChecked = settings.allowedConnections.includes(connection.id);
       const selectedTools = settings.allowedTools && settings.allowedTools[connection.id];
-      const toolsHtml = tools.length
-        ? tools.map(tool => {
-            const checked = !Array.isArray(selectedTools) || selectedTools.includes(tool.name);
-            return `<label class="mcp-permission-tool"><input type="checkbox" data-mcp-permission-tool="${escapeHtml(tool.name)}" ${checked ? 'checked' : ''}> <span>${escapeHtml(tool.title || tool.name)}</span></label>`;
-          }).join('')
-        : '<div class="settings-desc">尚未发现工具，请先到 MCP 页面测试连接。</div>';
+
+      let selectedCount = 0;
+      const hiddenInputs = tools.map(tool => {
+        const checked = !Array.isArray(selectedTools) || selectedTools.includes(tool.name);
+        if (checked) selectedCount++;
+        return `<input type="checkbox" data-mcp-permission-tool="${escapeHtml(tool.name)}" ${checked ? 'checked' : ''}>`;
+      }).join('');
+
+      const countText = tools.length ? `已选 ${selectedCount}/${tools.length} 项工具` : '暂无工具';
+
       return `
         <div class="mcp-permission-connection" data-mcp-permission-connection="${escapeHtml(connection.id)}">
-          <label class="mcp-permission-connection-head">
-            <input type="checkbox" data-mcp-permission-connection-toggle ${connectionChecked ? 'checked' : ''}>
-            <strong>${escapeHtml(connection.name)}</strong>
-            <span class="mcp-status-tag ${statusClass(connection)}">${statusLabel(connection)}</span>
-          </label>
-          <div class="mcp-permission-tools" ${connectionChecked ? '' : 'hidden'}>${toolsHtml}</div>
+          <div class="mcp-permission-connection-head">
+            <label class="mcp-permission-connection-title-wrap">
+              <input type="checkbox" data-mcp-permission-connection-toggle ${connectionChecked ? 'checked' : ''}>
+              <strong>${escapeHtml(connection.name)}</strong>
+              <span class="mcp-status-tag ${statusClass(connection)}">${statusLabel(connection)}</span>
+            </label>
+          </div>
+          <div class="mcp-permission-summary-strip" ${connectionChecked ? '' : 'hidden'}>
+            <span class="mcp-permission-badge">${countText}</span>
+            <button type="button" class="mcp-small-btn mcp-open-tools-btn" data-mcp-open-tools="${escapeHtml(connection.id)}" ${tools.length ? '' : 'disabled'}>
+              ${tools.length ? '配置工具' : '暂未测试'}
+            </button>
+          </div>
+          <div class="mcp-permission-tools-storage" style="display:none;" hidden>
+            ${hiddenInputs}
+          </div>
         </div>`;
     }).join('');
+
     container.innerHTML = `
       <div class="settings-item" style="display:flex;justify-content:space-between;align-items:center;">
         <div><label>允许角色使用 MCP</label><div class="settings-desc">角色可在聊天中自动调用已授权工具</div></div>
@@ -1095,14 +1279,26 @@
           <div class="mcp-permission-list">${connectionsHtml || '<div class="settings-desc">尚未添加 MCP 连接。</div>'}</div>
         </div>
       </div>`;
+
     container.onchange = event => {
       if (event.target.matches('[data-mcp-permission-enabled]')) {
         container.querySelector('[data-mcp-permission-options]').hidden = !event.target.checked;
       }
       if (event.target.matches('[data-mcp-permission-connection-toggle]')) {
         const row = event.target.closest('[data-mcp-permission-connection]');
-        const tools = row && row.querySelector('.mcp-permission-tools');
-        if (tools) tools.hidden = !event.target.checked;
+        const strip = row && row.querySelector('.mcp-permission-summary-strip');
+        if (strip) strip.hidden = !event.target.checked;
+      }
+    };
+
+    container.onclick = event => {
+      const btn = event.target.closest('[data-mcp-open-tools]');
+      if (!btn) return;
+      const connectionId = btn.dataset.mcpOpenTools;
+      const row = btn.closest('[data-mcp-permission-connection]');
+      const connection = getConnection(connectionId);
+      if (connection && row) {
+        openToolsPickerModal(connection, row);
       }
     };
   }

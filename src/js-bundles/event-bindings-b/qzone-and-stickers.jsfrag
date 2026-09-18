@@ -41,8 +41,9 @@
         commentInput.focus();
         return;
       }
-      if (target.classList.contains('post-actions-btn')) {
-        const container = target.closest('.qzone-post-container');
+      const actionsBtn = target.closest('.post-actions-btn');
+      if (actionsBtn) {
+        const container = actionsBtn.closest('.qzone-post-container');
         if (container && container.dataset.postId) showPostActions(parseInt(container.dataset.postId));
         return;
       }
@@ -330,25 +331,6 @@
 
 
     document.getElementById('switch-greeting-btn').addEventListener('click', handleSwitchGreeting);
-
-    document.getElementById('thoughts-history-list').addEventListener('click', (e) => {
-      if (e.target && e.target.id === 'load-more-thoughts-btn') {
-        loadMoreThoughts();
-      }
-    });
-
-
-
-
-    document.getElementById('profile-history-icon-btn').addEventListener('click', showThoughtsHistory);
-
-    document.getElementById('history-back-btn').addEventListener('click', hideThoughtsHistory);
-    document.getElementById('character-profile-modal').addEventListener('click', (e) => {
-
-      if (e.target.id === 'character-profile-modal') {
-        e.target.classList.remove('visible');
-      }
-    });
 
     document.getElementById('manage-stickers-btn').addEventListener('click', toggleStickerManagementMode);
     document.getElementById('delete-selected-stickers-btn').addEventListener('click', executeBatchDeleteStickers);
@@ -853,19 +835,68 @@
     document.getElementById('voice-call-restore-btn').addEventListener('click', restoreVoiceCall);
     makeDraggable(document.getElementById('voice-call-restore-btn'), document.getElementById('voice-call-restore-btn'));
     document.getElementById('voice-join-call-btn').addEventListener('click', handleUserJoinVoiceCall);
-    document.getElementById('voice-user-speak-btn').addEventListener('click', async () => {
-      if (!voiceCallState.isActive) return;
+    const voiceUserSpeakButton = document.getElementById('voice-user-speak-btn');
+    let suppressVoiceCallClick = false;
+    const getVoiceCallInputMode = () => state.chats[voiceCallState.activeChatId]?.settings?.voiceCallInputMode || 'text';
+    const setUserVoiceSpeaking = speaking => {
       const userAvatar = document.querySelector('#voice-participant-avatars-grid .participant-avatar-wrapper[data-participant-id="user"] .participant-avatar');
-      if (userAvatar) {
-        userAvatar.classList.add('speaking');
+      userAvatar?.classList.toggle('speaking', speaking);
+    };
+    const finishVoiceCallRecording = async cancelled => {
+      setUserVoiceSpeaking(false);
+      const result = await window.voiceRecording?.stopCallRecording(cancelled);
+      if (result?.text) triggerAiInVoiceCallAction(result.text, result);
+    };
+    window.addEventListener('real-voice-call-result', event => {
+      setUserVoiceSpeaking(false);
+      const result = event.detail;
+      if (voiceCallState.isActive && result?.text) triggerAiInVoiceCallAction(result.text, result);
+    });
+    voiceUserSpeakButton.addEventListener('click', async () => {
+      if (!voiceCallState.isActive) return;
+      if (suppressVoiceCallClick) {
+        suppressVoiceCallClick = false;
+        return;
       }
+      const inputMode = getVoiceCallInputMode();
+      if (inputMode === 'tap' && window.voiceRecording) {
+        if (window.voiceRecording.isRecording('call')) await finishVoiceCallRecording(false);
+        else {
+          setUserVoiceSpeaking(true);
+          const started = await window.voiceRecording.startCallRecording();
+          if (!started) setUserVoiceSpeaking(false);
+        }
+        return;
+      }
+      if (inputMode !== 'text' && !window.voiceRecording) showToast('真实语音组件尚未加载，已切换为文字输入', 'error');
+      setUserVoiceSpeaking(true);
       const userInput = await showCustomPrompt('你说', '请输入你想说的话...');
-      if (userAvatar) {
-        userAvatar.classList.remove('speaking');
-      }
+      setUserVoiceSpeaking(false);
       if (userInput && userInput.trim()) {
         triggerAiInVoiceCallAction(userInput.trim());
       }
+    });
+    voiceUserSpeakButton.addEventListener('pointerdown', async event => {
+      if (!voiceCallState.isActive || getVoiceCallInputMode() !== 'hold' || !window.voiceRecording) return;
+      event.preventDefault();
+      suppressVoiceCallClick = true;
+      try { voiceUserSpeakButton.setPointerCapture(event.pointerId); } catch (error) { /* Optional. */ }
+      setUserVoiceSpeaking(true);
+      const started = await window.voiceRecording.startCallRecording();
+      if (!started) setUserVoiceSpeaking(false);
+    });
+    voiceUserSpeakButton.addEventListener('pointerup', event => {
+      if (getVoiceCallInputMode() !== 'hold' || !window.voiceRecording) return;
+      event.preventDefault();
+      finishVoiceCallRecording(false);
+      setTimeout(() => { suppressVoiceCallClick = false; }, 0);
+    });
+    voiceUserSpeakButton.addEventListener('pointercancel', () => {
+      suppressVoiceCallClick = false;
+      if (getVoiceCallInputMode() === 'hold') finishVoiceCallRecording(true);
+    });
+    voiceUserSpeakButton.addEventListener('contextmenu', event => {
+      if (getVoiceCallInputMode() === 'hold') event.preventDefault();
     });
     document.getElementById('voice-regenerate-call-btn').addEventListener('click', () => {
       if (!voiceCallState.isActive) return;

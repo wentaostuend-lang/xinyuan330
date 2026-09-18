@@ -49,32 +49,35 @@
 
         let timeContextText = '';
         let longTimeNoSee = false;
+        let groupTimeAwarenessContext = '';
 
         if (chat.settings.enableTimePerception) {
-
-          const lastUserMsg = historySlice.findLast(msg => msg.role === 'user' && !msg.isHidden);
-
-          const lastAiMsg = historySlice.findLast(msg => msg.role === 'assistant' && !msg.isHidden);
-
-          if (lastUserMsg && lastAiMsg) {
-            const lastUserMessageTime = formatTimestampForAI(lastUserMsg.timestamp);
-            const lastAiMessageTime = formatTimestampForAI(lastAiMsg.timestamp);
-            timeContextText = `上一条消息发送于 ${lastAiMessageTime}，用户刚刚在 ${lastUserMessageTime} 回复了。`;
-
-
-            const timeDiffHours = (lastUserMsg.timestamp - lastAiMsg.timestamp) / (1000 * 60 * 60);
-            if (timeDiffHours > 3) {
-              longTimeNoSee = true;
-              const diffDays = Math.floor(timeDiffHours / 24);
-              timeContextText += ` 群里已经安静了${diffDays > 0 ? diffDays + '天' : Math.floor(timeDiffHours) + '小时'}。`;
-            }
-          } else if (lastUserMsg) {
-
-            timeContextText = "这是群里的第一条用户消息。";
+          if (window.TimeAwareness) {
+            const result = window.TimeAwareness.buildContext({
+              chat,
+              history: historySlice,
+              mode: 'reply',
+              currentTime,
+              localizedDate,
+              timeOfDayGreeting,
+              isGroup: true
+            });
+            timeContextText = result.timeContextText;
+            longTimeNoSee = result.longTimeNoSee;
+            groupTimeAwarenessContext = result.context;
           } else {
-            timeContextText = "这是群里的第一条消息。";
+            const lastUserMsg = historySlice.findLast(msg => msg.role === 'user' && !msg.isHidden);
+            const lastAiMsg = historySlice.findLast(msg => msg.role === 'assistant' && !msg.isHidden);
+            if (lastUserMsg && lastAiMsg) {
+              const lastUserMessageTime = formatTimestampForAI(lastUserMsg.timestamp);
+              const lastAiMessageTime = formatTimestampForAI(lastAiMsg.timestamp);
+              timeContextText = `上一条消息发送于 ${lastAiMessageTime}，用户刚刚在 ${lastUserMessageTime} 回复了。`;
+            } else if (lastUserMsg) {
+              timeContextText = "这是群里的第一条用户消息。";
+            } else {
+              timeContextText = "这是群里的第一条消息。";
+            }
           }
-
         }
 
         const allProducts = await db.shoppingProducts.toArray();
@@ -180,8 +183,10 @@
         }
         let systemPromptTemplate = window.getActiveChatPrompt ? window.getActiveChatPrompt(chat.settings.isOfflineMode ? 'group_offline' : 'group') : '';
         
-        let bilingualModeGroupContext = '';
-        if (chat.settings.enableBilingualMode) {
+        let bilingualModeGroupContext = window.languagePolicy
+          ? window.languagePolicy.buildPrompt(chat, { isGroup: true })
+          : '';
+        if (!window.languagePolicy && chat.settings.enableBilingualMode) {
           if (chat.settings.bilingualCharacters && chat.settings.bilingualCharacters.length > 0) {
             const chars = chat.settings.bilingualCharacters.join('、');
             bilingualModeGroupContext = `
@@ -222,7 +227,9 @@
           }
         }
 
-        let groupTimePerceptionInstruction = chat.settings.enableTimePerception ? `5.  **情景感知**: 你的对话【必须】自然地体现出对当前时间 (${currentTime}) 和情景的感知。${longTimeNoSee ? `【重要提示】${timeContextText} 你应该让角色们主动开启新话题来打破沉默。` : ''}` : '';
+        let groupTimePerceptionInstruction = chat.settings.enableTimePerception
+          ? `5. **情景感知**: 阅读下方时间感知事实，并依据各角色人设自然处理；时间信息不得压过用户当前消息。`
+          : '';
         
         let groupCrossChatInstruction = (() => {
           const enableCrossChat = state.globalSettings.enableCrossChat;
@@ -235,18 +242,12 @@
 ` : '';
         })();
         
-        let groupTimeContextText = chat.settings.enableTimePerception ? `- **对话状态**: 上次互动于 ${timeContextText}` : '';
-        let groupLongTimeNoSeeContext = longTimeNoSee ? `
-# 【行为铁律：回应时间差】
-- **当前情景**: ${timeContextText}
-- **你的首要任务**: 你们【必须】回应这个时间差。
-- **关键约束**: 你们【绝对不能】直接延续上一段对话的话题。
-- **你的行动**: 你们【必须】主动开启一个全新的、符合当前时间 (${currentTime}) 的话题来问候用户，或者对“好久不见”这件事发表评论。
-` : '';
+        let groupTimeContextText = chat.settings.enableTimePerception ? (groupTimeAwarenessContext || `- **对话状态**: ${timeContextText}`) : '';
+        let groupLongTimeNoSeeContext = '';
 
         let memoryModeContext = (() => {
           const memMode = chat.settings?.memoryMode || (chat.settings?.enableStructuredMemory ? 'structured' : 'diary');
-          if (memMode === 'vector') return '(群聊自身的向量记忆 - 由检索引擎动态注入)';
+          if (memMode === 'vector' && window.vectorMemoryManager) return window.vectorMemoryManager.serializeForPromptSync(chat);
           if (memMode === 'structured' && window.structuredMemoryManager) return window.structuredMemoryManager.serializeForPrompt(chat);
           return chat.longTermMemory && chat.longTermMemory.length > 0 ? chat.longTermMemory.map(mem => `- ${mem.content}`).join('\n') : '- (暂无)';
         })();
@@ -280,7 +281,7 @@
         - 适合需要准确理解复杂描述、画面文字或精细构图的场景。
         - 不要频繁使用，只在真正想分享图片的时候使用。` : '';
         
-        let bilingualAlertVoice = chat.settings.enableBilingualMode ? ' ⚠️ （注意：如果该角色是指定的双语角色，必须使用双语格式：外语〖中文〗）' : '';
+        let bilingualAlertVoice = chat.settings.enableBilingualMode ? ' （注意：如果该角色启用了语言与翻译设置，必须遵守上方对应角色的规则）' : '';
 
           const contextMap = {
             'thoughtChainContextHead': thoughtChainContextHead,
@@ -326,6 +327,9 @@
         };
 
         systemPrompt = replaceTemplateVars(systemPromptTemplate, contextMap);
+        if (groupTimeAwarenessContext && !systemPrompt.includes(groupTimeAwarenessContext)) {
+          systemPrompt += `\n\n${groupTimeAwarenessContext}`;
+        }
 
         systemPrompt = processPromptWithSettings(systemPrompt, chat.settings.isOfflineMode ? 'group_offline' : 'group');
 
@@ -645,8 +649,7 @@ ${enabledEntries}
           let longTermMemoryContextOffline = '';
           const memModeOffline = chat.settings.memoryMode || (chat.settings.enableStructuredMemory ? 'structured' : 'diary');
           if (memModeOffline === 'vector' && window.vectorMemoryManager) {
-            const queryTextForVectorOffline = filteredHistory.slice(-5).map(m => typeof m.content === 'string' ? m.content : '').join(' ');
-            longTermMemoryContextOffline = await window.vectorMemoryManager.serializeForPrompt(chat, queryTextForVectorOffline);
+            longTermMemoryContextOffline = await window.vectorMemoryManager.serializeForPrompt(chat);
           } else if (memModeOffline === 'structured' && window.structuredMemoryManager) {
             longTermMemoryContextOffline = window.structuredMemoryManager.serializeForPrompt(chat);
           } else {
@@ -665,6 +668,18 @@ ${enabledEntries}
             }
             return line;
           }).join('\n');
+
+          const offlineTimePerceptionContext = chat.settings.enableTimePerception && window.TimeAwareness
+            ? window.TimeAwareness.buildContext({
+                chat,
+                history: historySlice,
+                mode: 'reply',
+                currentTime,
+                localizedDate,
+                timeOfDayGreeting,
+                isGroup: false
+              }).context
+            : (chat.settings.enableTimePerception ? `- **当前时间**: ${currentTime} (${timeOfDayGreeting})` : '');
           
           const contextMapOffline = {
             'thoughtChainContextHead': thoughtChainContextHead,
@@ -681,7 +696,7 @@ ${enabledEntries}
             'presetContext': presetContext,
             'aiPersona': chat.settings.aiPersona,
             'myPersona': chat.settings.myPersona,
-            'timePerceptionContext': chat.settings.enableTimePerception ? `- **当前时间**: ${currentTime} (${timeOfDayGreeting})` : '',
+            'timePerceptionContext': offlineTimePerceptionContext,
             'worldBookContent': worldBookContent,
             'longTermMemoryContext': longTermMemoryContextOffline,
             'linkedMemoryContext': linkedMemoryContext,
@@ -692,6 +707,12 @@ ${enabledEntries}
           };
 
           systemPrompt = replaceTemplateVars(systemPromptTemplate, contextMapOffline);
+          if (offlineTimePerceptionContext && !systemPrompt.includes(offlineTimePerceptionContext)) {
+            systemPrompt += `\n\n${offlineTimePerceptionContext}`;
+          }
+          const lastOfflineUserMessage = [...filteredHistory].reverse().find(message => message.role === 'user' && !message.isHidden);
+          const offlineCharacterBondContext = window.CharacterBond ? window.CharacterBond.getPromptContext(chat, lastOfflineUserMessage) : '';
+          if (offlineCharacterBondContext) systemPrompt += `\n\n${offlineCharacterBondContext}`;
 
           systemPrompt = processPromptWithSettings(systemPrompt, 'offline');
           
@@ -704,7 +725,7 @@ ${enabledEntries}
 
 
             if (msg.type === 'offline_text') {
-              const sender = msg.role === 'user' ? (chat.settings.myNickname || '我') : chat.name;
+              const sender = msg.role === 'user' ? (chat.settings.myNickname || '我') : (msg.actorType === 'pet' ? (msg.senderName || chat.sharedPet?.name || '小精灵') : chat.name);
               let narrativeText = '';
 
 
@@ -796,6 +817,10 @@ ${enabledEntries}
               let assistantMsgObject = {
                 type: msg.type || 'text'
               };
+              if (msg.actorType === 'pet') {
+                assistantMsgObject.speakerType = 'pet';
+                assistantMsgObject.name = msg.senderName || chat.sharedPet?.name || '小精灵';
+              }
               if (msg.type === 'sticker') {
 
                 assistantMsgObject.meaning = msg.meaning;

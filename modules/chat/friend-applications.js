@@ -26,9 +26,8 @@
       })
       .join('\n');
 
-    const longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0 ?
-      `\n# 你们的过往记忆 (作为情感基础)\n` + chat.longTermMemory.map(mem => `- ${mem.content}`).join('\n') :
-      '';
+    const memoryText = await getMemoryContextForPromptAsync(chat, { queryText: contextSummary });
+    const longTermMemoryContext = memoryText ? `\n# 你们的过往记忆 (作为情感基础)\n${memoryText}` : '';
     let worldBookContent = '';
     // 获取所有应该使用的世界书ID（包括手动选择的和全局的）
     let allWorldBookIds = [...(chat.settings.linkedWorldBookIds || [])];

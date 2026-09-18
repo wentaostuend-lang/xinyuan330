@@ -56,17 +56,22 @@
     const chatInfo = state.chats[record.chatId];
     const chatName = chatInfo ? chatInfo.name : '未知会话';
 
-    const callDate = new Date(record.timestamp);
+    const timestamp = Number.isFinite(new Date(record.timestamp).getTime()) ? new Date(record.timestamp).getTime() : Date.now();
+    const callDate = new Date(timestamp);
     const dateString = `${callDate.getFullYear()}-${String(callDate.getMonth() + 1).padStart(2, '0')}-${String(callDate.getDate()).padStart(2, '0')} ${String(callDate.getHours()).padStart(2, '0')}:${String(callDate.getMinutes()).padStart(2, '0')}`;
-    const durationText = `${Math.floor(record.duration / 60)}分${record.duration % 60}秒`;
+    const duration = Math.max(0, Number(record.duration) || 0);
+    const durationText = `${Math.floor(duration / 60)}分${Math.floor(duration % 60)}秒`;
 
     // 判断通话类型
     const callTypeIcon = record.callType === 'voice' ? '📞' : '📹';
     const callTypeText = record.callType === 'voice' ? '语音通话' : '视频通话';
 
-    const avatarsHtml = record.participants.map(p =>
-      `<img src="${p.avatar}" alt="${p.name}" class="participant-avatar" title="${p.name}">`
+    const avatarsHtml = (Array.isArray(record.participants) ? record.participants : []).map(p =>
+      `<img src="${escapeHTML(String(p.avatar || ''))}" alt="${escapeHTML(String(p.name || ''))}" class="participant-avatar" title="${escapeHTML(String(p.name || ''))}">`
     ).join('');
+    const statusText = record.status === 'interrupted'
+      ? ' · 意外中断'
+      : (record.status === 'active' ? ' · 进行中' : '');
 
     card.innerHTML = `
                 <div class="card-header">
@@ -74,11 +79,11 @@
                     <span class="duration">${durationText}</span>
                 </div>
                 <div class="card-body">
-                    ${record.customName ? `<div class="custom-title">${record.customName}</div>` : ''}
+                    ${record.customName ? `<div class="custom-title">${escapeHTML(String(record.customName))}</div>` : ''}
                     
                     <div class="participants-info">
                         <div class="participants-avatars">${avatarsHtml}</div>
-                        <span class="participants-names">与 ${chatName} 的${callTypeText}</span>
+                        <span class="participants-names">与 ${escapeHTML(chatName)} 的${callTypeText}${statusText}</span>
                     </div>
                 </div>
             `;
@@ -96,7 +101,12 @@
     const bodyEl = document.getElementById('call-transcript-modal-body');
 
     const callTypeText = record.callType === 'voice' ? '语音通话' : '视频通话';
-    titleEl.textContent = `${callTypeText}于 ${new Date(record.timestamp).toLocaleString()} (时长: ${Math.floor(record.duration / 60)}分${record.duration % 60}秒)`;
+    const recordDate = Number.isFinite(new Date(record.timestamp).getTime()) ? new Date(record.timestamp) : new Date();
+    const duration = Math.max(0, Number(record.duration) || 0);
+    const statusText = record.status === 'interrupted'
+      ? '，意外中断'
+      : (record.status === 'active' ? '，进行中' : '');
+    titleEl.textContent = `${callTypeText}于 ${recordDate.toLocaleString()} (时长: ${Math.floor(duration / 60)}分${Math.floor(duration % 60)}秒${statusText})`;
     bodyEl.innerHTML = '';
 
     const deleteBtn = document.getElementById('delete-transcript-btn');

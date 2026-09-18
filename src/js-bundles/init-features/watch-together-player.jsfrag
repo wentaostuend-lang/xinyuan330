@@ -18,9 +18,150 @@
       mediaRecorder: null,
       audioChunks: [],
       corsWarningShown: false, // 跨域警告是否已显示
-      hlsInstance: null // HLS.js 实例
+      hlsInstance: null, // HLS.js 实例
+      isStopping: false
     };
     window.watchTogetherState = watchTogetherState;
+
+    function ensureWatchTogetherFloatingHost() {
+      const phone = document.getElementById('phone-screen');
+      const shell = document.getElementById('watch-together-pip-shell');
+      const bar = document.getElementById('watch-together-pip-bar');
+      if (!phone) return;
+      if (shell?.parentElement !== phone) phone.appendChild(shell);
+      if (bar?.parentElement !== phone) phone.appendChild(bar);
+    }
+
+    // 浮窗生命周期参考并独立改写自 yxlforever/YYY ece2d6b 的播放器资源治理思路。
+    function restoreWatchTogetherFromFloating() {
+      ensureWatchTogetherFloatingHost();
+      const shell = document.getElementById('watch-together-pip-shell');
+      const bar = document.getElementById('watch-together-pip-bar');
+      const video = document.getElementById('watch-together-video');
+      const videoContainer = document.getElementById('watch-together-video-container');
+      const placeholder = document.getElementById('watch-together-placeholder');
+      const modal = document.getElementById('watch-together-modal');
+      if (video && videoContainer && video.parentElement !== videoContainer) {
+        videoContainer.insertBefore(video, placeholder);
+      }
+      shell?.classList.remove('is-visible');
+      shell?.setAttribute('aria-hidden', 'true');
+      bar?.classList.remove('is-visible');
+      if (watchTogetherState.isActive && !watchTogetherState.isStopping) modal?.classList.add('visible');
+    }
+
+    function closeWatchTogetherFloatingPlayer() {
+      const shell = document.getElementById('watch-together-pip-shell');
+      const bar = document.getElementById('watch-together-pip-bar');
+      shell?.classList.remove('is-visible');
+      shell?.setAttribute('aria-hidden', 'true');
+      bar?.classList.remove('is-visible');
+      if (document.pictureInPictureElement === document.getElementById('watch-together-video')) {
+        document.exitPictureInPicture?.().catch(() => {});
+      }
+      restoreWatchTogetherFromFloating();
+      document.getElementById('watch-together-modal')?.classList.remove('visible');
+    }
+
+    async function showWatchTogetherFloatingPlayer() {
+      if (!watchTogetherState.isActive || watchTogetherState.isStopping) return false;
+      ensureWatchTogetherFloatingHost();
+      const shell = document.getElementById('watch-together-pip-shell');
+      const bar = document.getElementById('watch-together-pip-bar');
+      const video = document.getElementById('watch-together-video');
+      const body = document.getElementById('watch-together-pip-body');
+      const placeholder = document.getElementById('watch-together-pip-placeholder');
+      const modal = document.getElementById('watch-together-modal');
+      if (!shell || !bar || !video || !body || !modal) return false;
+
+      const title = state.chats[watchTogetherState.chatId]?.name || '正在一起看';
+      const titleElement = document.getElementById('watch-together-pip-title');
+      if (titleElement) titleElement.textContent = `与 ${title} 一起看`;
+      bar.textContent = `与 ${title} 一起看`;
+
+      if ('mediaSession' in navigator && typeof MediaMetadata === 'function') {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: '一起看电影',
+            artist: `与 ${title} 一起看`
+          });
+        } catch (error) {
+          console.info('[一起看电影] 当前环境不支持设置媒体信息:', error);
+        }
+      }
+
+      if (video.readyState > 0) {
+        try {
+          if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
+            await video.requestPictureInPicture();
+            modal.classList.remove('visible');
+            return false;
+          }
+          if (typeof video.webkitSetPresentationMode === 'function') {
+            video.webkitSetPresentationMode('picture-in-picture');
+            modal.classList.remove('visible');
+            return false;
+          }
+        } catch (error) {
+          console.info('[一起看电影] 原生画中画不可用，使用应用内悬浮播放器:', error);
+        }
+      }
+
+      if (video.parentElement !== body) body.insertBefore(video, placeholder);
+      shell.classList.add('is-visible');
+      shell.setAttribute('aria-hidden', 'false');
+      bar.classList.remove('is-visible');
+      modal.classList.remove('visible');
+      return false;
+    }
+
+    function collapseWatchTogetherFloatingPlayer() {
+      const shell = document.getElementById('watch-together-pip-shell');
+      const bar = document.getElementById('watch-together-pip-bar');
+      shell?.classList.remove('is-visible');
+      shell?.setAttribute('aria-hidden', 'true');
+      if (watchTogetherState.isActive) bar?.classList.add('is-visible');
+    }
+
+    function bindWatchTogetherFloatingDrag() {
+      ensureWatchTogetherFloatingHost();
+      const shell = document.getElementById('watch-together-pip-shell');
+      const handle = document.getElementById('watch-together-pip-drag-handle');
+      const phone = document.getElementById('phone-screen');
+      if (!shell || !handle || !phone || handle.dataset.dragBound === '1') return;
+      handle.dataset.dragBound = '1';
+      handle.addEventListener('pointerdown', event => {
+        if (event.target.closest('button')) return;
+        const shellRect = shell.getBoundingClientRect();
+        const phoneRect = phone.getBoundingClientRect();
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const startLeft = shellRect.left - phoneRect.left;
+        const startTop = shellRect.top - phoneRect.top;
+        handle.setPointerCapture?.(event.pointerId);
+        const move = moveEvent => {
+          const maxLeft = Math.max(8, phoneRect.width - shellRect.width - 8);
+          const maxTop = Math.max(8, phoneRect.height - shellRect.height - 8);
+          const left = Math.min(maxLeft, Math.max(8, startLeft + moveEvent.clientX - startX));
+          const top = Math.min(maxTop, Math.max(8, startTop + moveEvent.clientY - startY));
+          shell.style.left = `${left}px`;
+          shell.style.top = `${top}px`;
+          shell.style.transform = 'none';
+        };
+        const finish = () => {
+          handle.removeEventListener('pointermove', move);
+          handle.removeEventListener('pointerup', finish);
+          handle.removeEventListener('pointercancel', finish);
+        };
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('pointerup', finish);
+        handle.addEventListener('pointercancel', finish);
+      });
+    }
+
+    window.showWatchTogetherFloatingPlayer = showWatchTogetherFloatingPlayer;
+    window.restoreWatchTogetherFromFloating = restoreWatchTogetherFromFloating;
+    window.closeWatchTogetherFloatingPlayer = closeWatchTogetherFloatingPlayer;
 
     // 打开观影界面
     document.getElementById('open-watch-together-btn')?.addEventListener('click', () => {
@@ -31,6 +172,11 @@
       const chat = state.chats[state.activeChatId];
       if (chat.isGroup) {
         alert('一起看电影功能仅支持单人聊天！');
+        return;
+      }
+
+      if (watchTogetherState.isActive) {
+        restoreWatchTogetherFromFloating();
         return;
       }
 
@@ -67,11 +213,20 @@
       }, 100);
 
       renderWatchTogetherMessages();
+      bindWatchTogetherFloatingDrag();
     });
 
     // 关闭观影界面
     document.getElementById('close-watch-together-btn')?.addEventListener('click', () => {
       stopWatchTogether();
+    });
+
+    document.getElementById('watch-together-pip-btn')?.addEventListener('click', showWatchTogetherFloatingPlayer);
+    document.getElementById('watch-together-pip-back-btn')?.addEventListener('click', restoreWatchTogetherFromFloating);
+    document.getElementById('watch-together-pip-collapse-btn')?.addEventListener('click', collapseWatchTogetherFloatingPlayer);
+    document.getElementById('watch-together-pip-bar')?.addEventListener('click', showWatchTogetherFloatingPlayer);
+    document.getElementById('watch-together-video')?.addEventListener('leavepictureinpicture', () => {
+      if (watchTogetherState.isActive && !watchTogetherState.isStopping) restoreWatchTogetherFromFloating();
     });
 
     // 上传按钮
@@ -820,9 +975,10 @@ ${linkedContents}
 
         // 长期记忆
         let longTermMemoryContext = '';
-        if (chat.longTermMemory && chat.longTermMemory.length > 0) {
+        const activeMemoryText = getMemoryContextForPrompt(chat);
+        if (activeMemoryText) {
           longTermMemoryContext = `\n# 长期记忆 (最高优先级)\n`;
-          longTermMemoryContext += chat.longTermMemory.map(mem => `- ${mem.content}`).join('\n');
+          longTermMemoryContext += activeMemoryText;
           longTermMemoryContext += '\n';
         }
 

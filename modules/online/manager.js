@@ -2097,16 +2097,7 @@ class OnlineChatManager {
             const charName = mainChat.originalName || mainChat.name;
 
             // 从主屏幕读取记忆
-            let longTermMemory = '- (暂无)';
-            if (mainChat.longTermMemory && mainChat.longTermMemory.length > 0) {
-                longTermMemory = mainChat.longTermMemory.map(mem => `- ${mem.content}`).join('\n');
-            }
-
-            // 结构化记忆
-            let structuredMemoryText = '';
-            if (window.structuredMemoryManager && mainChat.structuredMemory) {
-                structuredMemoryText = window.structuredMemoryManager.serializeForPrompt(mainChat);
-            }
+            const longTermMemory = getMemoryContextForPrompt(mainChat) || '- (暂无)';
 
             // 群成员信息（区分认识的人和不认识的人）
             const membersList = (groupChat.members || []).map(m => {
@@ -2141,7 +2132,6 @@ class OnlineChatManager {
 
     # 你的长期记忆（与主人的）
     ${longTermMemory}
-    ${structuredMemoryText}
 
     # 当前群聊信息
     - **群名**: ${groupChat.name}

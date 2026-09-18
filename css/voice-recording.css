@@ -746,3 +746,195 @@
                white-space: nowrap;
                overflow: hidden;
                text-overflow: ellipsis;
+           }
+
+/* 用户真实语音：沿用聊天设置的紧凑信息层级，与卡片内部其他设置项统一对齐 */
+.voice-input-settings {
+    min-width: 0;
+}
+
+.voice-settings-title {
+    padding: 12px 16px 4px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .04em;
+}
+
+.voice-settings-note {
+    padding: 6px 16px 10px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.voice-input-settings .settings-item > div:first-child {
+    min-width: 0;
+    padding-right: 8px;
+}
+
+.voice-call-settings-title {
+    border-top: 0.5px solid rgba(60, 60, 67, 0.08);
+    margin-top: 4px;
+    padding: 12px 16px 6px;
+}
+
+.voice-config-row,
+.voice-field-row {
+    min-width: 0;
+    gap: 10px;
+}
+
+.voice-config-row > label,
+.voice-field-row > label {
+    flex: 0 0 auto;
+}
+
+#chat-settings-screen .voice-settings-select,
+#chat-settings-screen .voice-settings-input {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 58%;
+    color: var(--text-color);
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 7px;
+    font: inherit;
+    font-size: 13px;
+    padding: 7px 9px;
+}
+
+#chat-settings-screen .voice-settings-input {
+    width: min(230px, 58%);
+    text-overflow: ellipsis;
+}
+
+#chat-settings-screen .voice-settings-select:disabled,
+#chat-settings-screen .voice-settings-input:disabled {
+    opacity: .48;
+}
+
+.voice-nested-settings {
+    margin: 0 0 4px 12px;
+    padding-left: 10px;
+    border-left: 2px solid color-mix(in srgb, var(--accent-color) 30%, transparent);
+}
+
+.real-voice-recording-indicator {
+    position: fixed;
+    z-index: 10020;
+    left: 50%;
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    max-width: calc(100vw - 28px);
+    padding: 8px 12px;
+    border-radius: 18px;
+    color: #fff;
+    background: rgba(24, 24, 28, .9);
+    box-shadow: 0 5px 18px rgba(0, 0, 0, .24);
+    backdrop-filter: blur(10px);
+    font-size: 12px;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.recording-dot {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    margin-right: 7px;
+    border-radius: 50%;
+    background: #ff453a;
+    animation: real-voice-pulse 1s ease-in-out infinite;
+}
+
+.recording-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.recording-time {
+    flex: 0 0 auto;
+    margin-left: 8px;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, .72);
+}
+
+#voice-record-btn.is-recording,
+#voice-user-speak-btn.is-recording {
+    color: #ff453a;
+    background-color: rgba(255, 69, 58, .24);
+}
+
+.voice-preview-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 7px 10px;
+    color: var(--text-color);
+    background: var(--secondary-bg);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.voice-processing-error {
+    margin-top: 8px;
+    color: #d85b52;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.real-voice-confirm-content {
+    width: min(420px, calc(100vw - 28px));
+    box-sizing: border-box;
+}
+
+.call-message-bubble.user-voice-speech::before {
+    content: '\1F399';
+    margin-right: 5px;
+    font-size: .86em;
+    opacity: .8;
+}
+
+@keyframes real-voice-pulse {
+    50% { opacity: .36; transform: scale(.78); }
+}
+
+@media (max-width: 390px) {
+    #chat-settings-screen .voice-settings-select,
+    #chat-settings-screen .voice-settings-input {
+        max-width: 54%;
+        width: 54%;
+        font-size: 12px;
+        padding: 6px 7px;
+    }
+
+    .voice-nested-settings {
+        margin-left: 6px;
+        padding-left: 7px;
+    }
+}
+
+@media (max-width: 340px) {
+    .voice-field-row {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    #chat-settings-screen .voice-field-row .voice-settings-input {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .real-voice-recording-indicator {
+        bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    }
+}

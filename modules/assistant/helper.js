@@ -407,15 +407,15 @@ class HelperAssistant {
             <h3>🔗 当前引用</h3>
             <p><strong>作者昵称：</strong>穗穗 / 笨蛋小姐</p>
             <p><strong>项目：</strong><a href="https://github.com/yxlforever/YYY" target="_blank" rel="noopener noreferrer">yxlforever/YYY</a></p>
-            <p><strong>参考提交：</strong><a href="https://github.com/yxlforever/YYY/commit/ece2d6bec633ced55c89af3871f96c97ebf3aa7e" target="_blank" rel="noopener noreferrer">ece2d6b</a></p>
+            <p><strong>参考提交：</strong><a href="https://github.com/yxlforever/YYY/commit/ece2d6bec633ced55c89af3871f96c97ebf3aa7e" target="_blank" rel="noopener noreferrer">ece2d6b</a>、<a href="https://github.com/yxlforever/YYY/commit/fb27ca3fafb9a38f6f9f91daabd457a290f0be19" target="_blank" rel="noopener noreferrer">fb27ca3</a>、<a href="https://github.com/yxlforever/YYY/commit/58b52dd" target="_blank" rel="noopener noreferrer">58b52dd</a>、<a href="https://github.com/yxlforever/YYY/commit/f832fc967f" target="_blank" rel="noopener noreferrer">f832fc9</a>，以及 <a href="https://github.com/wq70/xinyuan330/pull/1" target="_blank" rel="noopener noreferrer">xinyuan330 PR #1</a></p>
           </div>
           <div class="declaration-section">
             <h3>📌 引用范围</h3>
-            <p>角色手机与“我的手机”播放器中的本地歌曲 Blob URL 回收逻辑参考并改写自上述提交。本项目结合自身模块结构实现为 <code>releaseCharMusicObjectUrl</code>，用于在切歌或关闭播放时回收本地音频资源。</p>
+            <p>参考范围包括语音通话活动记录与异常恢复、通话请求和长会话资源治理、初始化事件防重、API 历史兼容、iOS 安全区、角色手机播放器资源回收，以及保持页面片段顺序的并发装配思路。相关能力均结合当前模块结构改写，未整块覆盖来源项目。</p>
           </div>
           <div class="declaration-section">
             <h3>💗 致谢与维护</h3>
-            <p>感谢穗穗 / 笨蛋小姐公开分享相关实现。后续如继续修改或扩大引用范围，会同步保留来源注释、更新日志与本说明，并核对适用的许可证或授权要求。</p>
+            <p>感谢穗穗 / 笨蛋小姐公开分享相关实现；同时继续感谢思维链灵感与授权来源 1900 老师、默认预设贡献者 330 老师、全屏思路来源毛绒草莓老师，以及 EE、JCY、KUKU 等参与项目发展的老师。修改或扩大引用范围时会同步保留来源注释、更新日志与说明，并核对适用的许可证或授权要求。</p>
           </div>
         </div>
       </div>

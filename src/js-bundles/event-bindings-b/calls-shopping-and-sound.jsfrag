@@ -472,6 +472,13 @@
       document.getElementById('share-link-modal').classList.remove('visible');
     });
 
+    const closeShareLinkBtn = document.getElementById('close-share-link-btn');
+    if (closeShareLinkBtn) {
+      closeShareLinkBtn.addEventListener('click', () => {
+        document.getElementById('share-link-modal').classList.remove('visible');
+      });
+    }
+
 
     document.getElementById('confirm-share-link-btn').addEventListener('click', sendUserLinkShare);
 

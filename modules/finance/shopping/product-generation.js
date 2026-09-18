@@ -53,16 +53,7 @@
     }
 
     const userNickname = state.qzoneSettings.nickname || '我';
-    let longTermMemoryContext = '';
-    const memMode = chat.settings?.memoryMode || (chat.settings?.enableStructuredMemory ? 'structured' : 'diary');
-    if (memMode === 'vector' && window.vectorMemoryManager) {
-      longTermMemoryContext = window.vectorMemoryManager.serializeCoreMemories(chat) || '无';
-    } else if (memMode === 'structured' && window.structuredMemoryManager) {
-      longTermMemoryContext = window.structuredMemoryManager.serializeForPrompt(chat) || '无';
-    } else {
-      longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0 ?
-        chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n') : '无';
-    }
+    const longTermMemoryContext = getMemoryContextForPrompt(chat) || '无';
     const recentHistoryContext = chat.history.slice(-10).map(msg =>
       `${msg.role === 'user' ? userNickname : chat.name}: ${String(msg.content).substring(0, 30)}...`
     ).join('\n');

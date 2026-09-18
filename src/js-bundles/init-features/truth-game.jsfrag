@@ -20,14 +20,12 @@
       truthGameState.messages.forEach(msg => {
         if (msg.role === 'system') {
           const systemDiv = document.createElement('div');
-          systemDiv.style.cssText = 'text-align: center; color: #999; font-size: 12px; margin: 15px 0; padding: 5px;';
+          systemDiv.className = 'truth-game-system-notice';
           systemDiv.textContent = msg.content;
           container.appendChild(systemDiv);
         } else {
           const wrapper = document.createElement('div');
-          wrapper.style.cssText = msg.role === 'user'
-            ? 'display: flex; justify-content: flex-end; align-items: flex-end; margin: 10px 0; gap: 10px;'
-            : 'display: flex; justify-content: flex-start; align-items: flex-end; margin: 10px 0; gap: 10px;';
+          wrapper.className = msg.role === 'user' ? 'truth-msg-row truth-msg-row-user' : 'truth-msg-row truth-msg-row-assistant';
 
           let aiAvatar = defaultAvatar;
           let aiLabel = '';
@@ -50,9 +48,7 @@
           }
 
           const bubble = document.createElement('div');
-          bubble.style.cssText = msg.role === 'user'
-            ? 'background: #95ec69; padding: 10px 15px; border-radius: 4px; max-width: 60%; word-wrap: break-word; font-size: 14px; line-height: 1.5; cursor: pointer; white-space: pre-wrap;'
-            : 'background: white; padding: 10px 15px; border-radius: 4px; max-width: 60%; word-wrap: break-word; font-size: 14px; line-height: 1.5; cursor: pointer; white-space: pre-wrap;';
+          bubble.className = msg.role === 'user' ? 'truth-msg-bubble truth-msg-bubble-user' : 'truth-msg-bubble truth-msg-bubble-ai';
 
           const escapedContent = escapeHTML(msg.content);
           bubble.innerHTML = escapedContent.replace(/\n/g, '<br>');
@@ -63,7 +59,8 @@
 
           const avatar = document.createElement('img');
           avatar.src = msg.role === 'user' ? userAvatar : aiAvatar;
-          avatar.style.cssText = 'width: 40px; height: 40px; border-radius: 4px; object-fit: cover; flex-shrink: 0;';
+          avatar.className = 'truth-msg-avatar';
+          avatar.alt = msg.role === 'user' ? '用户头像' : '角色头像';
 
           if (msg.role === 'user') {
             wrapper.appendChild(bubble);
@@ -71,10 +68,10 @@
           } else {
             if (aiLabel) {
               const labelDiv = document.createElement('div');
-              labelDiv.style.cssText = 'font-size: 11px; color: #888; margin-bottom: 2px;';
+              labelDiv.className = 'truth-msg-label';
               labelDiv.textContent = aiLabel;
               const leftCol = document.createElement('div');
-              leftCol.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; max-width: 60%;';
+              leftCol.className = 'truth-msg-col';
               leftCol.appendChild(labelDiv);
               leftCol.appendChild(bubble);
               wrapper.appendChild(avatar);
@@ -307,9 +304,8 @@
     function buildTruthGamePrompt(chat, type, question = '') {
       let prompt = '';
 
-      const longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0
-        ? `\n\n# 长期记忆 (你和用户之间已经确立的事实)\n${chat.longTermMemory.map(mem => `- ${mem.content}`).join('\n')}`
-        : '';
+      const memoryText = getMemoryContextForPrompt(chat, { queryText: question });
+      const longTermMemoryContext = memoryText ? `\n\n# 长期记忆 (你和用户之间已经确立的事实)\n${memoryText}` : '';
 
       const summary3Hours = generateSummaryForTimeframe(chat, 3, 'hours');
       const summary6Hours = generateSummaryForTimeframe(chat, 6, 'hours');
@@ -798,4 +794,3 @@ ${truthGameHistoryContext}
       }
     });
     // ========== 真心话游戏结束 ==========
-

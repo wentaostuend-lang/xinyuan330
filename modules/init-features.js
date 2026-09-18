@@ -1814,23 +1814,6 @@ window.initFeatures = function(state, db) {
     });
 
 
-    const thoughtsHistoryList = document.getElementById('thoughts-history-list');
-    thoughtsHistoryList.addEventListener('scroll', () => {
-      const {
-        scrollTop,
-        scrollHeight,
-        clientHeight
-      } = thoughtsHistoryList;
-
-      if (scrollHeight - scrollTop <= clientHeight + 50 && !isLoadingMoreThoughts) {
-        const totalItems = state.chats[state.activeChatId]?.thoughtsHistory.length || 0;
-        if (totalItems > thoughtsHistoryRenderCount) {
-          loadMoreThoughts();
-        }
-      }
-    });
-
-
     const qzoneContent = document.querySelector('#qzone-screen .qzone-content');
     qzoneContent.addEventListener('scroll', () => {
       const {
@@ -2416,7 +2399,6 @@ window.initFeatures = function(state, db) {
     document.getElementById('chat-expand-btn')?.addEventListener('click', () => {
       document.body.classList.toggle('chat-actions-expanded');
     });
-    document.getElementById('profile-edit-btn')?.addEventListener('click', openThoughtEditor);
     document.getElementById('open-quick-reply-btn')?.addEventListener('click', openQuickReplyModal);
     
     // ========== 旁白功能 ==========
@@ -2437,7 +2419,7 @@ window.initFeatures = function(state, db) {
         const chat = state.chats[state.activeChatId];
         const narrationMessage = {
           role: 'system',
-          type: 'pat_message',
+          type: 'narration',
           content: narrationText.trim(),
           timestamp: Date.now()
         };
@@ -3196,14 +3178,12 @@ ${qaContext}
       truthGameState.messages.forEach(msg => {
         if (msg.role === 'system') {
           const systemDiv = document.createElement('div');
-          systemDiv.style.cssText = 'text-align: center; color: #999; font-size: 12px; margin: 15px 0; padding: 5px;';
+          systemDiv.className = 'truth-game-system-notice';
           systemDiv.textContent = msg.content;
           container.appendChild(systemDiv);
         } else {
           const wrapper = document.createElement('div');
-          wrapper.style.cssText = msg.role === 'user'
-            ? 'display: flex; justify-content: flex-end; align-items: flex-end; margin: 10px 0; gap: 10px;'
-            : 'display: flex; justify-content: flex-start; align-items: flex-end; margin: 10px 0; gap: 10px;';
+          wrapper.className = msg.role === 'user' ? 'truth-msg-row truth-msg-row-user' : 'truth-msg-row truth-msg-row-assistant';
 
           let aiAvatar = defaultAvatar;
           let aiLabel = '';
@@ -3226,9 +3206,7 @@ ${qaContext}
           }
 
           const bubble = document.createElement('div');
-          bubble.style.cssText = msg.role === 'user'
-            ? 'background: #95ec69; padding: 10px 15px; border-radius: 4px; max-width: 60%; word-wrap: break-word; font-size: 14px; line-height: 1.5; cursor: pointer; white-space: pre-wrap;'
-            : 'background: white; padding: 10px 15px; border-radius: 4px; max-width: 60%; word-wrap: break-word; font-size: 14px; line-height: 1.5; cursor: pointer; white-space: pre-wrap;';
+          bubble.className = msg.role === 'user' ? 'truth-msg-bubble truth-msg-bubble-user' : 'truth-msg-bubble truth-msg-bubble-ai';
 
           const escapedContent = escapeHTML(msg.content);
           bubble.innerHTML = escapedContent.replace(/\n/g, '<br>');
@@ -3239,7 +3217,8 @@ ${qaContext}
 
           const avatar = document.createElement('img');
           avatar.src = msg.role === 'user' ? userAvatar : aiAvatar;
-          avatar.style.cssText = 'width: 40px; height: 40px; border-radius: 4px; object-fit: cover; flex-shrink: 0;';
+          avatar.className = 'truth-msg-avatar';
+          avatar.alt = msg.role === 'user' ? '用户头像' : '角色头像';
 
           if (msg.role === 'user') {
             wrapper.appendChild(bubble);
@@ -3247,10 +3226,10 @@ ${qaContext}
           } else {
             if (aiLabel) {
               const labelDiv = document.createElement('div');
-              labelDiv.style.cssText = 'font-size: 11px; color: #888; margin-bottom: 2px;';
+              labelDiv.className = 'truth-msg-label';
               labelDiv.textContent = aiLabel;
               const leftCol = document.createElement('div');
-              leftCol.style.cssText = 'display: flex; flex-direction: column; align-items: flex-start; max-width: 60%;';
+              leftCol.className = 'truth-msg-col';
               leftCol.appendChild(labelDiv);
               leftCol.appendChild(bubble);
               wrapper.appendChild(avatar);
@@ -3483,9 +3462,8 @@ ${qaContext}
     function buildTruthGamePrompt(chat, type, question = '') {
       let prompt = '';
 
-      const longTermMemoryContext = chat.longTermMemory && chat.longTermMemory.length > 0
-        ? `\n\n# 长期记忆 (你和用户之间已经确立的事实)\n${chat.longTermMemory.map(mem => `- ${mem.content}`).join('\n')}`
-        : '';
+      const memoryText = getMemoryContextForPrompt(chat, { queryText: question });
+      const longTermMemoryContext = memoryText ? `\n\n# 长期记忆 (你和用户之间已经确立的事实)\n${memoryText}` : '';
 
       const summary3Hours = generateSummaryForTimeframe(chat, 3, 'hours');
       const summary6Hours = generateSummaryForTimeframe(chat, 6, 'hours');
@@ -3974,7 +3952,6 @@ ${truthGameHistoryContext}
       }
     });
     // ========== 真心话游戏结束 ==========
-
     // ========== 一起看电影功能 ==========
     let watchTogetherState = {
       isActive: false,
@@ -3995,9 +3972,150 @@ ${truthGameHistoryContext}
       mediaRecorder: null,
       audioChunks: [],
       corsWarningShown: false, // 跨域警告是否已显示
-      hlsInstance: null // HLS.js 实例
+      hlsInstance: null, // HLS.js 实例
+      isStopping: false
     };
     window.watchTogetherState = watchTogetherState;
+
+    function ensureWatchTogetherFloatingHost() {
+      const phone = document.getElementById('phone-screen');
+      const shell = document.getElementById('watch-together-pip-shell');
+      const bar = document.getElementById('watch-together-pip-bar');
+      if (!phone) return;
+      if (shell?.parentElement !== phone) phone.appendChild(shell);
+      if (bar?.parentElement !== phone) phone.appendChild(bar);
+    }
+
+    // 浮窗生命周期参考并独立改写自 yxlforever/YYY ece2d6b 的播放器资源治理思路。
+    function restoreWatchTogetherFromFloating() {
+      ensureWatchTogetherFloatingHost();
+      const shell = document.getElementById('watch-together-pip-shell');
+      const bar = document.getElementById('watch-together-pip-bar');
+      const video = document.getElementById('watch-together-video');
+      const videoContainer = document.getElementById('watch-together-video-container');
+      const placeholder = document.getElementById('watch-together-placeholder');
+      const modal = document.getElementById('watch-together-modal');
+      if (video && videoContainer && video.parentElement !== videoContainer) {
+        videoContainer.insertBefore(video, placeholder);
+      }
+      shell?.classList.remove('is-visible');
+      shell?.setAttribute('aria-hidden', 'true');
+      bar?.classList.remove('is-visible');
+      if (watchTogetherState.isActive && !watchTogetherState.isStopping) modal?.classList.add('visible');
+    }
+
+    function closeWatchTogetherFloatingPlayer() {
+      const shell = document.getElementById('watch-together-pip-shell');
+      const bar = document.getElementById('watch-together-pip-bar');
+      shell?.classList.remove('is-visible');
+      shell?.setAttribute('aria-hidden', 'true');
+      bar?.classList.remove('is-visible');
+      if (document.pictureInPictureElement === document.getElementById('watch-together-video')) {
+        document.exitPictureInPicture?.().catch(() => {});
+      }
+      restoreWatchTogetherFromFloating();
+      document.getElementById('watch-together-modal')?.classList.remove('visible');
+    }
+
+    async function showWatchTogetherFloatingPlayer() {
+      if (!watchTogetherState.isActive || watchTogetherState.isStopping) return false;
+      ensureWatchTogetherFloatingHost();
+      const shell = document.getElementById('watch-together-pip-shell');
+      const bar = document.getElementById('watch-together-pip-bar');
+      const video = document.getElementById('watch-together-video');
+      const body = document.getElementById('watch-together-pip-body');
+      const placeholder = document.getElementById('watch-together-pip-placeholder');
+      const modal = document.getElementById('watch-together-modal');
+      if (!shell || !bar || !video || !body || !modal) return false;
+
+      const title = state.chats[watchTogetherState.chatId]?.name || '正在一起看';
+      const titleElement = document.getElementById('watch-together-pip-title');
+      if (titleElement) titleElement.textContent = `与 ${title} 一起看`;
+      bar.textContent = `与 ${title} 一起看`;
+
+      if ('mediaSession' in navigator && typeof MediaMetadata === 'function') {
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: '一起看电影',
+            artist: `与 ${title} 一起看`
+          });
+        } catch (error) {
+          console.info('[一起看电影] 当前环境不支持设置媒体信息:', error);
+        }
+      }
+
+      if (video.readyState > 0) {
+        try {
+          if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
+            await video.requestPictureInPicture();
+            modal.classList.remove('visible');
+            return false;
+          }
+          if (typeof video.webkitSetPresentationMode === 'function') {
+            video.webkitSetPresentationMode('picture-in-picture');
+            modal.classList.remove('visible');
+            return false;
+          }
+        } catch (error) {
+          console.info('[一起看电影] 原生画中画不可用，使用应用内悬浮播放器:', error);
+        }
+      }
+
+      if (video.parentElement !== body) body.insertBefore(video, placeholder);
+      shell.classList.add('is-visible');
+      shell.setAttribute('aria-hidden', 'false');
+      bar.classList.remove('is-visible');
+      modal.classList.remove('visible');
+      return false;
+    }
+
+    function collapseWatchTogetherFloatingPlayer() {
+      const shell = document.getElementById('watch-together-pip-shell');
+      const bar = document.getElementById('watch-together-pip-bar');
+      shell?.classList.remove('is-visible');
+      shell?.setAttribute('aria-hidden', 'true');
+      if (watchTogetherState.isActive) bar?.classList.add('is-visible');
+    }
+
+    function bindWatchTogetherFloatingDrag() {
+      ensureWatchTogetherFloatingHost();
+      const shell = document.getElementById('watch-together-pip-shell');
+      const handle = document.getElementById('watch-together-pip-drag-handle');
+      const phone = document.getElementById('phone-screen');
+      if (!shell || !handle || !phone || handle.dataset.dragBound === '1') return;
+      handle.dataset.dragBound = '1';
+      handle.addEventListener('pointerdown', event => {
+        if (event.target.closest('button')) return;
+        const shellRect = shell.getBoundingClientRect();
+        const phoneRect = phone.getBoundingClientRect();
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const startLeft = shellRect.left - phoneRect.left;
+        const startTop = shellRect.top - phoneRect.top;
+        handle.setPointerCapture?.(event.pointerId);
+        const move = moveEvent => {
+          const maxLeft = Math.max(8, phoneRect.width - shellRect.width - 8);
+          const maxTop = Math.max(8, phoneRect.height - shellRect.height - 8);
+          const left = Math.min(maxLeft, Math.max(8, startLeft + moveEvent.clientX - startX));
+          const top = Math.min(maxTop, Math.max(8, startTop + moveEvent.clientY - startY));
+          shell.style.left = `${left}px`;
+          shell.style.top = `${top}px`;
+          shell.style.transform = 'none';
+        };
+        const finish = () => {
+          handle.removeEventListener('pointermove', move);
+          handle.removeEventListener('pointerup', finish);
+          handle.removeEventListener('pointercancel', finish);
+        };
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('pointerup', finish);
+        handle.addEventListener('pointercancel', finish);
+      });
+    }
+
+    window.showWatchTogetherFloatingPlayer = showWatchTogetherFloatingPlayer;
+    window.restoreWatchTogetherFromFloating = restoreWatchTogetherFromFloating;
+    window.closeWatchTogetherFloatingPlayer = closeWatchTogetherFloatingPlayer;
 
     // 打开观影界面
     document.getElementById('open-watch-together-btn')?.addEventListener('click', () => {
@@ -4008,6 +4126,11 @@ ${truthGameHistoryContext}
       const chat = state.chats[state.activeChatId];
       if (chat.isGroup) {
         alert('一起看电影功能仅支持单人聊天！');
+        return;
+      }
+
+      if (watchTogetherState.isActive) {
+        restoreWatchTogetherFromFloating();
         return;
       }
 
@@ -4044,11 +4167,20 @@ ${truthGameHistoryContext}
       }, 100);
 
       renderWatchTogetherMessages();
+      bindWatchTogetherFloatingDrag();
     });
 
     // 关闭观影界面
     document.getElementById('close-watch-together-btn')?.addEventListener('click', () => {
       stopWatchTogether();
+    });
+
+    document.getElementById('watch-together-pip-btn')?.addEventListener('click', showWatchTogetherFloatingPlayer);
+    document.getElementById('watch-together-pip-back-btn')?.addEventListener('click', restoreWatchTogetherFromFloating);
+    document.getElementById('watch-together-pip-collapse-btn')?.addEventListener('click', collapseWatchTogetherFloatingPlayer);
+    document.getElementById('watch-together-pip-bar')?.addEventListener('click', showWatchTogetherFloatingPlayer);
+    document.getElementById('watch-together-video')?.addEventListener('leavepictureinpicture', () => {
+      if (watchTogetherState.isActive && !watchTogetherState.isStopping) restoreWatchTogetherFromFloating();
     });
 
     // 上传按钮
@@ -4797,9 +4929,10 @@ ${linkedContents}
 
         // 长期记忆
         let longTermMemoryContext = '';
-        if (chat.longTermMemory && chat.longTermMemory.length > 0) {
+        const activeMemoryText = getMemoryContextForPrompt(chat);
+        if (activeMemoryText) {
           longTermMemoryContext = `\n# 长期记忆 (最高优先级)\n`;
-          longTermMemoryContext += chat.longTermMemory.map(mem => `- ${mem.content}`).join('\n');
+          longTermMemoryContext += activeMemoryText;
           longTermMemoryContext += '\n';
         }
 
@@ -5255,6 +5388,8 @@ ${linkedContents}
 
     // 停止观影
     function stopWatchTogether() {
+      watchTogetherState.isStopping = true;
+      closeWatchTogetherFloatingPlayer();
       stopMonitoring();
 
       // 销毁 HLS 实例
@@ -5280,8 +5415,13 @@ ${linkedContents}
       restoreNormalMessageActionsFromWatchTogether();
 
       watchTogetherState.isActive = false;
+      watchTogetherState.isStopping = false;
       watchTogetherState.videoUrl = null;
       watchTogetherState.messages = [];
+
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = null;
+      }
     }
 
     // ========== 影视搜索功能 ==========
@@ -6150,9 +6290,7 @@ ${linkedContents}
         `## 世界书《${book.name}》设定:\n${book.content.filter(e => e.enabled).map(e => `- ${e.content}`).join('\n')}`
       ).join('\n');
 
-      const longTermMemory = chat.longTermMemory && chat.longTermMemory.length > 0
-        ? chat.longTermMemory.map(mem => `- ${mem.content}`).join('\n')
-        : '';
+      const longTermMemory = getMemoryContextForPrompt(chat);
 
       const shortTermMemory = chat.history.slice(-10).map(msg =>
         `${msg.role === 'user' ? userNickname : chat.name}: ${String(msg.content)}`
@@ -6280,9 +6418,7 @@ ${linkedContents}
         ).join('\n');
 
         // 3. 长期记忆
-        const longTermMemory = chat.longTermMemory && chat.longTermMemory.length > 0
-          ? chat.longTermMemory.map(mem => `- ${mem.content}`).join('\n')
-          : '';
+        const longTermMemory = getMemoryContextForPrompt(chat);
 
         // 4. 短期记忆（主聊天最近的对话）
         const shortTermMemory = chat.history.slice(-15).map(msg =>
@@ -7180,16 +7316,7 @@ ${finalInstruction}
         }
       });
     }
-    // 绑定邮箱底部按钮事件
-    const deleteSelectedBtn = document.getElementById('mail-delete-selected-btn');
-    if (deleteSelectedBtn) {
-      deleteSelectedBtn.addEventListener('click', window.executeBatchDeleteEmails);
-    }
-
-    const selectAllBtn = document.getElementById('mail-select-all-btn');
-    if (selectAllBtn) {
-      selectAllBtn.addEventListener('click', window.handleSelectAllEmails);
-    }
+    // 邮箱事件由 mail-app.js 统一绑定，避免按钮被重复监听。
     document.getElementById('manage-rules-btn')?.addEventListener('click', toggleRuleManagementMode);
     document.getElementById('import-rules-btn')?.addEventListener('click', () => {
       document.getElementById('import-rules-input').click();

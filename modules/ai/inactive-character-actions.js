@@ -8,6 +8,10 @@
   async function triggerInactiveAiAction(chatId) {
     const chat = state.chats[chatId];
     if (!chat) return;
+    if (window.TimeAwareness?.isBackgroundPaused(chat)) {
+      console.log(`角色 "${chat.name}" 的后台活动当前已暂停。`);
+      return;
+    }
 
 
     const actionCooldownMinutes = chat.settings.actionCooldownMinutes || 10;
@@ -110,6 +114,7 @@
     let timeContextText = '';
     let recentContextSummary;
     let longTimeNoSee = false;
+    let backgroundTimeAwarenessContext = '';
 
 
 
@@ -122,32 +127,23 @@
 
     if (chat.settings.enableTimePerception) {
       timeOfDayGreeting = getTimeOfDayGreeting(localizedDate);
-      const lastMessage = chat.history.filter(m => !m.isHidden).slice(-1)[0];
-      const now = new Date();
-      let timeContextText = '';
-      let longTimeNoSee = false;
-
-      if (lastMessage) {
-        const lastTime = new Date(lastMessage.timestamp);
-        const timeDiffHours = (now - lastTime) / (1000 * 60 * 60);
-
-        if (timeDiffHours > 2) {
-          longTimeNoSee = true;
-          const diffDays = Math.floor(timeDiffHours / 24);
-          timeContextText = `你们已经有${diffDays > 0 ? diffDays + '天' : Math.floor(timeDiffHours) + '小时'}没有聊天了。`;
-        } else {
-          const diffMinutes = Math.floor(timeDiffHours * 60);
-          if (diffMinutes < 5) {
-            timeContextText = "你们的对话刚刚还在继续。";
-          } else if (diffMinutes < 60) {
-            timeContextText = `你们在${diffMinutes}分钟前聊过。`;
-          } else {
-            timeContextText = `你们在${Math.floor(timeDiffHours)}小时前聊过。`;
-          }
-        }
-      } else {
-        longTimeNoSee = true;
-        timeContextText = "这是你们的第一次互动。";
+      if (window.TimeAwareness) {
+        const result = window.TimeAwareness.buildContext({
+          chat,
+          history: chat.history,
+          mode: 'background',
+          currentTime,
+          localizedDate,
+          timeOfDayGreeting,
+          isGroup: false
+        });
+        timeContextText = result.timeContextText;
+        longTimeNoSee = result.longTimeNoSee;
+        backgroundTimeAwarenessContext = result.context;
+      } else if (lastMessage) {
+        const timeDiffHours = (Date.now() - Number(lastMessage.timestamp)) / (1000 * 60 * 60);
+        longTimeNoSee = timeDiffHours > 2;
+        timeContextText = `你们已经有${Math.max(0, Math.floor(timeDiffHours))}小时没有聊天了。`;
       }
 
 
@@ -159,12 +155,7 @@
         }).join('\n');
       }
 
-      if (longTimeNoSee) {
-
-        recentContextSummary = `[情景提示] ${timeContextText} 当前时间是 ${currentTime}. 你可以参考这个时间，并根据你的角色设定，【考虑】是否开启一个新话题来问候用户。\n${historySummary}`;
-      } else {
-        recentContextSummary = `${historySummary}`;
-      }
+      recentContextSummary = historySummary;
 
     } else {
 
@@ -414,12 +405,7 @@ ${linkedContents}
 
     const longTermMemoryContext = `# 长期记忆 (最高优先级，这是你和用户之间已经确立的事实，必须严格遵守)
 ${(() => {
-  const memMode = chat.settings.memoryMode || (chat.settings.enableStructuredMemory ? 'structured' : 'diary');
-  if (memMode === 'structured' && window.structuredMemoryManager) return window.structuredMemoryManager.serializeForPrompt(chat);
-  if (memMode === 'vector' && window.vectorMemoryManager) return window.vectorMemoryManager.serializeCoreMemories(chat) || '- (暂无)';
-  return chat.longTermMemory && chat.longTermMemory.length > 0
-    ? chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n')
-    : '- (暂无)';
+  return getMemoryContextForPrompt(chat) || '- (暂无)';
 })()}`;
 
 
@@ -492,7 +478,7 @@ ${(() => {
 
     const systemPrompt = `
         # 你的任务
-        你正在扮演角色"${chat.originalName}"（你的本名）。你已经有一段时间没有和用户（${userNickname}）互动了，现在你有机会【主动】做点什么，来表现你的个性和独立生活。这是一个秘密的、后台的独立行动。
+        你正在扮演角色"${chat.originalName}"（你的本名）。现在你有机会【主动】做点什么，来表现你的个性和独立生活。这是一个秘密的、后台的独立行动。
 
 ${viewMyPhonePromptHint}
      
@@ -500,10 +486,8 @@ ${viewMyPhonePromptHint}
         **你与用户的关系是最重要的！** 相比于在动态区闲逛，你应该【优先考虑】是否需要主动给用户发消息来维系你们的感情。
 ${chat.settings.enableTimePerception ? `
 # 【情景感知】
-- **时间**: 感知到当前是${currentTime} (${timeOfDayGreeting})}。
 ${weatherContext}
-- **对话状态**: ${timeContextText}
-${longTimeNoSee ? `【重要提示】你们已经很久没聊天了！你【必须】将本次行动的重点放在使用 'text' 指令给用户发消息，主动开启一个新的、有趣的话题来重新建立联系。绝对不要只是点赞或评论动态，那会显得你很冷漠！` : ''}` : ''}
+${backgroundTimeAwarenessContext || `- **时间**: 当前是${currentTime} (${timeOfDayGreeting})。\n- **对话状态**: ${timeContextText}`}` : ''}
         
         # 【对话节奏铁律 (至关重要！)】
         你的回复【必须】模拟真人的打字和思考习惯。**绝对不要一次性发送一大段文字！** 你应该将你想说的话，拆分成【多条、简短的】消息气泡来发送，每条消息最好不要超过30个字。这会让对话看起来更自然、更真实。
@@ -552,12 +536,7 @@ ${longTimeNoSee ? `【重要提示】你们已经很久没聊天了！你【必�
         - **你的聊天对象（${userNickname}）的人设**: ${chat.settings.myPersona || '(未设置)'}
         ${worldBookContent}
         ${(() => {
-          const memMode = chat.settings?.memoryMode || (chat.settings?.enableStructuredMemory ? 'structured' : 'diary');
-          if (memMode === 'vector' && window.vectorMemoryManager) return window.vectorMemoryManager.serializeCoreMemories(chat) || '- (暂无)';
-          if (memMode === 'structured' && window.structuredMemoryManager) return window.structuredMemoryManager.serializeForPrompt(chat);
-          return chat.longTermMemory && chat.longTermMemory.length > 0
-            ? chat.longTermMemory.map(mem => `- (记录于 ${formatTimeAgo(mem.timestamp)}) ${mem.content}`).join('\n')
-            : '无';
+          return getMemoryContextForPrompt(chat) || '无';
         })()}
         ${multiLayeredSummaryContext}   
         ${linkedMemoryContext}

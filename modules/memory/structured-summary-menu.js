@@ -94,7 +94,7 @@ async function openStructuredSummaryMenu(chat) {
 // 模式1：新消息总结
 async function handleNewMessagesSummary(chat) {
   const lastTimestamp = chat.lastStructuredMemoryTimestamp || 0;
-  const newMessages = chat.history.filter(m => m.timestamp > lastTimestamp && (!m.isHidden || (m.role === 'system' && m.content.includes('内心独白'))));
+  const newMessages = (chat.history || []).filter(m => Number(m?.timestamp) > lastTimestamp && (!m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白'))));
 
   if (newMessages.length === 0) {
     showToast('暂无新消息需要总结', 'info');
@@ -187,7 +187,7 @@ async function handleRangeSummary(chat) {
       hideCustomModal();
 
       const rangeMessages = chat.history.slice(start - 1, end);
-      const validMessages = rangeMessages.filter(m => !m.isHidden || (m.role === 'system' && m.content.includes('内心独白')));
+      const validMessages = rangeMessages.filter(m => !m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白')));
 
       if (validMessages.length === 0) {
         showToast('选定范围内没有有效消息', 'info');
@@ -254,7 +254,7 @@ async function executeStructuredSummary(chat, messages, updateTimestamp = false)
 
   // 格式化对话历史
   const formattedHistory = messages.map(msg => {
-    if (msg.isHidden && msg.role === 'system' && msg.content.includes('内心独白')) return msg.content;
+    if (msg.isHidden && msg.role === 'system' && typeof msg.content === 'string' && msg.content.includes('内心独白')) return msg.content;
     if (msg.isHidden) return null;
     let sender = msg.role === 'user' ? userNickname : (msg.senderName || chat.originalName);
     let contentToSummarize = '';
@@ -318,7 +318,7 @@ async function executeStructuredSummary(chat, messages, updateTimestamp = false)
   }
 
   // 根据参数决定是否更新时间戳
-  if (updateTimestamp) {
+  if (updateTimestamp && entries.length > 0) {
     const newTimestamp = endMsg.timestamp;
     chat.lastStructuredMemoryTimestamp = newTimestamp;
     console.log(`[结构化记忆] 时间戳已更新到: ${newTimestamp}`);
@@ -344,7 +344,7 @@ function openManualSummaryModal() {
   const endInput = document.getElementById('manual-summary-end');
 
   // 计算可用消息总数（排除隐藏消息）
-  const availableMessages = chat.history.filter(m => !m.isHidden || (m.role === 'system' && m.content.includes('内心独白')));
+  const availableMessages = (chat.history || []).filter(m => !m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白')));
   const totalMessages = availableMessages.length;
 
   totalCount.textContent = totalMessages;
@@ -361,7 +361,7 @@ async function handleDiaryModeSummary() {
   if (!chat) return;
 
   const lastSummaryTimestamp = chat.lastMemorySummaryTimestamp || 0;
-  const unsummarizedMessages = chat.history.filter(m => m.timestamp > lastSummaryTimestamp && (!m.isHidden || (m.role === 'system' && m.content.includes('内心独白'))));
+  const unsummarizedMessages = (chat.history || []).filter(m => Number(m?.timestamp) > lastSummaryTimestamp && (!m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白'))));
 
   if (unsummarizedMessages.length < 5) {
     const confirmed = await showCustomConfirm(
@@ -381,8 +381,9 @@ async function handleDiaryModeSummary() {
     } else {
       await triggerAutoSummary(state.activeChatId, true);
       if ((memoryMode === 'structured' || chat.settings.enableStructuredMemory) && window.structuredMemoryManager) {
-        await triggerStructuredMemorySummary(state.activeChatId, true);
-        showToast('结构化记忆已同步更新', 'success');
+        const structuredCount = await triggerStructuredMemorySummary(state.activeChatId, true);
+        if (structuredCount > 0) showToast(`结构化记忆已同步更新（${structuredCount} 条）`, 'success');
+        else if (structuredCount === 0) showToast('结构化记忆检查完成，没有需要新增的内容', 'info');
       }
     }
   }
@@ -408,7 +409,7 @@ async function executeManualSummary() {
   }
 
   const chat = state.chats[state.activeChatId];
-  const availableMessages = chat.history.filter(m => !m.isHidden || (m.role === 'system' && m.content.includes('内心独白')));
+  const availableMessages = (chat.history || []).filter(m => !m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白')));
 
   if (end > availableMessages.length) {
     await showCustomAlert('范围超出', `结束位置不能超过总消息数（${availableMessages.length}）`);

@@ -401,6 +401,98 @@
 .vm-guide-list {
   margin: 8px 0;
 }
+#vm-embedding-model-input,
+#vm-embedding-model-select {
+  min-width: 0;
+}
+
+.vm-embedding-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  min-width: 0;
+}
+.vm-embedding-actions .vm-btn-secondary {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vm-embedding-status {
+  margin-top: 6px;
+  color: var(--text-secondary, #777);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.vm-language-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.vm-language-grid > label {
+  display: block;
+  min-width: 0;
+  color: var(--text-secondary, #666);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.vm-language-grid .vm-input-full {
+  min-width: 0;
+  font-size: 12px;
+}
+.vm-setting-row-compact {
+  margin: 8px 0 0;
+}
+.vm-multilingual-actions {
+  margin-top: 6px;
+}
+.vm-diagnostic-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.vm-diagnostic-row .vm-input-full {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+.vm-diagnostic-row .vm-btn-secondary {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  white-space: nowrap;
+}
+.vm-diagnostic-results {
+  margin-top: 7px;
+  color: var(--text-secondary, #777);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.vm-diagnostic-item {
+  padding: 6px 0;
+  border-top: 1px solid var(--border-color, #eee);
+}
+.vm-diagnostic-item:first-child {
+  border-top: 0;
+}
+.vm-diagnostic-item.matched .vm-diagnostic-title {
+  color: var(--text-primary, #333);
+}
+.vm-diagnostic-title {
+  overflow: hidden;
+  color: var(--text-secondary, #666);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vm-diagnostic-scores {
+  margin-top: 2px;
+  font-size: 10px;
+}
 .vm-guide-list > div {
   font-size: 13px;
   color: var(--text-primary, #555);
@@ -505,6 +597,45 @@
   }
   .vm-panel-content {
     padding: 12px;
+  }
+  .vm-item-actions {
+    flex-direction: column;
+    max-width: 76px;
+  }
+  .vm-item-actions .vm-item-btn {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .vm-embedding-actions {
+    gap: 6px;
+  }
+  .vm-embedding-actions .vm-btn-secondary {
+    font-size: 11px;
+    padding-inline: 5px;
+  }
+  .vm-language-grid {
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+  .vm-diagnostic-row {
+    gap: 5px;
+  }
+  .vm-diagnostic-row .vm-btn-secondary {
+    padding-inline: 8px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 340px) {
+  .vm-multilingual-actions {
+    flex-direction: column;
+  }
+  .vm-diagnostic-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .vm-diagnostic-row .vm-btn-secondary {
+    width: 100%;
   }
 }
 

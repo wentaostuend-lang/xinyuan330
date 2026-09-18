@@ -186,10 +186,20 @@ function bindVectorMemoryEvents(chat, container) {
       if (!content || !content.trim()) return;
       const tags = await showCustomPrompt('添加标签', '输入关键词标签（逗号分隔）：', '');
       const tagArr = tags ? tags.split(/[,，]/).map(t => t.trim()).filter(Boolean) : [];
-      const embedding = await window.vectorMemoryManager.getEmbedding(content.trim(), chat);
+      const draft = {
+        content: content.trim(),
+        tags: tagArr,
+        sourceLanguage: window.vectorMemoryManager.detectLanguage(content),
+        conversationLanguages: [window.vectorMemoryManager.detectLanguage(content)].filter(language => language !== 'unknown')
+      };
+      const embeddingText = window.vectorMemoryManager._embeddingTextFor(chat, draft);
+      const embedding = await window.vectorMemoryManager.getEmbedding(embeddingText, chat);
       window.vectorMemoryManager.createFragment(chat, {
-        content: content.trim(), tags: tagArr, category: 'E', importance: 5,
-        emotionalWeight: 3, embedding, source: 'manual'
+        ...draft, category: 'E', importance: 5,
+        emotionalWeight: 3, embedding,
+        embeddingSignature: embedding ? window.vectorMemoryManager._embeddingSignature(chat) : '',
+        embeddingTextHash: embedding ? window.vectorMemoryManager._hashEmbeddingText(embeddingText) : '',
+        source: 'manual'
       });
       await db.chats.put(chat);
       renderVectorMemoryView();
@@ -254,11 +264,20 @@ function bindVectorMemoryEvents(chat, container) {
         if (!file) return;
         try {
           const text = await file.text();
-          const mode = await showCustomConfirm('导入模式', '选择"确认"为合并模式（保留现有数据），选择"取消"为替换模式（清空现有数据）');
-          const importMode = mode ? 'merge' : 'replace';
+          const importMode = await showChoiceModal('导入模式', [
+            { text: '合并导入（保留现有记忆）', value: 'merge' },
+            { text: '替换导入（清空现有记忆）', value: 'replace' }
+          ]);
+          if (!importMode) return;
           showToast('正在导入...', 'info');
+          const backup = JSON.parse(JSON.stringify(chat.variableMemory || null));
           const count = await window.vectorMemoryManager.importMemory(chat, text, importMode);
-          await db.chats.put(chat);
+          try {
+            await db.chats.put(chat);
+          } catch (error) {
+            chat.variableMemory = backup;
+            throw error;
+          }
           renderVectorMemoryView();
           showToast(`成功导入 ${count} 条记忆`, 'success');
         } catch (err) {
@@ -321,7 +340,10 @@ function bindVectorMemoryEvents(chat, container) {
         window.vectorMemoryManager.editFragment(chat, btn.dataset.id, { content: newContent.trim() });
         // 重新生成embedding
         const embedding = await window.vectorMemoryManager.getEmbedding(newContent.trim(), chat);
-        if (embedding) frag.embedding = embedding;
+        if (embedding) {
+          frag.embedding = embedding;
+          frag.embeddingSignature = window.vectorMemoryManager._embeddingSignature(chat);
+        }
         await db.chats.put(chat);
         renderVectorMemoryView();
       }
@@ -340,6 +362,7 @@ function bindVectorMemoryEvents(chat, container) {
 }
 
 async function openVectorMemorySettings(chat, defaultTab = 'settings') {
+  const vm = window.vectorMemoryManager.getVariableMemory(chat);
   const settingsHtml = window.vectorMemoryManager.renderSettingsPanel(chat);
 
   const guideHtml = window.vectorMemoryManager.renderGuide ? window.vectorMemoryManager.renderGuide() : '<div style="padding:20px;text-align:center;">暂无教程内容</div>';
@@ -367,6 +390,7 @@ async function openVectorMemorySettings(chat, defaultTab = 'settings') {
     </div>
   `;
   document.body.appendChild(panel);
+  let metadataEnrichmentRunning = false;
 
   // Tab切换
   panel.querySelectorAll('.vm-panel-tab').forEach(tab => {
@@ -381,6 +405,10 @@ async function openVectorMemorySettings(chat, defaultTab = 'settings') {
 
   // 返回按钮
   panel.querySelector('#vm-settings-back').addEventListener('click', () => {
+    if (metadataEnrichmentRunning) {
+      window.vectorMemoryManager.cancelMemoryMetadataEnrichment(chat);
+      showToast('正在停止多语言信息补全', 'info');
+    }
     panel.remove();
   });
 
@@ -505,6 +533,181 @@ async function openVectorMemorySettings(chat, defaultTab = 'settings') {
       }
     });
   }
+  const multilingualCb = panel.querySelector('#vm-multilingual-enabled');
+  if (multilingualCb) {
+    multilingualCb.addEventListener('change', () => {
+      const fields = panel.querySelector('#vm-multilingual-fields');
+      if (fields) fields.style.display = multilingualCb.checked ? 'block' : 'none';
+    });
+  }
+
+  const statusEl = panel.querySelector('#vm-embedding-status');
+  const testEmbeddingBtn = panel.querySelector('#vm-test-embedding-btn');
+  if (testEmbeddingBtn) {
+    testEmbeddingBtn.addEventListener('click', async () => {
+      testEmbeddingBtn.disabled = true;
+      testEmbeddingBtn.textContent = '测试中...';
+      if (statusEl) statusEl.textContent = '正在请求 Embedding 接口…';
+      try {
+        const dimensions = await window.vectorMemoryManager.testEmbeddingConnection(chat, true);
+        if (statusEl) statusEl.textContent = `接口正常，返回 ${dimensions} 维向量`;
+        showToast('向量接口连接正常', 'success');
+      } catch (error) {
+        if (statusEl) statusEl.textContent = `接口失败：${error.message}`;
+        showToast(`向量接口测试失败：${error.message}`, 'error');
+      } finally {
+        testEmbeddingBtn.disabled = false;
+        testEmbeddingBtn.textContent = '测试向量接口';
+      }
+    });
+  }
+
+  const reembedBtn = panel.querySelector('#vm-reembed-btn');
+  if (reembedBtn) {
+    reembedBtn.addEventListener('click', async () => {
+      const confirmed = await showCustomConfirm('补全/重建向量', '将为缺失或与当前模型不一致的记忆重新请求向量，会消耗 Embedding API 额度。确定继续吗？');
+      if (!confirmed) return;
+      window.vectorMemoryManager.saveSettingsFromUI(chat);
+      reembedBtn.disabled = true;
+      reembedBtn.textContent = '处理中...';
+      try {
+        const result = await window.vectorMemoryManager.rebuildEmbeddings(chat, (completed, failed) => {
+          if (statusEl) statusEl.textContent = `处理中：成功 ${completed}，失败 ${failed}`;
+        });
+        await db.chats.put(chat);
+        if (statusEl) statusEl.textContent = `处理完成：成功 ${result.completed}，失败 ${result.failed}`;
+        showToast(`向量处理完成：成功 ${result.completed}，失败 ${result.failed}`, result.failed ? 'info' : 'success');
+      } catch (error) {
+        if (statusEl) statusEl.textContent = `处理失败：${error.message}`;
+        showToast(`向量处理失败：${error.message}`, 'error');
+      } finally {
+        reembedBtn.disabled = false;
+        reembedBtn.textContent = '补全/重建向量';
+      }
+    });
+  }
+
+  const multilingualStatusEl = panel.querySelector('#vm-multilingual-status');
+  const testMultilingualBtn = panel.querySelector('#vm-test-multilingual-btn');
+  if (testMultilingualBtn) {
+    testMultilingualBtn.addEventListener('click', async () => {
+      testMultilingualBtn.disabled = true;
+      testMultilingualBtn.textContent = '测试中...';
+      if (multilingualStatusEl) multilingualStatusEl.textContent = '正在比较中英文同义文本与无关文本…';
+      try {
+        const result = await window.vectorMemoryManager.testMultilingualEmbedding(chat, true);
+        const cross = result.crossLanguageScore.toFixed(3);
+        const unrelated = result.unrelatedScore.toFixed(3);
+        const gap = result.crossLanguageScore - result.unrelatedScore;
+        if (multilingualStatusEl) {
+          multilingualStatusEl.textContent = `跨语言 ${cross}；无关对照 ${unrelated}；区分度 ${gap.toFixed(3)}`;
+        }
+        showToast(gap > 0.08 ? '跨语言语义区分正常' : '接口可用，但跨语言区分度偏低', gap > 0.08 ? 'success' : 'info');
+      } catch (error) {
+        if (multilingualStatusEl) multilingualStatusEl.textContent = `跨语言测试失败：${error.message}`;
+        showToast(`跨语言测试失败：${error.message}`, 'error');
+      } finally {
+        testMultilingualBtn.disabled = false;
+        testMultilingualBtn.textContent = '测试跨语言';
+      }
+    });
+  }
+
+  const enrichMetadataBtn = panel.querySelector('#vm-enrich-metadata-btn');
+  if (enrichMetadataBtn) {
+    enrichMetadataBtn.addEventListener('click', async () => {
+      if (metadataEnrichmentRunning) {
+        window.vectorMemoryManager.cancelMemoryMetadataEnrichment(chat);
+        enrichMetadataBtn.disabled = true;
+        enrichMetadataBtn.textContent = '正在停止...';
+        return;
+      }
+      const coverage = window.vectorMemoryManager.getMultilingualCoverage(chat);
+      if (!coverage.missing) {
+        showToast('现有记忆的多语言信息已补全', 'info');
+        return;
+      }
+      const confirmed = await showCustomConfirm('补全多语言信息', `将使用聊天模型整理 ${coverage.missing} 条待补全记忆的双语检索词，并在接口可用时重新生成向量。原记忆正文不会被覆盖，会消耗 API 额度。确定继续吗？`);
+      if (!confirmed) return;
+      window.vectorMemoryManager.saveSettingsFromUI(chat);
+      metadataEnrichmentRunning = true;
+      enrichMetadataBtn.textContent = '停止补全';
+      try {
+        const result = await window.vectorMemoryManager.enrichMemoryMetadata(chat, progress => {
+          if (multilingualStatusEl) multilingualStatusEl.textContent = `处理中 ${progress.processed}/${progress.total}：已补全 ${progress.enriched}，失败 ${progress.failed}`;
+        });
+        await db.chats.put(chat);
+        const stateText = result.cancelled ? '已停止' : '完成';
+        if (multilingualStatusEl) multilingualStatusEl.textContent = `${stateText}：补全 ${result.enriched}/${result.total}，生成向量 ${result.embedded}，失败 ${result.failed}`;
+        showToast(`多语言信息${stateText}：${result.enriched}/${result.total}`, result.failed || result.cancelled ? 'info' : 'success');
+      } catch (error) {
+        if (multilingualStatusEl) multilingualStatusEl.textContent = `补全失败：${error.message}`;
+        showToast(`多语言信息补全失败：${error.message}`, 'error');
+      } finally {
+        metadataEnrichmentRunning = false;
+        enrichMetadataBtn.disabled = false;
+        enrichMetadataBtn.textContent = '补全现有记忆';
+      }
+    });
+  }
+
+  const diagnosticBtn = panel.querySelector('#vm-run-diagnostic-btn');
+  const diagnosticInput = panel.querySelector('#vm-diagnostic-query');
+  const diagnosticResults = panel.querySelector('#vm-diagnostic-results');
+  const runDiagnostic = async () => {
+    if (!diagnosticBtn) return;
+    const query = diagnosticInput?.value.trim();
+    if (!query) {
+      showToast('请先输入测试内容', 'info');
+      return;
+    }
+    diagnosticBtn.disabled = true;
+    diagnosticBtn.textContent = '测试中...';
+    if (diagnosticResults) diagnosticResults.textContent = '正在计算召回分数…';
+    const vmState = window.vectorMemoryManager.getVariableMemory(chat);
+    const savedSettings = {
+      ...vmState.settings,
+      scoreWeights: { ...(vmState.settings.scoreWeights || {}) }
+    };
+    const savedCache = vmState._retrievalCache;
+    const savedEmbeddingSignatures = vmState.fragments.map(fragment => ({
+      fragment,
+      embeddingSignature: fragment.embeddingSignature
+    }));
+    try {
+      window.vectorMemoryManager.saveSettingsFromUI(chat);
+      const rows = await window.vectorMemoryManager.diagnoseRetrieval(chat, query, 10);
+      diagnosticResults.innerHTML = '';
+      if (!rows.length) {
+        diagnosticResults.textContent = '没有可供测试的普通记忆。';
+      } else {
+        rows.forEach((row, index) => {
+          const item = document.createElement('div');
+          item.className = `vm-diagnostic-item${row.matched ? ' matched' : ''}`;
+          const title = document.createElement('div');
+          title.className = 'vm-diagnostic-title';
+          title.textContent = `${index + 1}. ${row.content}`;
+          const scores = document.createElement('div');
+          scores.className = 'vm-diagnostic-scores';
+          scores.textContent = `${row.matched ? '命中' : '未过阈值'} · 总分 ${row.score.toFixed(3)} · 语义 ${row.semanticScore.toFixed(3)} · 字面 ${row.keywordScore.toFixed(3)} · 实体 ${row.entityScore.toFixed(3)} · ${row.language}`;
+          item.append(title, scores);
+          diagnosticResults.appendChild(item);
+        });
+      }
+    } catch (error) {
+      if (diagnosticResults) diagnosticResults.textContent = `测试失败：${error.message}`;
+    } finally {
+      vmState.settings = savedSettings;
+      vmState._retrievalCache = savedCache;
+      savedEmbeddingSignatures.forEach(item => { item.fragment.embeddingSignature = item.embeddingSignature; });
+      diagnosticBtn.disabled = false;
+      diagnosticBtn.textContent = '测试';
+    }
+  };
+  if (diagnosticBtn) diagnosticBtn.addEventListener('click', runDiagnostic);
+  if (diagnosticInput) diagnosticInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter') runDiagnostic();
+  });
 
   // 保存按钮
   const saveBtn = panel.querySelector('#vm-save-settings-btn');
@@ -513,6 +716,7 @@ async function openVectorMemorySettings(chat, defaultTab = 'settings') {
       window.vectorMemoryManager.saveSettingsFromUI(chat);
       await db.chats.put(chat);
       panel.remove();
+      renderVectorMemoryView();
       showToast('设置已保存', 'success');
     });
   }
@@ -529,7 +733,7 @@ async function openVectorMemorySettings(chat, defaultTab = 'settings') {
   }
   
   // 检索缓存开关变化时显示/隐藏缓存间隔设置
-  const retrievalCacheCb = panel.querySelector('#vm-retrieval-cache');
+  const retrievalCacheCb = panel.querySelector('#vm-cache-enabled');
   if (retrievalCacheCb) {
     retrievalCacheCb.addEventListener('change', () => {
       const cacheIntervalGroup = panel.querySelector('#vm-cache-interval-group');

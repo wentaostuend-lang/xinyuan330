@@ -751,22 +751,142 @@ window.initEventBindingsA = async function(state, db) {
     }
 
 
+    function showWorldBookExportSelectionModal(books, categories) {
+      return new Promise(resolve => {
+        const modal = document.getElementById('custom-modal-overlay');
+        const modalTitle = document.getElementById('custom-modal-title');
+        const modalBody = document.getElementById('custom-modal-body');
+        const modalFooter = document.querySelector('#custom-modal .custom-modal-footer');
+
+        if (!modal || !modalTitle || !modalBody || !modalFooter) {
+          resolve(books);
+          return;
+        }
+
+        modalTitle.textContent = '选择要导出的世界书';
+        modalBody.innerHTML = `
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;">
+            <span id="world-book-export-count" style="font-size:13px; color:var(--text-secondary, #666);"></span>
+            <div style="display:flex; gap:6px;">
+              <button type="button" id="select-all-world-books-for-export" style="padding:5px 9px; border:1px solid var(--border-color, #ddd); border-radius:7px; background:var(--secondary-bg, #fff); color:var(--text-color, #333); cursor:pointer;">全选</button>
+              <button type="button" id="deselect-all-world-books-for-export" style="padding:5px 9px; border:1px solid var(--border-color, #ddd); border-radius:7px; background:var(--secondary-bg, #fff); color:var(--text-color, #333); cursor:pointer;">取消全选</button>
+            </div>
+          </div>
+          <div id="world-book-export-list" style="max-height:48vh; overflow-y:auto; border:1px solid var(--border-color, #e5e5e5); border-radius:9px; text-align:left;"></div>
+        `;
+
+        const categoryNameById = new Map(categories.map(category => [String(category.id), category.name]));
+        const list = document.getElementById('world-book-export-list');
+        const count = document.getElementById('world-book-export-count');
+        const checkboxes = [];
+
+        books.forEach((book, index) => {
+          const row = document.createElement('label');
+          row.style.cssText = 'display:flex; align-items:center; gap:10px; padding:10px 11px; cursor:pointer; border-bottom:1px solid var(--border-color, #eee);';
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.checked = true;
+          checkbox.dataset.bookIndex = String(index);
+          checkbox.style.cssText = 'width:18px; height:18px; padding:0; margin:0; flex:0 0 auto; cursor:pointer;';
+          checkboxes.push(checkbox);
+
+          const text = document.createElement('span');
+          text.style.cssText = 'display:flex; flex-direction:column; min-width:0; flex:1;';
+
+          const name = document.createElement('span');
+          name.textContent = book.name || '未命名世界书';
+          name.style.cssText = 'font-size:14px; color:var(--text-color, #333); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+          text.appendChild(name);
+
+          if (book.categoryId !== null && book.categoryId !== undefined && book.categoryId !== '') {
+            const category = document.createElement('span');
+            category.textContent = categoryNameById.get(String(book.categoryId)) || '未知分类';
+            category.style.cssText = 'margin-top:2px; font-size:11px; color:var(--text-secondary, #888);';
+            text.appendChild(category);
+          }
+
+          row.appendChild(checkbox);
+          row.appendChild(text);
+          list.appendChild(row);
+        });
+
+        const lastRow = list.lastElementChild;
+        if (lastRow) lastRow.style.borderBottom = 'none';
+
+        modalFooter.style.cssText = '';
+        modalFooter.style.flexDirection = 'row';
+        modalFooter.innerHTML = `
+          <button type="button" id="custom-modal-cancel">取消</button>
+          <button type="button" id="custom-modal-confirm" class="confirm-btn">导出</button>
+        `;
+
+        const cancelBtn = document.getElementById('custom-modal-cancel');
+        const confirmBtn = document.getElementById('custom-modal-confirm');
+        const selectAllBtn = document.getElementById('select-all-world-books-for-export');
+        const deselectAllBtn = document.getElementById('deselect-all-world-books-for-export');
+
+        const updateCount = () => {
+          const selectedCount = checkboxes.filter(checkbox => checkbox.checked).length;
+          count.textContent = `已选择 ${selectedCount} / ${books.length} 本`;
+          confirmBtn.disabled = selectedCount === 0;
+          confirmBtn.style.opacity = selectedCount === 0 ? '0.45' : '1';
+          confirmBtn.style.cursor = selectedCount === 0 ? 'not-allowed' : 'pointer';
+        };
+
+        checkboxes.forEach(checkbox => checkbox.addEventListener('change', updateCount));
+        selectAllBtn.onclick = () => {
+          checkboxes.forEach(checkbox => { checkbox.checked = true; });
+          updateCount();
+        };
+        deselectAllBtn.onclick = () => {
+          checkboxes.forEach(checkbox => { checkbox.checked = false; });
+          updateCount();
+        };
+        cancelBtn.onclick = () => {
+          modal.classList.remove('visible');
+          resolve(null);
+        };
+        confirmBtn.onclick = () => {
+          const selectedBooks = checkboxes
+            .filter(checkbox => checkbox.checked)
+            .map(checkbox => books[Number(checkbox.dataset.bookIndex)]);
+          modal.classList.remove('visible');
+          resolve(selectedBooks);
+        };
+
+        updateCount();
+        modal.classList.add('visible');
+      });
+    }
+
     async function exportWorldBooks() {
       try {
         const books = await db.worldBooks.toArray();
         const categories = await db.worldBookCategories.toArray();
 
-        if (books.length === 0 && categories.length === 0) {
+        if (books.length === 0) {
           alert("没有可导出的世界书数据。");
           return;
         }
+
+        const selectedBooks = await showWorldBookExportSelectionModal(books, categories);
+        if (!selectedBooks) return;
+
+        const selectedCategoryIds = new Set(
+          selectedBooks
+            .map(book => book.categoryId)
+            .filter(categoryId => categoryId !== null && categoryId !== undefined && categoryId !== '')
+            .map(String)
+        );
+        const selectedCategories = categories.filter(category => selectedCategoryIds.has(String(category.id)));
 
         const backupData = {
           type: 'EPhoneWorldBookBackup',
           version: 1,
           timestamp: Date.now(),
-          books: books,
-          categories: categories
+          books: selectedBooks,
+          categories: selectedCategories
         };
 
         const blob = new Blob(
@@ -781,7 +901,7 @@ window.initEventBindingsA = async function(state, db) {
         link.click();
         URL.revokeObjectURL(url);
 
-        await showCustomAlert('导出成功', '所有世界书数据已成功导出！');
+        await showCustomAlert('导出成功', `已成功导出 ${selectedBooks.length} 本世界书！`);
 
       } catch (error) {
         console.error("导出世界书时出错:", error);
@@ -940,6 +1060,10 @@ window.initEventBindingsA = async function(state, db) {
     window.renderWorldBookScreenProxy = renderWorldBookScreen;
 
     await loadAllDataFromDB();
+    // 在常规数据加载完成后再恢复异常中断的通话，避免启动阶段读取到半初始化状态。
+    if (typeof window.recoverInterruptedVoiceCalls === 'function') {
+      await window.recoverInterruptedVoiceCalls();
+    }
     await initFunds();
 
     // 初始化提示词管理器
@@ -1114,6 +1238,10 @@ window.initEventBindingsA = async function(state, db) {
       await showAdvancedExportImportModal();
     });
 
+    document.getElementById('advanced-import-btn')?.addEventListener('click', () => {
+      document.getElementById('advanced-import-input').click();
+    });
+
     // 高级导入文件选择
     document.getElementById('advanced-import-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -1143,10 +1271,12 @@ window.initEventBindingsA = async function(state, db) {
     // 双语模式开关事件
     document.getElementById('bilingual-mode-toggle').addEventListener('change', (e) => {
       document.getElementById('bilingual-display-mode-group').style.display = e.target.checked ? 'flex' : 'none';
+      document.getElementById('language-policy-settings').style.display = e.target.checked ? 'block' : 'none';
       if (state.activeChatId && state.chats[state.activeChatId] && state.chats[state.activeChatId].isGroup) {
         document.getElementById('bilingual-characters-group').style.display = e.target.checked ? 'block' : 'none';
       }
     });
+    if (window.languagePolicy) window.languagePolicy.bindSettingsUi();
     
     // 自动记忆开关实时生效
     document.getElementById('auto-memory-toggle').addEventListener('change', (e) => {
@@ -1335,6 +1465,7 @@ window.initEventBindingsA = async function(state, db) {
 
       // E. 清理全局临时变量 (最重要的一步！)
       ruleCache = {};
+      window.invalidateRenderingRuleCache?.();
       activeMessageTimestamp = null;
       activeTransferTimestamp = null;
       //lastRawAiResponse = ''; 
@@ -1644,10 +1775,13 @@ window.initEventBindingsA = async function(state, db) {
 
     document.getElementById('send-btn').addEventListener('click', () => {
       playSilentAudio();
-      const content = chatInput.value.trim();
+      let content = chatInput.value.trim();
       if (!content || !state.activeChatId) return;
 
       const chat = state.chats[state.activeChatId];
+      if (window.CharacterBond && !chat.isGroup) {
+        content = window.CharacterBond.normalizePetMention(content, chat);
+      }
       if (content.startsWith('/n ') || content.startsWith('/旁白 ')) {
         const narrationText = content.replace(/^\/n\s+|^\/旁白\s+/, '');
 
@@ -1684,6 +1818,7 @@ window.initEventBindingsA = async function(state, db) {
 
       (async () => {
         chat.history.push(msg);
+        if (window.CharacterBond) window.CharacterBond.onMessageSaved(chat, msg);
         await db.chats.put(chat);
         renderChatList();
 
@@ -2223,10 +2358,14 @@ window.initEventBindingsA = async function(state, db) {
       }
 
       // 新增：保存心声和动态功能开关
+      const previousThoughtsUIEnabled = state.globalSettings.customThoughtsUIEnabled;
+      const previousThoughtsHTML = state.globalSettings.customThoughtsHTML;
+      const previousThoughtsCSS = state.globalSettings.customThoughtsCSS;
       state.globalSettings.enableThoughts = document.getElementById('global-enable-thoughts-switch').checked;
       state.globalSettings.customThoughtsUIEnabled = document.getElementById('custom-thoughts-ui-switch').checked;
       state.globalSettings.customThoughtsHTML = document.getElementById('custom-thoughts-html-textarea').value;
       state.globalSettings.customThoughtsCSS = document.getElementById('custom-thoughts-css-textarea').value;
+      window.PromptEntryManager?.syncAll();
       state.globalSettings.customThoughtsPromptEnabled = document.getElementById('custom-thoughts-prompt-switch').checked;
       state.globalSettings.customThoughtsPrompt = document.getElementById('custom-thoughts-prompt-textarea').value;
       state.globalSettings.customSummaryPromptEnabled = document.getElementById('custom-summary-prompt-switch').checked;
@@ -2236,6 +2375,9 @@ window.initEventBindingsA = async function(state, db) {
       state.globalSettings.customChatPromptGroup = document.getElementById('custom-chat-prompt-group-textarea').value;
       state.globalSettings.customChatPromptOffline = document.getElementById('custom-chat-prompt-offline-textarea').value;
       state.globalSettings.customChatPromptGroupOffline = document.getElementById('custom-chat-prompt-group-offline-textarea').value;
+      if (window.PromptEntryManager) {
+        state.globalSettings.customPromptCollections = window.PromptEntryManager.exportState();
+      }
       state.globalSettings.enableQzoneActions = document.getElementById('global-enable-qzone-actions-switch').checked;
       state.globalSettings.enableViewMyPhone = document.getElementById('global-enable-view-myphone-switch').checked;
       state.globalSettings.enableCrossChat = document.getElementById('global-enable-cross-chat-switch').checked;
@@ -2284,6 +2426,13 @@ window.initEventBindingsA = async function(state, db) {
       }
       
       await db.globalSettings.put(state.globalSettings);
+      if (
+        previousThoughtsUIEnabled !== state.globalSettings.customThoughtsUIEnabled
+        || previousThoughtsHTML !== state.globalSettings.customThoughtsHTML
+        || previousThoughtsCSS !== state.globalSettings.customThoughtsCSS
+      ) {
+        window.invalidateCustomThoughtsUI?.(true);
+      }
       
       // 如果安全渲染模式发生变化，提醒用户刷新页面
       if (safeRenderSwitch && oldSafeRenderMode !== safeRenderSwitch.checked) {
@@ -3141,6 +3290,7 @@ window.initEventBindingsA = async function(state, db) {
       if (!state.activeChatId) return;
       const chat = state.chats[state.activeChatId];
       const isGroup = chat.isGroup;
+      if (window.CharacterBond) window.CharacterBond.loadSettingsUi(chat);
       const mcpEditor = document.getElementById('chat-mcp-permission-editor');
       const groupMcpNote = document.getElementById('group-mcp-permission-note');
       if (mcpEditor && groupMcpNote) {
@@ -3279,6 +3429,7 @@ window.initEventBindingsA = async function(state, db) {
       const timeZoneGroup = document.getElementById('time-zone-group');
       timePerceptionToggle.checked = chat.settings.enableTimePerception;
       timeZoneGroup.style.display = timePerceptionToggle.checked ? 'block' : 'none';
+      if (window.TimeAwareness) window.TimeAwareness.loadSettingsUi(chat);
 
 
       const timezoneSelect = document.getElementById('time-zone-select');
@@ -3301,6 +3452,7 @@ window.initEventBindingsA = async function(state, db) {
       document.getElementById('bilingual-display-mode-select').value = chat.settings.bilingualDisplayMode || 'outside';
       document.getElementById('bilingual-display-mode-group').style.display = 
         (chat.settings.enableBilingualMode) ? 'flex' : 'none';
+      if (window.languagePolicy) window.languagePolicy.loadSettingsUi(chat);
       
       if (isGroup) {
         document.getElementById('bilingual-characters-group').style.display = 
@@ -3324,7 +3476,7 @@ window.initEventBindingsA = async function(state, db) {
           const displayText = document.querySelector('#bilingual-chars-multiselect .selected-options-text');
 
           if (checkedBoxes.length === 0) {
-            displayText.textContent = '全员双语';
+            displayText.textContent = '全员生效';
           } else if (checkedBoxes.length > 2) {
             displayText.textContent = `已选择 ${checkedBoxes.length} 个角色`;
           } else {
@@ -3342,7 +3494,7 @@ window.initEventBindingsA = async function(state, db) {
         newBilingualSelectBox.addEventListener('click', (e) => {
           e.stopPropagation();
           if (state.globalSettings.dropdownPopupMode) {
-            showMultiselectPopup('生效双语角色', bilingualCharsContainer, updateBilingualSelectionDisplay);
+            showMultiselectPopup('语言与翻译生效角色', bilingualCharsContainer, updateBilingualSelectionDisplay);
           } else {
             bilingualCharsContainer.classList.toggle('visible');
             newBilingualSelectBox.classList.toggle('expanded');
@@ -3494,6 +3646,18 @@ window.initEventBindingsA = async function(state, db) {
         document.getElementById('ai-voice-lang-select').value = chat.settings.ttsLanguage || '';
         document.getElementById('chat-show-seconds-switch').checked = chat.settings.showSeconds !== undefined ? chat.settings.showSeconds : (state.globalSettings.showSeconds || false);
         document.getElementById('enable-tts-switch').checked = chat.settings.enableTts !== false;
+        document.getElementById('enable-real-voice-switch').checked = chat.settings.enableRealVoice !== false;
+        document.getElementById('real-voice-operation-select').value = chat.settings.realVoiceOperation || 'tap';
+        document.getElementById('voice-understanding-mode-select').value = chat.settings.voiceUnderstandingMode || 'auto';
+        document.getElementById('voice-transcription-url-input').value = chat.settings.voiceTranscriptionUrl || '';
+        document.getElementById('voice-transcription-model-input').value = chat.settings.voiceTranscriptionModel || 'whisper-1';
+        document.getElementById('voice-transcription-key-input').value = chat.settings.voiceTranscriptionKey || '';
+        document.getElementById('voice-max-duration-select').value = String(chat.settings.voiceMaxDuration || 60);
+        document.getElementById('voice-confirm-transcript-switch').checked = chat.settings.voiceConfirmTranscript !== false;
+        document.getElementById('voice-call-input-mode-select').value = chat.settings.voiceCallInputMode || 'text';
+        document.getElementById('voice-call-understanding-select').value = chat.settings.voiceCallUnderstandingMode || 'same';
+        document.getElementById('voice-call-text-fallback-switch').checked = chat.settings.voiceCallTextFallback !== false;
+        if (window.voiceRecording?.refreshSettingsUi) window.voiceRecording.refreshSettingsUi();
         document.getElementById('ai-persona').value = chat.settings.aiPersona;
         
         // 动态年龄设置回显
@@ -4092,13 +4256,31 @@ window.initEventBindingsA = async function(state, db) {
     document.getElementById('save-chat-settings-btn').addEventListener('click', async () => {
       if (!state.activeChatId) return;
       const chat = state.chats[state.activeChatId];
+      const shouldOpenPetSetup = !chat.isGroup
+        && !chat.settings.enableSharedPet
+        && document.getElementById('shared-pet-switch').checked
+        && chat.sharedPet?.status !== 'active';
 
+      if (window.languagePolicy) {
+        const languageError = window.languagePolicy.validateSettingsUi(document.getElementById('bilingual-mode-toggle').checked);
+        if (languageError) {
+          await showCustomAlert('语言设置未完成', languageError);
+          return;
+        }
+      }
 
       const oldOfflineModeState = chat.settings.isOfflineMode || false;
 
 
       const newName = document.getElementById('chat-name-input').value.trim();
       if (!newName) return alert('备注名/群名不能为空！');
+      if (!chat.isGroup && window.CharacterBond) {
+        window.CharacterBond.setSwitches(
+          chat,
+          document.getElementById('character-spark-switch').checked,
+          document.getElementById('shared-pet-switch').checked
+        );
+      }
       if (!chat.isGroup && newName !== chat.name) {
         if (!chat.nameHistory) chat.nameHistory = [];
         if (!chat.nameHistory.includes(chat.name)) chat.nameHistory.push(chat.name);
@@ -4175,6 +4357,7 @@ window.initEventBindingsA = async function(state, db) {
 
       chat.settings.enableTimePerception = document.getElementById('time-perception-toggle').checked;
       chat.settings.timeZone = document.getElementById('time-zone-select').value;
+      if (window.TimeAwareness) window.TimeAwareness.saveSettingsUi(chat);
       chat.settings.lyricsPosition = {
         vertical: document.getElementById('lyrics-vertical-pos').value,
         horizontal: document.getElementById('lyrics-horizontal-pos').value,
@@ -4186,6 +4369,7 @@ window.initEventBindingsA = async function(state, db) {
       // 保存双语模式设置
       chat.settings.enableBilingualMode = document.getElementById('bilingual-mode-toggle').checked;
       chat.settings.bilingualDisplayMode = document.getElementById('bilingual-display-mode-select').value;
+      if (window.languagePolicy) window.languagePolicy.saveSettingsUi(chat);
       
       if (chat.isGroup) {
         const checkedBilingualChars = document.querySelectorAll('#bilingual-chars-checkboxes-container input[type="checkbox"]:checked');
@@ -4352,6 +4536,17 @@ window.initEventBindingsA = async function(state, db) {
         chat.settings.ttsLanguage = document.getElementById('ai-voice-lang-select').value;
         chat.settings.showSeconds = document.getElementById('chat-show-seconds-switch').checked;
         chat.settings.enableTts = document.getElementById('enable-tts-switch').checked;
+        chat.settings.enableRealVoice = document.getElementById('enable-real-voice-switch').checked;
+        chat.settings.realVoiceOperation = document.getElementById('real-voice-operation-select').value;
+        chat.settings.voiceUnderstandingMode = document.getElementById('voice-understanding-mode-select').value;
+        chat.settings.voiceTranscriptionUrl = document.getElementById('voice-transcription-url-input').value.trim();
+        chat.settings.voiceTranscriptionModel = document.getElementById('voice-transcription-model-input').value.trim() || 'whisper-1';
+        chat.settings.voiceTranscriptionKey = document.getElementById('voice-transcription-key-input').value.trim();
+        chat.settings.voiceMaxDuration = parseInt(document.getElementById('voice-max-duration-select').value, 10) || 60;
+        chat.settings.voiceConfirmTranscript = document.getElementById('voice-confirm-transcript-switch').checked;
+        chat.settings.voiceCallInputMode = document.getElementById('voice-call-input-mode-select').value;
+        chat.settings.voiceCallUnderstandingMode = document.getElementById('voice-call-understanding-select').value;
+        chat.settings.voiceCallTextFallback = document.getElementById('voice-call-text-fallback-switch').checked;
         chat.settings.aiAvatar = document.getElementById('ai-avatar-preview').src;
         chat.settings.myNickname = document.getElementById('my-nickname-input').value.trim() || '我';
         chat.settings.actionCooldownMinutes = parseInt(document.getElementById('ai-action-cooldown-input').value) || 10;
@@ -4380,6 +4575,10 @@ window.initEventBindingsA = async function(state, db) {
       showScreen('chat-interface-screen');
       renderChatInterface(state.activeChatId);
       renderChatList();
+      if (shouldOpenPetSetup && window.CharacterBond) {
+        window.CharacterBond.showBondModal('pet', chat);
+      }
+      if (window.voiceRecording?.refreshAvailability) window.voiceRecording.refreshAvailability();
     });
     // 暴露需要跨文件引用的函数到 window
     window.handleWorldBookImport = handleWorldBookImport;

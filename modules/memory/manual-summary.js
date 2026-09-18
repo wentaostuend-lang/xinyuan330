@@ -9,8 +9,9 @@
       } else {
         await triggerAutoSummary(state.activeChatId, true);
         if ((memoryMode === 'structured' || (chat && chat.settings.enableStructuredMemory)) && window.structuredMemoryManager) {
-          await triggerStructuredMemorySummary(state.activeChatId, true);
-          showToast('结构化记忆已同步更新', 'success');
+          const structuredCount = await triggerStructuredMemorySummary(state.activeChatId, true);
+          if (structuredCount > 0) showToast(`结构化记忆已同步更新（${structuredCount} 条）`, 'success');
+          else if (structuredCount === 0) showToast('结构化记忆检查完成，没有需要新增的内容', 'info');
         }
       }
     }
@@ -27,7 +28,7 @@
     const totalCount = document.getElementById('manual-summary-total-count');
     const startInput = document.getElementById('manual-summary-start');
     const endInput = document.getElementById('manual-summary-end');
-    const availableMessages = chat.history.filter(m => !m.isHidden || (m.role === 'system' && m.content.includes('内心独白')));
+    const availableMessages = (chat.history || []).filter(m => !m?.isHidden || (m?.role === 'system' && typeof m?.content === 'string' && m.content.includes('内心独白')));
     const totalMessages = availableMessages.length;
     totalCount.textContent = totalMessages;
     startInput.max = totalMessages;

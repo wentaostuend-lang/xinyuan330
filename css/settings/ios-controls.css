@@ -2,32 +2,85 @@
 
            /* --- iOS Settings UI Transformation --- */
 
-           /* 背景色 */
+           /* 背景色：纯白背景，消除突兀沉闷灰 */
            #api-settings-screen.ios-settings-screen {
-               background-color: #f2f2f7 !important;
+               background-color: #ffffff !important;
            }
 
            #phone-screen.dark-mode #api-settings-screen.ios-settings-screen {
                background-color: #000 !important;
            }
 
-           /* 头部调整 */
+           /* 头部调整：纯白毛玻璃效果 */
            #api-settings-screen .header {
-               background-color: #f2f2f7 !important;
-               border-bottom: none !important;
+               background-color: rgba(255, 255, 255, 0.96) !important;
+               backdrop-filter: blur(20px) !important;
+               -webkit-backdrop-filter: blur(20px) !important;
+               border-bottom: 0.5px solid rgba(60, 60, 67, 0.08) !important;
                box-shadow: none !important;
            }
 
            #phone-screen.dark-mode #api-settings-screen .header {
                background-color: #000 !important;
+               border-bottom: 0.5px solid rgba(255, 255, 255, 0.1) !important;
+           }
+
+           /* 头部返回/退出按钮美化 */
+           #api-settings-screen .header .back-btn {
+               display: inline-flex !important;
+               align-items: center !important;
+               justify-content: center !important;
+               color: #007aff !important;
+               padding: 6px 10px 6px 0 !important;
+               cursor: pointer !important;
+               transition: opacity 0.2s, transform 0.15s !important;
+           }
+
+           #api-settings-screen .header .back-btn:active {
+               opacity: 0.45 !important;
+               transform: scale(0.96) !important;
+           }
+
+           /* 头部保存按钮美化：方形微圆角 + iOS 原生绿 (#34C759) */
+           #api-settings-screen .header .save-btn,
+           #save-api-settings-btn {
+               display: inline-flex !important;
+               align-items: center !important;
+               justify-content: center !important;
+               min-width: 52px !important;
+               height: 30px !important;
+               padding: 0 12px !important;
+               border-radius: 7px !important; /* 方形微圆角 */
+               background-color: #34C759 !important; /* iOS 原生绿 */
+               color: #ffffff !important;
+               font-size: 14px !important;
+               font-weight: 600 !important;
+               border: none !important;
+               cursor: pointer !important;
+               box-shadow: 0 2px 6px rgba(52, 199, 89, 0.28) !important;
+               transition: all 0.15s ease !important;
+               letter-spacing: 0.5px !important;
+           }
+
+           #api-settings-screen .header .save-btn:active,
+           #save-api-settings-btn:active {
+               transform: scale(0.95) !important;
+               opacity: 0.88 !important;
+           }
+
+           #api-settings-screen .header .save-btn.is-saving,
+           #save-api-settings-btn.is-saving {
+               opacity: 0.7 !important;
+               pointer-events: none !important;
            }
 
            /* 滚动容器 */
            .ios-scroll-container {
-               padding: 20px 16px;
+               padding: 16px 16px 40px;
                overflow-y: auto;
                height: 100%;
                box-sizing: border-box;
+               background-color: #ffffff !important;
            }
 
            /* 分组标题 */
@@ -233,21 +286,113 @@
                margin: 0;
            }
 
-           /* 修复 Toggle Switch (复用之前的，只需确保 vertical-align) */
+           /* ============================================================
+              全局 iOS 风格平滑切换开关 (Toggle Switch & Slider)
+              ============================================================ */
            .toggle-switch {
-               display: flex;
+               position: relative;
+               display: inline-flex;
                align-items: center;
+               width: 51px;
+               height: 31px;
+               flex-shrink: 0;
+               cursor: pointer;
+               user-select: none;
+               -webkit-user-select: none;
+               vertical-align: middle;
+               margin: 0;
            }
 
-           /* 小按钮 (Mini Btn) */
-           .settings-mini-btn {
-               background-color: #f2f2f7;
-               color: #007aff;
-               border: none;
-               border-radius: 14px;
-               padding: 6px 12px;
-               font-size: 14px;
+           /* 彻底隐藏原生丑陋的 checkbox */
+           .toggle-switch input[type="checkbox"],
+           .toggle-switch input {
+               position: absolute !important;
+               opacity: 0 !important;
+               width: 0 !important;
+               height: 0 !important;
+               margin: 0 !important;
+               padding: 0 !important;
+               pointer-events: none !important;
+           }
+
+           /* 滑轨槽 (默认未选中态：iOS 浅灰) */
+           .toggle-switch .slider {
+               position: absolute;
                cursor: pointer;
+               top: 0;
+               left: 0;
+               right: 0;
+               bottom: 0;
+               background-color: #e9e9ea;
+               border: 1.5px solid transparent;
+               border-radius: 31px;
+               transition: background-color 0.28s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+               box-sizing: border-box;
+           }
+
+           /* 白色圆形滚珠 */
+           .toggle-switch .slider::before {
+               position: absolute;
+               content: "";
+               height: 27px;
+               width: 27px;
+               left: 1px;
+               bottom: 1px;
+               background-color: #ffffff;
+               border-radius: 50%;
+               transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+               box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16);
+               box-sizing: border-box;
+           }
+
+           /* 开启选中态：iOS 原生质感绿 (#34C759) */
+           .toggle-switch input:checked + .slider {
+               background-color: #34c759;
+           }
+
+           /* 开启时滑块移动 */
+           .toggle-switch input:checked + .slider::before {
+               transform: translateX(20px);
+           }
+
+           /* 点击微缩放手感反馈 */
+           .toggle-switch:active .slider::before {
+               width: 30px;
+           }
+           .toggle-switch input:checked:active + .slider::before {
+               transform: translateX(17px);
+           }
+
+           /* 暗色模式适配 */
+           #phone-screen.dark-mode .toggle-switch .slider {
+               background-color: #39393d;
+           }
+           #phone-screen.dark-mode .toggle-switch input:checked + .slider {
+               background-color: #34c759;
+           }
+           #phone-screen.dark-mode .toggle-switch .slider::before {
+               background-color: #ffffff;
+               box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+           }
+
+           /* 小按钮 (Mini Btn)：浅蓝半透明 iOS 质感胶囊，去除死灰小块 */
+           .settings-mini-btn,
+           #open-console-btn {
+               background-color: rgba(0, 122, 255, 0.08) !important;
+               color: #007aff !important;
+               border: 0.5px solid rgba(0, 122, 255, 0.15) !important;
+               border-radius: 12px !important;
+               padding: 5px 12px !important;
+               font-size: 13px !important;
+               font-weight: 500 !important;
+               cursor: pointer !important;
+               transition: all 0.18s ease !important;
+           }
+
+           .settings-mini-btn:active,
+           #open-console-btn:active {
+               transform: scale(0.95) !important;
+               background-color: rgba(0, 122, 255, 0.2) !important;
            }
 
            /* 思维链管理：保留现有 iOS 设置结构，仅补充窄屏可操作性与暗色回显 */
@@ -494,44 +639,35 @@
                /* 减小元素间距 */
            }
 
-           /* --- 修复 1: 截图同款“更换”按钮样式 --- */
-           .settings-mini-btn {
+           /* --- 聊天详情专属：精致 iOS 胶囊小按钮（无渐变、纯色、平滑微圆角） --- */
+           #chat-settings-screen .settings-mini-btn {
                background-color: #f2f2f7 !important;
-               /* 浅灰背景 */
-               border: 1px solid #e5e5ea !important;
-               /* 极淡的边框 */
+               border: 0.5px solid rgba(60, 60, 67, 0.12) !important;
                color: #007aff !important;
-               /* iOS 蓝色文字 */
-               border-radius: 6px !important;
-               /* 小圆角 */
-               padding: 5px 12px !important;
-               /* 内边距 */
+               border-radius: 14px !important;
+               padding: 5px 13px !important;
                font-size: 13px !important;
-               /* 字体稍小 */
                font-weight: 500 !important;
-               /* 适中字重 */
-               cursor: pointer;
-               white-space: nowrap;
-               /* 防止换行 */
-               margin-left: 8px;
-               /* 与左边的输入框保持距离 */
-               transition: opacity 0.2s;
+               cursor: pointer !important;
+               white-space: nowrap !important;
+               box-shadow: none !important;
+               background-image: none !important;
+               transition: all 0.15s ease !important;
            }
 
-           /* 点击时的反馈 */
-           .settings-mini-btn:active {
-               opacity: 0.6;
+           #chat-settings-screen .settings-mini-btn:active {
+               opacity: 0.65 !important;
                background-color: #e5e5ea !important;
+               transform: scale(0.96) !important;
            }
 
-           /* 暗黑模式适配 */
-           #phone-screen.dark-mode .settings-mini-btn {
+           #phone-screen.dark-mode #chat-settings-screen .settings-mini-btn {
                background-color: #2c2c2e !important;
-               border-color: #3a3a3c !important;
+               border-color: rgba(255, 255, 255, 0.12) !important;
                color: #0a84ff !important;
            }
 
-           #phone-screen.dark-mode .settings-mini-btn:active {
+           #phone-screen.dark-mode #chat-settings-screen .settings-mini-btn:active {
                background-color: #3a3a3c !important;
            }
 
@@ -618,15 +754,6 @@
            }
 
            /* --- 修正 1: 按钮颜色统一为黑色 (去蓝去红) --- */
-           /* 小按钮 (保存、删除、压缩) */
-           .settings-mini-btn {
-               color: #333333 !important;
-               /* 黑色文字 */
-               background-color: #f2f2f7 !important;
-               border: 1px solid #e5e5ea !important;
-               margin-left: 8px;
-           }
-
            /* 大列表按钮 (导出、导入、清理) */
            .settings-full-btn {
                color: #333333 !important;
@@ -637,7 +764,6 @@
            }
 
            /* 暗黑模式下改为白色 */
-           #phone-screen.dark-mode .settings-mini-btn,
            #phone-screen.dark-mode .settings-full-btn {
                color: #ffffff !important;
            }
@@ -800,54 +926,130 @@
    【独立修复】聊天详情页下拉框 (不影响 API 设置页)
    ============================================================ */
 
-           /* 1. 将选择器限定在 #chat-settings-screen 内 */
+           /* 1. 聊天详情页下拉框：精致 iOS 扁平无渐变设计 */
            #chat-settings-screen .settings-select {
-               /* 恢复灰色背景条 */
-               background-color: #f2f2f7 !important;
-
-               /* 加回边框和圆角，让它看起来像个按钮 */
-               border: 1px solid #e5e5ea !important;
-               border-radius: 6px !important;
-
-               /* 调整内边距：上下 6px 保证高度与旁边的“更换”按钮一致 */
-               padding: 6px 25px 6px 12px !important;
-
-               /* 恢复黑色文字 */
-               color: #333 !important;
-
-               /* 默认：强制左对齐 */
+               background-color: #f7f7f9 !important;
+               border: 0.5px solid rgba(60, 60, 67, 0.12) !important;
+               border-radius: 9px !important;
+               padding: 7px 28px 7px 12px !important;
+               color: #000000 !important;
                text-align: left !important;
                text-align-last: left !important;
-
-               /* 添加一个小箭头图标，让它看起来更像下拉框 */
-               background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8a8a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+               font-size: 14px !important;
+               background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
                background-repeat: no-repeat !important;
-               background-position: right 8px center !important;
+               background-position: right 10px center !important;
                background-size: 12px !important;
-
-               /* 确保高度撑开 */
-               min-height: 28px !important;
-               line-height: normal !important;
+               min-height: 32px !important;
+               box-shadow: none !important;
+               outline: none !important;
+               transition: border-color 0.15s ease !important;
            }
 
-           /* 2. 【特例】语音语言选择：强制右对齐 */
+           #chat-settings-screen .settings-select:focus {
+               border-color: #007aff !important;
+           }
+
+           /* 好友分组行排版与图标按钮精致 iOS 规范化 */
+           #chat-settings-screen #assign-group-section .settings-right {
+               display: flex !important;
+               align-items: center !important;
+               gap: 8px !important;
+               flex-grow: 1 !important;
+               max-width: 65% !important;
+           }
+
+           #chat-settings-screen #assign-group-select {
+               flex: 1 1 auto !important;
+               min-width: 0 !important;
+               height: 32px !important;
+               box-sizing: border-box !important;
+           }
+
+           /* 精致 iOS 图标按钮：纯色扁平、无渐变、原生轻触反馈 */
+           .settings-icon-btn,
+           #chat-settings-screen .settings-icon-btn,
+           #manage-groups-btn {
+               display: inline-flex !important;
+               align-items: center !important;
+               justify-content: center !important;
+               width: 32px !important;
+               height: 32px !important;
+               min-width: 32px !important;
+               min-height: 32px !important;
+               padding: 0 !important;
+               margin: 0 !important;
+               box-sizing: border-box !important;
+               background: #f7f7f9 !important;
+               background-image: none !important;
+               border: 0.5px solid rgba(60, 60, 67, 0.15) !important;
+               border-radius: 9px !important;
+               color: #007aff !important;
+               cursor: pointer !important;
+               outline: none !important;
+               box-shadow: none !important;
+               transition: background-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease !important;
+               flex-shrink: 0 !important;
+           }
+
+           .settings-icon-btn svg,
+           #manage-groups-btn svg {
+               display: block !important;
+               width: 17px !important;
+               height: 17px !important;
+               stroke: currentColor !important;
+               transition: stroke 0.15s ease !important;
+           }
+
+           .settings-icon-btn:hover,
+           #manage-groups-btn:hover {
+               background-color: #ebebee !important;
+               color: #0062cc !important;
+           }
+
+           .settings-icon-btn:active,
+           #manage-groups-btn:active {
+               background-color: #e2e2e7 !important;
+               transform: scale(0.94) !important;
+               opacity: 0.8 !important;
+           }
+
+           /* 暗色模式适配 */
+           #phone-screen.dark-mode #chat-settings-screen .settings-icon-btn,
+           #phone-screen.dark-mode #manage-groups-btn,
+           body.dark-mode .settings-icon-btn {
+               background: #2c2c2e !important;
+               border-color: rgba(255, 255, 255, 0.12) !important;
+               color: #0a84ff !important;
+           }
+
+           #phone-screen.dark-mode #chat-settings-screen .settings-icon-btn:hover,
+           #phone-screen.dark-mode #manage-groups-btn:hover,
+           body.dark-mode .settings-icon-btn:hover {
+               background-color: #363639 !important;
+           }
+
+           #phone-screen.dark-mode #chat-settings-screen .settings-icon-btn:active,
+           #phone-screen.dark-mode #manage-groups-btn:active,
+           body.dark-mode .settings-icon-btn:active {
+               background-color: #3a3a3c !important;
+           }
+
+           /* 2. 【特例】语音语言选择：右对齐 */
            #chat-settings-screen #ai-voice-lang-select {
                text-align: right !important;
                text-align-last: right !important;
                direction: ltr !important;
-               /* 右侧留出一点空间给箭头，但文字靠右 */
-               padding-right: 30px !important;
-               padding-left: 0 !important;
+               padding-right: 28px !important;
+               padding-left: 8px !important;
            }
 
            /* 3. 暗黑模式适配 (仅针对聊天设置页) */
            #phone-screen.dark-mode #chat-settings-screen .settings-select {
-               background-color: #3a3a3c !important;
-               border-color: #48484a !important;
-               color: #fff !important;
-
-               /* 暗黑模式下箭头变白一点 */
-               background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+               background-color: #2c2c2e !important;
+               border-color: rgba(255, 255, 255, 0.12) !important;
+               color: #ffffff !important;
+               background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23aeaeb2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
            }
 
            #ai-avatar-group,
@@ -930,4 +1132,3 @@
                align-items: stretch;
                justify-content: stretch;
            }
-

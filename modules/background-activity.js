@@ -45,6 +45,10 @@
           triggerAiFriendApplication(chat.id);
         }
       } else if (chat.relationship?.status === 'friend' && chat.id !== state.activeChatId) {
+        if (window.TimeAwareness?.isBackgroundPaused(chat)) {
+          console.log(`角色 "${chat.name}" 的后台活动已被时间感知暂停设置暂停。`);
+          return;
+        }
         if (chat.settings.enableBackgroundActivity === false) {
           console.log(`角色 "${chat.name}" 的独立后台活动开关已关闭，本次跳过。`);
           return;
@@ -65,6 +69,10 @@
 
     const allGroupChats = Object.values(state.chats).filter(chat => chat.isGroup);
     allGroupChats.forEach(chat => {
+      if (window.TimeAwareness?.isBackgroundPaused(chat)) {
+        console.log(`群聊 "${chat.name}" 的后台活动已被时间感知暂停设置暂停。`);
+        return;
+      }
       if (chat.settings.enableBackgroundActivity === false) {
         console.log(`群聊 "${chat.name}" 的后台活动开关已关闭，本次跳过。`);
         return;
@@ -963,6 +971,7 @@ ${tasksString}
     const activeCharacters = Object.values(state.chats).filter(chat =>
       !chat.isGroup &&
       chat.settings.enableBackgroundActivity &&
+      !window.TimeAwareness?.isBackgroundPaused(chat) &&
       chat.relationship?.status === 'friend'
     );
 
