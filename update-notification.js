@@ -2,7 +2,7 @@
 class UpdateNotification {
   constructor() {
     this.storageKey = 'update_notification_dismissed';
-    this.currentVersion = '0.0.36'; // 当前更新版本号
+    this.currentVersion = '9.18'; // 当前更新版本号
     this.countdownSeconds = 5;
     this.countdownInterval = null;
   }
@@ -23,16 +23,29 @@ class UpdateNotification {
       <div class="update-item important-note">注意：首次打开最好使用魔法</div>
       <div class="update-item tips">有任何问题请通过DC私信联系 <a href="https://discord.com/users/1353222930875551804" target="_blank" style="color: #4A9EFF;">点击前往</a>，其他渠道可能无法及时回复</div>
       <div class="update-item important-note">使用提示：请留意 API 设置页面的小人菜单，新增功能入口都在这里哦。</div>
-      <div class="update-divider">9.4 本次更新内容</div>
-      <div class="update-item">1. 新增 GPT 生图：支持独立配置 API、模型、尺寸、质量、格式、透明背景和内容过滤。</div>
-      <div class="update-item">2. GPT 图片现可用于私聊、群聊、线下互动与动态；支持查看、下载、重新生成和转发。</div>
-      <div class="update-item">3. 编辑消息新增“谷歌图”和“GPT 图”快捷格式；转发图片会保留图片与提示词。</div>
-      <div class="update-item">4. 优化谷歌生图模型筛选和请求方式，优化 NovelAI 生成流程并新增超时提醒。</div>
-      <div class="update-item">5. 优化音乐播放器控制栏、深色模式与播放列表布局，常用操作收纳至“更多”菜单。</div>
-      <div class="update-item">6. 新增网络音频批量导入；本地批量导入会从文件名识别歌名与歌手。</div>
-      <div class="update-item">7. 优化本地歌曲保存和空播放列表提示，导入失败时会自动回退为本地保存。</div>
-      <div class="update-item">8. 优化聊天列表点击、长按交互、功能页加载、图片显示与自动相册定时任务的稳定性。</div>
-      <div class="update-item important-note">致谢：语音通话持久化与资源治理、事件防重、API 历史兼容、iOS 安全区、播放器资源回收及启动装配思路，参考并按本项目结构改写自穗穗 / 笨蛋小姐的 <a href="https://github.com/yxlforever/YYY" target="_blank" rel="noopener noreferrer" style="color: #4A9EFF;">yxlforever/YYY</a> 与 <a href="https://github.com/wq70/xinyuan330/pull/1" target="_blank" rel="noopener noreferrer" style="color: #4A9EFF;">xinyuan330 PR #1</a>。既有对 1900 老师、330 老师、毛绒草莓老师及其他贡献者的感谢继续保留，具体来源见项目内《致谢与第三方引用说明》。</div>
+      <div class="update-divider">9.18 本次更新</div>
+      <div class="update-item">1. 修复简洁 API 模式及部分美化场景下的卡顿问题，优化整体使用流畅度。</div>
+      <div class="update-item important-note">2. 感谢 <strong>穗穗 / 笨蛋小姐</strong> 提供及公开分享的相关代码与实现思路。本次参考并结合当前版本进行了适配，包括情侣空间、iOS 安全区、语音电话、本地音乐资源处理等部分内容。由于涉及内容较多，不在此逐项列出，可前往「引用第三方」中查看具体引用范围及来源。</div>
+      <div class="update-item">3. 优化备份与记忆管理：修复分类备份 BUG；新增独立的「分类备份」入口、记忆导出类型选择和记忆单独导入功能。</div>
+      <div class="update-item">4. 新增真实语音发送与语音对话功能，安卓设备同样可以使用。</div>
+      <div class="update-item">5. 修复酒馆角色卡导入世界书时，默认关闭的世界书条目可能丢失的问题。</div>
+      <div class="update-item">6. 优化向量记忆与结构化记忆，修复部分处理异常，优化写入、读取及转换流程，提升大量记忆情况下的稳定性。</div>
+      <div class="update-item">7. 修复导入书籍时部分书名出现乱码的问题。</div>
+      <div class="update-item">8. 优化向量记忆的多语言兼容，更好地处理不同语言的记忆内容。</div>
+      <div class="update-item">9. 全面优化双语功能：可分别设置原文输出与翻译方式，自由开关双语，并在高级设置中自定义双语提示词。</div>
+      <div class="update-item">10. 优化时间感知，改进角色对当前时间、日期及时间变化的理解，并优化相关信息注入与处理。</div>
+      <div class="update-item">11. 优化邮件系统：新增向陌生人发送邮件、邮件回信及主动发送信件，优化邮件往来与交互逻辑。</div>
+      <div class="update-item">12. 修复心声中 HTML / CSS 内容较多时可能导致页面卡顿的问题。</div>
+      <div class="update-item">13. 优化番茄钟功能及部分交互体验。</div>
+      <div class="update-item">14. 新增「小火人 / 火花」互动功能。</div>
+      <div class="update-item">15. 新增提示词分层管理，支持按用途拆分、编辑查找及控制作用范围；分层设计灵感来源于 <strong>1900老师</strong>，感谢分享与授权。</div>
+      <div class="update-item">16. 修复部分情况下旁白内容被错误识别成角色本人发言的问题。</div>
+      <div class="update-item">17. 优化部分页面 UI 与移动端使用体验，包括弹窗、安全区域及不同屏幕尺寸下的显示。</div>
+      <div class="update-item">18. 进一步适配 iOS 安全区与动态视口，优化顶部、底部安全区域及键盘弹出后的页面高度处理，减少页面被遮挡或弹窗超出屏幕。</div>
+      <div class="update-item">19. 优化世界书页面显示与操作体验，调整列表、编辑页面和部分按钮样式。</div>
+      <div class="update-item">20. 情侣空间新增历史奖励检查：支持预览、逐条确认修复，避免历史奖励重复补发。</div>
+      <div class="update-item">21. 优化部分公共组件、语言设置、时间感知、角色关系及提示词相关模块，减少不同功能之间互相影响的问题。</div>
+      <div class="update-item tips">本次更新涉及内容较多，如果出现遗漏或异常欢迎反馈。</div>
     `;
 
     return `
@@ -40,7 +53,7 @@ class UpdateNotification {
         <div id="update-notification-modal">
           <img src="https://img.baibai.cv/f/mwOEhK/retouch-2026013121094970.png" class="update-decoration-img">
           <div class="update-notification-header">
-            <div class="update-title">9.4 更新</div>
+            <div class="update-title">9.18 更新</div>
           </div>
           
           <div class="update-notification-body">

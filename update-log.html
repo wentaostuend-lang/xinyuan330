@@ -167,6 +167,83 @@
       <p>另有一部分功能更新因忘记记录而遗失，未能完整列入本页，敬请谅解。</p>
     </div>
 
+    <!-- 9.18 版本 -->
+    <div class="version-card">
+      <div class="version-header">
+        <span class="version-number">v9.18</span>
+        <span class="version-date">最新版本</span>
+      </div>
+
+      <div class="section">
+        <div class="section-title optimize">稳定性与体验优化</div>
+        <ul class="item-list">
+          <li>修复简洁 API 模式及部分美化场景下的卡顿问题，优化整体使用流畅度。</li>
+          <li>修复心声中 HTML / CSS 内容较多时可能导致页面卡顿的问题。</li>
+          <li>优化番茄钟功能及部分交互体验。</li>
+          <li>优化部分页面 UI 与移动端使用体验，包括弹窗、安全区域及不同屏幕尺寸下的显示。</li>
+          <li>优化部分公共组件、语言设置、时间感知、角色关系及提示词相关模块，减少不同功能之间互相影响的问题。</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <div class="section-title new">新增功能</div>
+        <ul class="item-list">
+          <li>新增真实语音发送与语音对话功能，安卓设备同样可以使用。</li>
+          <li>新增「小火人 / 火花」互动功能。</li>
+          <li>新增提示词分层管理：可按用途拆分管理，编辑和查找更加方便，并支持更清晰地控制提示词作用范围。分层设计灵感来源于 <strong>1900老师</strong>，感谢分享与授权。</li>
+          <li>邮件系统新增向陌生人发送邮件、邮件回信及主动发送信件功能。</li>
+          <li>备份与记忆管理新增独立的「分类备份」入口、记忆导出类型选择及记忆单独导入功能。</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <div class="section-title optimize">备份、记忆与双语优化</div>
+        <ul class="item-list">
+          <li>修复分类备份相关 BUG。</li>
+          <li>优化向量记忆与结构化记忆，修复部分记忆处理异常，优化记忆写入、读取及转换流程，提升大量记忆情况下的稳定性。</li>
+          <li>优化向量记忆的多语言兼容，更好地处理不同语言的记忆内容。</li>
+          <li>全面优化双语功能：可分别设置原文输出与翻译方式，可自由开启或关闭双语，并支持在高级设置中自定义双语提示词。</li>
+          <li>优化时间感知，改进角色对当前时间、日期及时间变化的理解，并优化相关时间信息的注入与处理。</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <div class="section-title fix">问题修复</div>
+        <ul class="item-list">
+          <li>修复酒馆角色卡导入世界书时，默认关闭的世界书条目可能丢失的问题。</li>
+          <li>修复导入书籍时部分书名出现乱码的问题。</li>
+          <li>修复部分情况下旁白内容被错误识别成角色本人发言的问题。</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <div class="section-title optimize">邮件、世界书与 iOS 适配</div>
+        <ul class="item-list">
+          <li>优化邮件往来及相关交互逻辑。</li>
+          <li>优化世界书页面显示与操作体验，调整列表、编辑页面和部分按钮样式。</li>
+          <li>进一步适配 iOS 安全区与动态视口：优化顶部、底部安全区域及键盘弹出后的页面高度处理，减少部分 iPhone / iOS 页面被遮挡或弹窗超出屏幕的问题。</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <div class="section-title new">情侣空间</div>
+        <ul class="item-list">
+          <li>新增历史奖励检查：可以检查情侣树历史记录中可能缺失的奖励。</li>
+          <li>修复前会先进行预览，不会直接修改数据，可逐条确认需要修复的记录。</li>
+          <li>避免历史奖励被重复补发。</li>
+        </ul>
+      </div>
+
+      <div class="section">
+        <div class="section-title">致谢与第三方引用</div>
+        <ul class="item-list">
+          <li>感谢 <strong>穗穗 / 笨蛋小姐</strong> 提供及公开分享的相关代码与实现思路。本次参考并结合当前版本进行了适配，包括情侣空间、iOS 安全区、语音电话、本地音乐资源处理等部分内容。由于涉及内容较多，具体引用范围及来源请前往「引用第三方」查看。</li>
+        </ul>
+      </div>
+
+      <p style="margin-top: 16px; font-size: 13px; color: var(--text-secondary, #999); font-style: italic;">本次更新涉及内容较多，如果出现遗漏或异常欢迎反馈。</p>
+    </div>
+
     <!-- 9.4 版本 -->
     <div class="version-card">
       <div class="version-header">
