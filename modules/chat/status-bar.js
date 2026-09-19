@@ -1,0 +1,913 @@
+// ============================================================
+// status-bar.js — 角色状态栏（正则+HTML模板渲染）
+//
+// 独立数据库 StatusBarDB 存预设库，不碰主项目 db schema。
+// 变量命名沿用 ai-response.js 里 contextMap 已经在用的那套
+// (char_avatar/user_avatar/char_name/char_remark/user_name/user_remark)。
+//
+// 数据来源（重要，和早期版本不一样）：
+//   状态栏的原始文本不再是"AI自然写在回复正文里、前端正则去聊天气泡里扫"，
+//   而是跟着 update_thoughts 指令（心声/散记）一起，作为 status_bar 字段输出，
+//   存在 chat.thoughtsHistory[i].customThoughts.status_bar 里。
+//   这样天然不会出现在聊天气泡里（不用碰聊天气泡的渲染函数），
+//   也复用了 update_thoughts 已经验证过比较稳定、不容易被复读的生成方式。
+//   正则(regexPattern)和HTML模板(replacePattern)还是原来那套，只是现在拿去匹配
+//   status_bar 字符串，而不是匹配聊天消息正文。
+//
+// 数据结构：
+//   StatusBarDB.presets: {id, name, promptSuffix, regexPattern, replacePattern}
+//   （字段名对齐社区通用的状态栏预设JSON格式，regexPattern是"/pattern/flags"这种JS正则字面量字符串）
+//   chat.settings.enableStatusBar        boolean 这个角色是否生成状态栏
+//   chat.settings.statusBarPresetId       number  用哪个预设
+//   chat.settings.statusBarHistoryLimit   number  最多同时显示几条历史（默认20）
+//   state.globalSettings.statusBarEnabled boolean 全局总开关
+// ============================================================
+
+(function () {
+  const sbDB = new Dexie('LiyaStatusBarDB');
+  sbDB.version(1).stores({ presets: '++id, name' });
+
+  // ---------------- 变量替换 + 特殊标签 + 交互按钮 ----------------
+  function getVarMap(chat) {
+    return {
+      char_avatar: chat.isGroup ? (chat.settings.groupAvatar || '') : (chat.settings.aiAvatar || ''),
+      user_avatar: chat.settings.myAvatar || (state.qzoneSettings && state.qzoneSettings.avatar) || '',
+      char_name: chat.isGroup ? chat.name : (chat.originalName || chat.name),
+      char_remark: chat.name,
+      user_name: chat.settings.myNickname || '我',
+      user_remark: chat.settings.myNickname || '我'
+    };
+  }
+
+  function applyVariables(html, chat) {
+    const vars = getVarMap(chat);
+    let out = html.replace(/\{\{(\w+)\}\}/g, (match, key) => vars[key] !== undefined ? vars[key] : match);
+    // <char-avatar style="..."></char-avatar> / <user-avatar> 转成真实 <img>
+    out = out.replace(/<char-avatar([^>]*)><\/char-avatar>/g, (m, attrs) => `<img src="${vars.char_avatar}"${attrs}>`);
+    out = out.replace(/<user-avatar([^>]*)><\/user-avatar>/g, (m, attrs) => `<img src="${vars.user_avatar}"${attrs}>`);
+    return out;
+  }
+
+  // 给iframe要加载的HTML默认兜一些基础样式：
+  // 1）字体优先跟随你在"外观设置"里自己传的自定义字体（跟主文档用的是同一套 @font-face），
+  //    没设置自定义字体的话才退回系统字体栈；预设自己声明了字体的话，那条规则在后面，还是预设的赢。
+  // 2）顺便把手机浏览器点击链接/按钮时那个蓝色高亮框关掉（iframe是独立文档，app本身设置的
+  //    -webkit-tap-highlight-color:transparent 影响不到里面，得单独兜一份）。
+  // ---------------- 预设自身不适配夜间模式时的兜底方案 ----------------
+  // 很多预设是纯行内style="background:#fff;color:#111"这种写死颜色的，作者压根没考虑过夜间模式，
+  // App切成夜间后这张卡片还是大白底，很扎眼。这里做一个通用兜底：
+  // 1. 先看预设自己是不是已经用了 prefers-color-scheme / CSS变量 / dark相关 class这些手段——
+  //    有的话说明作者自己适配过，不要手贱去覆盖人家已经做好的效果。
+  // 2. 没适配过的话，整体做一次"反色"滤镜：白底变黑底、深色字变浅色字，图片(真实照片类内容)
+  //    单独用一次反色抵消，避免被连累出现色彩失真。这不是完美方案，但对"纯浅色卡片"这种
+  //    最常见的情况效果还不错，比"始终一片刺眼的白"要好。
+  function looksDarkModeAware(html) {
+    return /prefers-color-scheme|var\(\s*--|dark-mode|data-theme/i.test(html || '');
+  }
+  function isAppInDarkMode() {
+    const phoneScreen = document.getElementById('phone-screen');
+    return !!(phoneScreen && phoneScreen.classList.contains('dark-mode'));
+  }
+  function buildDarkAutoInvertCss(html) {
+    if (!isAppInDarkMode() || looksDarkModeAware(html)) return '';
+    return `html{filter:invert(0.9) hue-rotate(180deg);background:#1c1c1e !important;}
+      img{filter:invert(1) hue-rotate(180deg);}`;
+  }
+
+  function buildSbDefaultStyle(html) {
+    const fontSrc = (state.globalSettings && (state.globalSettings.fontLocalData || state.globalSettings.fontUrl)) || '';
+    const fontFaceRule = fontSrc
+      ? `@font-face { font-family: 'sb-custom-font'; src: url('${fontSrc}'); font-display: swap; }`
+      : '';
+    const fontFamilyStack = fontSrc
+      ? `'sb-custom-font', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`
+      : `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+    // 很多预设自己会在卡片根节点上用行内 style="font-family: ..." 或者自己的 <style> 里
+    // 指定字体——不加 !important 的话，这条规则会被那些更具体/内联的声明盖掉，状态栏用的
+    // 还是预设写死的字体（结果就是外观设置里导入的字体不生效，看着像用了手机自带字体）。
+    // 只有在外观设置里确实导入了自定义字体时才强制覆盖；没导入的话不改变原来的行为，
+    // 让预设自己决定用什么字体。
+    const fontOverrideSuffix = fontSrc ? ' !important' : '';
+    return `<style>
+      ${fontFaceRule}
+      html,body,body *{font-family:${fontFamilyStack}${fontOverrideSuffix};}
+      ${buildDarkAutoInvertCss(html)}
+      * { -webkit-tap-highlight-color: transparent; }
+      a, button, [onclick] { outline: none; -webkit-tap-highlight-color: transparent; }
+      *:focus { outline: none; }
+      /* iframe是独立文档，外层app隐藏滚动条的CSS影响不到里面，这里单独隐藏一份，
+         包括预设自己内部可能有的可滚动区域（比如相册详情页那种） */
+      html { scrollbar-width: none; -ms-overflow-style: none; }
+      ::-webkit-scrollbar { display: none; width: 0; height: 0; }
+    </style>`;
+  }
+  // iframe路径专用：注入一段小脚本，在iframe内部自己检测"明显的左右滑动"，通过postMessage
+  // 告诉外层"翻页"，而不是像之前那样在外面盖一层手势层拦所有touch——那样会连带把预设自己
+  // 内部的滚动区域也一起挡住。这段脚本只是"观察"touch，从来不调用preventDefault，
+  // 原生的滚动/点击完全不受影响。
+  const SB_SWIPE_SCRIPT = `<script>(function(){
+    var sx=0, sy=0, swiping=false, moved=false;
+    document.addEventListener('touchstart', function(e){
+      if (!e.touches || !e.touches[0]) return;
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; moved=false; swiping=false;
+    }, {passive:true});
+    document.addEventListener('touchmove', function(e){
+      if (!e.touches || !e.touches[0]) return;
+      var dx = e.touches[0].clientX - sx, dy = e.touches[0].clientY - sy;
+      if (!moved && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) { moved = true; swiping = true; }
+    }, {passive:true});
+    document.addEventListener('touchend', function(e){
+      if (!swiping) return;
+      var t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      var dx = t.clientX - sx;
+      if (Math.abs(dx) > 40) {
+        try { window.parent.postMessage({source:'sb-status-bar-viewer', type:'swipe', dx: dx}, '*'); } catch(err) {}
+      }
+    }, {passive:true});
+  })();<\/script>`;
+
+  function wrapHtmlWithDefaultFont(html, forIframe) {
+    if (!html) return html;
+    const defaultStyle = buildSbDefaultStyle(html) + (forIframe ? SB_SWIPE_SCRIPT : '');
+    const headMatch = html.match(/<head[^>]*>/i);
+    if (headMatch) {
+      // 完整文档：插到<head>开头，让预设自己后面的<style>能顺理成章地覆盖它
+      const idx = html.indexOf(headMatch[0]) + headMatch[0].length;
+      return html.slice(0, idx) + defaultStyle + html.slice(idx);
+    }
+    // 没有<head>，大概率是纯片段（比如只用了行内style），直接在最前面加就行，不用担心DOCTYPE位置
+    return defaultStyle + html;
+  }
+
+  // 三层判断，按需要的隔离程度选最轻的方案：
+  // 1. 啥都没有（纯行内style=""）→ 直接innerHTML，跟最早版本一样，最快最稳
+  // 2. 有<style>但没有真的<script>（比如靠<details>、:checked这种CSS/HTML原生技巧做交互）
+  //    → 用 Shadow DOM：样式一样能隔离不冲突，但没有iframe那个独立文档的问题——
+  //      不用等load事件、原生滚动/触摸完全不受影响，速度也是同步的、没有延迟。
+  // 3. 真的有<script>标签（要执行JS逻辑）→ 只有这种才上iframe，因为innerHTML/Shadow DOM
+  //    插入的<script>浏览器都不会执行，没有别的轻量办法能让脚本真的跑起来。
+  function needsScriptExecution(html) {
+    if (!html) return false;
+    return /<script[\s>]/i.test(html);
+  }
+  function needsStyleIsolation(html) {
+    if (!html) return false;
+    return /<style[\s>]/i.test(html);
+  }
+
+  // ---------------- :has() 兼容性补丁 ----------------
+  // 很多状态栏预设用"隐藏 checkbox/radio + CSS :has()"这套技巧来做翻页、切换译文、展开评论
+  // 之类的交互（比如 .card:has(.cb:checked) .comment-section { display:block; }）。
+  // :has() 是比较新的CSS特性，个别WebView/浏览器内核可能还不支持——不支持的话这条规则会被
+  // 直接忽略，对应的区域就永远显示不出来，但因为不是语法报错，看起来就是"某些内容莫名其妙显示不了"。
+  // 这里做特征检测：浏览器原生支持就什么都不做；不支持的话，把 CSS 里的 :has(X:checked) 这种写法
+  // 换成一个我们自己维护的 marker class，再用 JS 监听 checkbox/radio 的 change 事件手动去同步这个
+  // class，效果上等价于polyfill了这套最常见的 :has() 用法。
+  function applyHasCompatPolyfillIfNeeded(root) {
+    try {
+      if (window.CSS && CSS.supports && CSS.supports('selector(:has(*))')) return; // 原生支持，不用管
+    } catch (e) {
+      // CSS.supports 本身都不认识 selector() 语法的老浏览器，当成不支持处理，继续走polyfill
+    }
+    const styleEl = root.querySelector('style');
+    if (!styleEl || !styleEl.textContent || !styleEl.textContent.includes(':has(')) return;
+
+    const rawCss = styleEl.textContent;
+    // 逐条规则处理(而不是一次性正则整个文件)，这样"逗号分隔的多个选择器共用一段声明"
+    // 这种常见写法（比如 "A:has(X:checked), B:has(Y:checked) { ... }"）也能正确拆开处理，
+    // 不会因为一个正则跨着逗号乱吃导致提取错误。
+    const ruleRegex = /([^{}]+)\{([^{}]*)\}/g;
+    const injections = [];
+    let idx = 0;
+    const rewritten = rawCss.replace(ruleRegex, (fullRule, selectorList, body) => {
+      if (!selectorList.includes(':has(')) return fullRule;
+      const selectors = selectorList.split(',');
+      const newSelectors = selectors.map(sel => {
+        const m = sel.match(/^([\s\S]*?):has\(([^()]+)\)([\s\S]*)$/);
+        if (!m) return sel;
+        const [, beforeHasRaw, insideHas, afterHas] = m;
+        const beforeHas = beforeHasRaw.replace(/\/\*[\s\S]*?\*\//g, '').trim();
+        if (!insideHas.includes(':checked')) return sel; // 目前只处理checkbox/radio勾选触发这种最常见的写法
+        idx++;
+        const markerClass = `hp-${idx}`;
+        injections.push({
+          outerSelector: beforeHas,
+          triggerSelector: insideHas.replace(':checked', '').trim(),
+          markerClass
+        });
+        return `${beforeHas}.${markerClass}${afterHas}`;
+      });
+      return `${newSelectors.join(',')} {${body}}`;
+    });
+    if (injections.length === 0) return;
+
+    styleEl.textContent = rewritten;
+
+    function refresh() {
+      injections.forEach(({ outerSelector, triggerSelector, markerClass }) => {
+        let outers;
+        try { outers = root.querySelectorAll(outerSelector); } catch (e) { return; }
+        outers.forEach(outerEl => {
+          let triggerEl;
+          try { triggerEl = outerEl.querySelector(triggerSelector); } catch (e) { triggerEl = null; }
+          outerEl.classList.toggle(markerClass, !!(triggerEl && triggerEl.checked));
+        });
+      });
+    }
+    root.addEventListener('change', refresh);
+    refresh();
+  }
+
+  // ---------------- Shadow DOM 内联 onclick 里 document.querySelector 失效的修复 ----------------
+  // 有些预设用"点图标 -> onclick里用 document.querySelector('.xxx').click() 去帮你点一下真正
+  // 藏起来的checkbox/radio"这种写法（常见于切换译文、展开评论这类交互）。这段onclick代码
+  // 執行时用的是全局 document，但预设的HTML现在被塞进了 Shadow DOM 隔离出来的独立子树里，
+  // 全局 document.querySelector 根本查不到shadow内部的元素——点了图标，checkbox纹丝不动，
+  // :has() 自然也就检测不到"已勾选"，看起来就是"这个按钮点了没反应"。
+  // 这里扫一遍shadow内所有带onclick的元素，把里面涉及document.querySelector(All)的，
+  // 改成实际执行时用当前shadow root去找，其他不受影响。
+  function fixShadowScopedOnclickHandlers(root) {
+    root.querySelectorAll('[onclick]').forEach(el => {
+      const code = el.getAttribute('onclick');
+      if (!code || !code.includes('document.querySelector')) return;
+      el.removeAttribute('onclick');
+      const fakeDocument = {
+        querySelector: sel => root.querySelector(sel),
+        querySelectorAll: sel => root.querySelectorAll(sel)
+      };
+      el.addEventListener('click', () => {
+        try {
+          // eslint-disable-next-line no-new-func
+          const runOriginalOnclick = new Function('document', code);
+          runOriginalOnclick(fakeDocument);
+        } catch (err) {
+          console.warn('[状态栏] 修复Shadow DOM里的onclick失败', err);
+        }
+      });
+    });
+  }
+
+  function wireInteractiveButtons(container, chatId) {
+    container.querySelectorAll('[data-send-msg]').forEach(el => {
+      el.addEventListener('click', () => {
+        const text = el.getAttribute('data-send-msg');
+        if (!text) return;
+        if (typeof window.sendMessageForChat === 'function') {
+          window.sendMessageForChat(chatId, text);
+        } else if (typeof window.handleSendMessage === 'function') {
+          window.handleSendMessage(text);
+        } else {
+          // 兜底：直接把文字填进输入框，模拟用户自己点发送（具体输入框id待你项目确认后可再精确对接）
+          const inputEl = document.getElementById('message-input') || document.querySelector('#chat-interface-screen textarea, #chat-interface-screen input[type="text"]');
+          if (inputEl) { inputEl.value = text; inputEl.dispatchEvent(new Event('input')); }
+          alert('已把内容填入输入框，请手动点发送（这个按钮的自动发送对接还需要确认你项目里发送消息的具体函数名）');
+        }
+      });
+    });
+  }
+
+  // ---------------- 正则匹配 + 渲染 ----------------
+  // 解析 "/pattern/flags" 这种JS正则字面量字符串，兼容社区通用的状态栏预设格式
+  function parseRegexLiteral(source) {
+    if (!source) return null;
+    const trimmed = source.trim();
+    if (trimmed.startsWith('/')) {
+      const lastSlash = trimmed.lastIndexOf('/');
+      if (lastSlash > 0) {
+        const pattern = trimmed.slice(1, lastSlash);
+        const flags = trimmed.slice(lastSlash + 1).replace(/[^gimsuy]/g, '');
+        return { pattern, flags: flags.includes('g') ? flags : flags + 'g' };
+      }
+    }
+    // 没有斜杠包裹，当成裸正则处理，兼容手写的情况
+    return { pattern: trimmed, flags: 'g' };
+  }
+
+  function buildRegex(source) {
+    const parsed = parseRegexLiteral(source);
+    if (!parsed) return null;
+    try {
+      return new RegExp(parsed.pattern, parsed.flags);
+    } catch (e) {
+      console.error('[状态栏] 正则语法错误', e);
+      return null;
+    }
+  }
+
+  function renderOne(matchGroups, replacePattern, chat) {
+    // 修复：之前是按 $1、$2...$9、$10、$11 这样顺序逐个用 new RegExp('\\$'+n) 替换，
+    // 但 "$1" 是 "$10"/"$11"/"$13"...的前缀，先替换 $1 会把 $10~$19、$1X 这些也提前吃掉一部分
+    // （比如 $13 会被 $1 的替换啃掉一半，变成 "值3"）。字段数一旦超过9个（这个预设有33个）就会开始出错，
+    // 这也是"只能渲染出一部分"的根因。改成一次性用 \$(\d+) 整体匹配，数字部分交给正则自己贪婪匹配，
+    // 就不会有 $1 抢跑吃掉 $10/$13 的问题了。
+    const html = replacePattern.replace(/\$(\d+)/g, (match, numStr) => {
+      const idx = parseInt(numStr, 10) - 1;
+      const g = matchGroups[idx];
+      return g !== undefined ? g : '';
+    });
+    return applyVariables(html, chat);
+  }
+
+  async function collectStatusBars(chat, preset) {
+    const limit = chat.settings.statusBarHistoryLimit || 20;
+    const dismissed = new Set(chat.settings.dismissedStatusBarKeys || []);
+    const results = [];
+    // 不再扫描聊天正文：状态栏内容现在跟着 update_thoughts 指令一起生成，存在 chat.thoughtsHistory
+    // 里每一条的 customThoughts.status_bar 字段上，天然不会出现在聊天气泡里，也复用了心声那套
+    // 已经验证过很稳定、不容易重复的生成机制。
+    const thoughtsHistory = chat.thoughtsHistory || [];
+
+    // 换了预设之后，之前用旧预设生成的状态栏不应该跟着消失——所以这里把保存过的所有预设都准备好，
+    // 当前预设解析不出来的历史条目，依次拿其他预设试一遍，哪个能解析出来就用哪个渲染。
+    // (前提是旧预设本身还留着没被删；删掉了自然也没法知道当初是按什么格式生成的)
+    const allPresets = preset ? await sbDB.presets.toArray() : [];
+    const orderedPresets = [preset, ...allPresets.filter(p => p.id !== preset.id)].filter(Boolean);
+    const regexCache = new Map();
+    function getRegexFor(p) {
+      if (!regexCache.has(p.id)) regexCache.set(p.id, buildRegex(p.regexPattern));
+      return regexCache.get(p.id);
+    }
+
+    for (let i = thoughtsHistory.length - 1; i >= 0 && results.length < limit; i--) {
+      const entry = thoughtsHistory[i];
+      const raw = entry && entry.customThoughts && entry.customThoughts.status_bar;
+      if (!raw || typeof raw !== 'string') continue;
+      if (dismissed.has(entry.timestamp)) continue;
+      for (const p of orderedPresets) {
+        const regex = getRegexFor(p);
+        if (!regex) continue;
+        regex.lastIndex = 0;
+        const m = regex.exec(raw);
+        if (m) {
+          results.push({
+            html: renderOne(m.slice(1), p.replacePattern, chat),
+            timestamp: entry.timestamp
+          });
+          break;
+        }
+      }
+    }
+    return results; // 从新到旧
+  }
+
+  // ---------------- 弹窗展示（全屏沉浸 + 左右滑动轮播） ----------------
+  function injectViewerStyle() {
+    if (document.getElementById('sb-viewer-style')) return;
+    const style = document.createElement('style');
+    style.id = 'sb-viewer-style';
+    style.textContent = `
+      #sb-viewer-overlay {
+        position: fixed; inset: 0; z-index: 999998;
+        background: rgba(0,0,0,0.45);
+        display: flex; flex-direction: column;
+        overflow: hidden;
+      }
+      #sb-viewer-track {
+        flex: 1; display: flex; height: 100%;
+        transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+        touch-action: pan-y;
+      }
+      .sb-page {
+        flex: 0 0 100%; width: 100%; height: 100%;
+        display: flex; align-items: center; justify-content: center;
+        padding: 60px 20px 100px; box-sizing: border-box;
+        overflow-y: auto;
+        scrollbar-width: none; /* Firefox 隐藏滚动条 */
+        -ms-overflow-style: none;
+      }
+      .sb-page::-webkit-scrollbar { display: none; } /* Chrome/Safari 隐藏滚动条 */
+      .sb-page-inner { width: 100%; position: relative; }
+      .sb-page-iframe { width: 100%; border: none; display: block; min-height: 200px; background: transparent; -webkit-tap-highlight-color: transparent; }
+      /* 手势捕获层：盖在iframe上面专门接左右滑动翻页的touch事件（iframe是独立文档，
+         触摸事件不会冒泡出来给外层的swipe监听，所以单独盖一层来接）。
+         正常情况下不挡点击——判断出不是滑动手势(只是单纯点了一下)时会把点击转发进iframe里。 */
+      /* 手势层已经去掉了（会连带挡住iframe内部预设自己的滚动区域），
+         翻页滑动改成iframe内部自己检测+postMessage通知外层，见JS里的说明 */
+      .sb-empty { text-align:center; color: rgba(255,255,255,0.6); font-size:13px; }
+
+      /* ---- 多选删除模式 ---- */
+      #sb-select-list {
+        position: fixed; inset: 0; z-index: 999997; overflow-y: auto;
+        padding: 70px 16px 90px; box-sizing: border-box;
+        scrollbar-width: none;
+      }
+      #sb-select-list::-webkit-scrollbar { display: none; }
+      .sb-select-card {
+        position: relative; margin-bottom: 14px; border-radius: 16px; overflow: hidden;
+        border: 2px solid transparent;
+      }
+      .sb-select-card.checked { border-color: rgba(255,255,255,0.8); }
+      .sb-select-card .sb-select-mark {
+        position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 50%;
+        background: #fff; color: #333; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+        display: flex; align-items: center; justify-content: center; font-size: 13px;
+      }
+      .sb-select-card.checked .sb-select-mark { background: #0A84FF; color: #fff; }
+      #sb-select-bottom-bar {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 999999;
+        background: rgba(28,28,30,0.92); backdrop-filter: blur(16px);
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+        color: #fff; font-size: 14px;
+      }
+      #sb-select-bottom-bar .sb-count { color: rgba(255,255,255,0.7); font-size: 13px; }
+      #sb-select-bottom-bar .sb-actions { display: flex; gap: 16px; }
+      #sb-select-bottom-bar button { border: none; background: none; color: #fff; font-size: 14px; padding: 6px 4px; }
+      #sb-select-bottom-bar button.sb-delete-selected { color: #ff453a; font-weight: 600; }
+      #sb-select-bottom-bar button.sb-delete-selected:disabled { color: rgba(255,69,58,0.35); }
+
+      /* 实色按钮，仿图上那种白色圆形✕ / 蓝色圆形✓ 的风格，不做玻璃透明效果 */
+      .sb-glass-btn {
+        width: 46px; height: 46px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; cursor: pointer;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+      }
+      #sb-viewer-edit {
+        position: fixed; top: max(16px, env(safe-area-inset-top)); right: 16px; z-index: 999999;
+        background: #f2f2f2; color: #333;
+      }
+      #sb-viewer-close-round {
+        position: fixed; left: 50%; bottom: max(28px, env(safe-area-inset-bottom));
+        transform: translateX(-50%); z-index: 999999;
+        background: #f2f2f2; color: #333;
+      }
+      #sb-viewer-counter {
+        position: fixed; left: 50%; bottom: 82px; transform: translateX(-50%);
+        z-index: 999999; color: rgba(255,255,255,0.75); font-size: 13px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  async function showStatusBarViewer(chat, preset) {
+    injectViewerStyle();
+    document.getElementById('sb-viewer-overlay')?.remove();
+    document.getElementById('sb-select-list')?.remove();
+    document.getElementById('sb-select-bottom-bar')?.remove();
+
+    let entries = await collectStatusBars(chat, preset);
+    let currentIndex = 0; // 0 = 最新
+
+    const overlay = document.createElement('div');
+    overlay.id = 'sb-viewer-overlay';
+
+    // 之前每次翻页都调用 renderFrame() 整个重建一遍DOM——包括把所有iframe的srcdoc重新赋值一次，
+    // 这会让iframe整个重新加载，看起来就是"翻一下闪一下"。改成：
+    // buildViewer() 只在弹窗刚打开时执行一次，把所有页面/iframe一次性建好；
+    // 之后翻页只调用 updateFrame()，只改 track 的位移和"1/12"计数器文字，iframe完全不动，
+    // 配合CSS过渡，才能做到你说的"只有内容和计数器在动"。
+    function buildViewer() {
+      const counterHtml = entries.length > 1 ? `<div id="sb-viewer-counter">${currentIndex + 1} / ${entries.length}</div>` : '';
+
+      overlay.innerHTML = `
+        <div id="sb-viewer-track">
+          ${entries.length === 0
+            ? `<div class="sb-page"><div class="sb-empty">还没有匹配到状态栏数据，可能AI还没按格式回复过</div></div>`
+            : entries.map((e, i) => `<div class="sb-page"><div class="sb-page-inner" data-page-index="${i}"></div></div>`).join('')}
+        </div>
+        <div id="sb-viewer-edit" class="sb-glass-btn">✓</div>
+        <div id="sb-viewer-close-round" class="sb-glass-btn">✕</div>
+        ${counterHtml}
+      `;
+
+      // 分层处理：只有预设自己带 <script> 或独立 <style> 标签（说明它设计成一份完整/半完整网页，
+      // 需要脚本执行、样式隔离）才走iframe这一整套；纯用行内 style="" 写的简单预设，
+      // 直接用回最早那种 innerHTML 的老办法——没有load时机、没有ResizeObserver、没有手势层，
+      // 也就不会有这些新引入的边缘问题，跟之前能正常显示的时候一样稳。
+      entries.forEach((e, i) => {
+        try {
+          const container = overlay.querySelector(`.sb-page-inner[data-page-index="${i}"]`);
+          if (!container) return;
+
+          if (!needsScriptExecution(e.html)) {
+            // 不需要真的执行脚本：有样式就用Shadow DOM隔离一下（同步渲染，没有iframe那个
+            // "要等文档加载"的延迟，滚动/触摸也是原生的，完全不用手势层这些补丁），
+            // 没样式的话直接innerHTML更省事。
+            if (needsStyleIsolation(e.html)) {
+              const shadowHost = document.createElement('div');
+              container.appendChild(shadowHost);
+              const shadow = shadowHost.attachShadow({ mode: 'open' });
+              shadow.innerHTML = wrapHtmlWithDefaultFont(e.html);
+              fixShadowScopedOnclickHandlers(shadow);
+              applyHasCompatPolyfillIfNeeded(shadow);
+              wireInteractiveButtons(shadow, chat.id);
+            } else {
+              // 纯行内style的最简单预设，本来就在主文档里，理论上会跟着外观设置里字体走，
+              // 但夜间模式这块因为预设自己写死了颜色，还是需要跟另外两条渲染路径一样兜个底。
+              container.innerHTML = e.html;
+              if (isAppInDarkMode() && !looksDarkModeAware(e.html)) {
+                container.style.filter = 'invert(0.9) hue-rotate(180deg)';
+                container.style.background = '#1c1c1e';
+                container.querySelectorAll('img').forEach(img => {
+                  img.style.filter = 'invert(1) hue-rotate(180deg)';
+                });
+              }
+              wireInteractiveButtons(container, chat.id);
+            }
+            return;
+          }
+
+          const iframe = document.createElement('iframe');
+          iframe.className = 'sb-page-iframe';
+          iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms');
+          iframe.setAttribute('scrolling', 'no');
+          // 加载完成前先隐身，避免"先出现一半高度、resize时跳一下"这种视觉卡顿。
+          // 但不等图片这些外部资源全部下载完——只要HTML结构和样式解析好了（readyState不是loading了）
+          // 就先显示出来，图片各自异步加载、自己"填进"对应位置，不用干等一两秒的空白。
+          iframe.style.visibility = 'hidden';
+          iframe.srcdoc = wrapHtmlWithDefaultFont(e.html, true);
+
+          const measureHeight = () => {
+            const doc = iframe.contentDocument;
+            if (!doc) return 0;
+            return Math.max(
+              doc.documentElement ? doc.documentElement.scrollHeight : 0,
+              doc.body ? doc.body.scrollHeight : 0
+            );
+          };
+
+          let revealed = false;
+          function revealNow() {
+            if (revealed) return;
+            revealed = true;
+            clearTimeout(revealTimeout);
+            const h = measureHeight();
+            if (h > 0) iframe.style.height = h + 'px';
+            iframe.style.visibility = 'visible';
+          }
+
+          // 轮询：结构解析完（readyState变成interactive/complete）后不马上显示——这时候预设自己的
+          // <script>可能还没跑完（比如异步初始化、延迟渲染某些区块），高度量早了就会先显示出"一半"，
+          // 等脚本跑完/图片撑开内容后才变回完整高度，看起来就是"点开卡一下、过一会才显示全"。
+          // 改成连续两帧高度一致(内容已经稳定不再变化)才真正显示，避免顶着中间状态就先亮出来。
+          let pollCount = 0;
+          let lastMeasuredHeight = -1;
+          let stableFrames = 0;
+          function pollForEarlyReveal() {
+            if (revealed) return;
+            const doc = iframe.contentDocument;
+            if (doc && doc.readyState !== 'loading') {
+              const h = measureHeight();
+              if (h > 0 && h === lastMeasuredHeight) {
+                stableFrames++;
+                if (stableFrames >= 2) { // 连续两帧(约32ms)高度没变，认为内容已经稳定下来了
+                  revealNow();
+                  return;
+                }
+              } else {
+                stableFrames = 0;
+                lastMeasuredHeight = h;
+              }
+            }
+            pollCount++;
+            if (pollCount < 120) { // 最多轮询2秒左右（120*~16ms），轮询不到就交给下面的load事件兜底
+              requestAnimationFrame(pollForEarlyReveal);
+            }
+          }
+          requestAnimationFrame(pollForEarlyReveal);
+
+          // 保险丝：正常情况早显示靠上面的轮询，晚一点还有下面的load事件；
+          // 但万一某个预设的内容比较特殊，两边都没触发，前面就会一直卡在隐身状态、什么都看不见。
+          // 这里加一道兜底：3秒后不管有没有触发，强制显示出来，至少不会永远空白。
+          const revealTimeout = setTimeout(() => {
+            if (iframe.style.visibility === 'hidden') {
+              console.warn('[状态栏] 这一页iframe超过3秒没能显示，强制显示（内容可能不完整）', e.html.slice(0, 80));
+              revealNow();
+            }
+          }, 3000);
+          iframe.addEventListener('load', () => {
+            // load事件这时候图片基本都下载完了，不管前面有没有提前显示过，这里都重新量一次精确高度，
+            // 顺便把ResizeObserver、按钮绑定这些"正式收尾"的工作做掉。
+            revealNow();
+            try {
+              const doc = iframe.contentDocument;
+              const h = measureHeight();
+              if (h > 0) iframe.style.height = h + 'px';
+              // load事件触发时，图片/自定义字体不一定已经加载完——之前只在这一刻量一次高度，
+              // 图片晚一步撑开内容的话，iframe高度就定死在小了的那个值上，看起来像"只显示一半"甚至
+              // 关键内容被切掉看不见。这里加个 ResizeObserver 持续盯着内容实际高度变化，
+              // 后面不管是图片、字体哪个晚加载完，都会再更新一次高度，不会再卡死在早期的错误尺寸上。
+              if (doc.body && typeof ResizeObserver !== 'undefined') {
+                let rafPending = false;
+                const ro = new ResizeObserver(() => {
+                  // 标准解法：不要在ResizeObserver回调里同步改尺寸（改了又会立刻触发新一轮通知，
+                  // 容易导致"loop completed with undelivered notifications"这个报错，严重的话
+                  // 浏览器可能会直接跳过这一批通知不处理，表现出来就是高度没更新上、内容显示不全）。
+                  // 挪到下一帧再改，把这个同步反馈环断开。
+                  if (rafPending) return;
+                  rafPending = true;
+                  requestAnimationFrame(() => {
+                    rafPending = false;
+                    const newH = measureHeight();
+                    if (newH > 0 && Math.abs(newH - parseFloat(iframe.style.height || '0')) > 1) {
+                      iframe.style.height = newH + 'px';
+                    }
+                  });
+                });
+                ro.observe(doc.body);
+              }
+              // 预设HTML里可能有 data-send-msg 这种"点了帮你发消息"的按钮，
+              // 之前是靠 wireInteractiveButtons(overlay,...) 在外层文档里找，但现在
+              // 这些按钮都在iframe自己的文档里，外层找不到了，改成在iframe文档里重新绑一次。
+              applyHasCompatPolyfillIfNeeded(doc);
+              wireInteractiveButtons(doc, chat.id);
+            } catch (err) {
+              console.warn('[状态栏] 读取iframe内容失败', err);
+              // 沙盒/跨域读不到内容就算了，保留默认高度，按钮绑不上也不至于整个弹窗报错
+            } finally {
+              iframe.style.visibility = 'visible';
+            }
+          });
+          container.appendChild(iframe);
+          // 之前这里会盖一层"手势层"接touch事件，但这样会连带挡住iframe内部预设自己的滚动区域
+          // （比如这个杂志预设每页自己就有 overflow-y:auto）。改成不盖任何东西，让iframe内部
+          // 该滚动滚动、该点击点击，完全原生；翻页滑动改成在iframe内部自己检测+postMessage通知外层，
+          // 见 wrapHtmlWithDefaultFont 里注入的那段小脚本和下面的 message 监听。
+        } catch (err) {
+          // 某一页预设内容有问题导致构建过程直接报错的话，只影响这一页，不要让其他页也跟着显示不出来
+          console.error('[状态栏] 第' + (i + 1) + '页构建失败', err);
+        }
+      });
+
+      const track = document.getElementById('sb-viewer-track');
+      track.style.transform = `translateX(${-currentIndex * 100}%)`;
+
+      document.getElementById('sb-viewer-close-round').addEventListener('click', () => {
+        overlay.remove();
+        cleanupMessageListener();
+      });
+      document.getElementById('sb-viewer-edit').addEventListener('click', enterSelectMode);
+      bindSwipe(track);
+    }
+
+    // 翻页时只调这个：只更新位移(带过渡动画)和计数器文字，iframe/手势层全都不重建
+    function updateFrame() {
+      const track = document.getElementById('sb-viewer-track');
+      if (!track) return;
+      track.style.transform = `translateX(${-currentIndex * 100}%)`;
+      const counterEl = document.getElementById('sb-viewer-counter');
+      if (counterEl) counterEl.textContent = `${currentIndex + 1} / ${entries.length}`;
+    }
+
+    // ---- 多选删除模式：只把状态栏标记为"隐藏"，不动背后的聊天消息 ----
+    function enterSelectMode() {
+      if (entries.length === 0) return;
+      overlay.style.display = 'none';
+
+      const selected = new Set();
+      const listEl = document.createElement('div');
+      listEl.id = 'sb-select-list';
+      listEl.innerHTML = entries.map((e, i) => `
+        <div class="sb-select-card" data-idx="${i}">
+          <div class="sb-page-inner" data-select-page-index="${i}"></div>
+          <div class="sb-select-mark">✓</div>
+        </div>
+      `).join('');
+      // 预览卡片同样用iframe装，样式才不会跟主文档冲突/丢失；这里纯预览不需要交互，
+      // 所以sandbox不给allow-scripts，省得预览列表里一堆脚本重复跑。
+      entries.forEach((e, i) => {
+        const container = listEl.querySelector(`[data-select-page-index="${i}"]`);
+        if (!container) return;
+        const iframe = document.createElement('iframe');
+        iframe.className = 'sb-page-iframe';
+        iframe.setAttribute('sandbox', 'allow-same-origin');
+        iframe.setAttribute('scrolling', 'no');
+        iframe.srcdoc = wrapHtmlWithDefaultFont(e.html);
+        iframe.style.pointerEvents = 'none'; // 预览卡片本来就是靠外层div接收点击来选中，iframe不用响应点击
+        iframe.addEventListener('load', () => {
+          try {
+            const doc = iframe.contentDocument;
+            const h = Math.max(
+              doc.documentElement ? doc.documentElement.scrollHeight : 0,
+              doc.body ? doc.body.scrollHeight : 0
+            );
+            if (h > 0) iframe.style.height = h + 'px';
+          } catch (err) {}
+        });
+        container.appendChild(iframe);
+      });
+
+      const barEl = document.createElement('div');
+      barEl.id = 'sb-select-bottom-bar';
+      const updateBar = () => {
+        barEl.innerHTML = `
+          <span class="sb-count">已选 ${selected.size} 项</span>
+          <div class="sb-actions">
+            <button id="sb-select-all-btn">${selected.size === entries.length ? '取消全选' : '全选'}</button>
+            <button class="sb-delete-selected" id="sb-delete-selected-btn" ${selected.size === 0 ? 'disabled' : ''}>删除选中</button>
+            <button id="sb-select-cancel-btn">取消</button>
+          </div>
+        `;
+        document.getElementById('sb-select-all-btn').addEventListener('click', () => {
+          if (selected.size === entries.length) selected.clear();
+          else entries.forEach((_, i) => selected.add(i));
+          syncCardChecks(); updateBar();
+        });
+        document.getElementById('sb-delete-selected-btn').addEventListener('click', deleteSelected);
+        document.getElementById('sb-select-cancel-btn').addEventListener('click', exitSelectMode);
+      };
+
+      function syncCardChecks() {
+        listEl.querySelectorAll('.sb-select-card').forEach(card => {
+          card.classList.toggle('checked', selected.has(parseInt(card.dataset.idx, 10)));
+        });
+      }
+
+      listEl.querySelectorAll('.sb-select-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const idx = parseInt(card.dataset.idx, 10);
+          if (selected.has(idx)) selected.delete(idx); else selected.add(idx);
+          syncCardChecks(); updateBar();
+        });
+      });
+
+      async function deleteSelected() {
+        if (selected.size === 0) return;
+        const keysToHide = Array.from(selected).map(i => entries[i].timestamp);
+        if (!chat.settings.dismissedStatusBarKeys) chat.settings.dismissedStatusBarKeys = [];
+        chat.settings.dismissedStatusBarKeys.push(...keysToHide);
+        await db.chats.put(chat);
+
+        entries = await collectStatusBars(chat, preset);
+        currentIndex = 0;
+        exitSelectMode();
+        if (entries.length === 0) { overlay.remove(); return; }
+        overlay.style.display = 'flex';
+        buildViewer();
+      }
+
+      function exitSelectMode() {
+        listEl.remove();
+        barEl.remove();
+        overlay.style.display = 'flex';
+      }
+
+      document.body.appendChild(listEl);
+      document.body.appendChild(barEl);
+      updateBar();
+    }
+
+    // 翻页判断+执行，供 track 本身(bindSwipe) 和每页iframe上方的手势层(bindPageGesture) 共用
+    function trySwipeTurnPage(dx) {
+      if (dx < -40 && currentIndex < entries.length - 1) { currentIndex++; updateFrame(); return true; }
+      if (dx > 40 && currentIndex > 0) { currentIndex--; updateFrame(); return true; }
+      return false;
+    }
+
+    function bindSwipe(track) {
+      let startX = 0, startY = 0, dragging = false, moved = false;
+      track.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX; startY = e.touches[0].clientY; dragging = true; moved = false;
+      }, { passive: true });
+      track.addEventListener('touchmove', (e) => {
+        if (!dragging) return;
+        const dx = e.touches[0].clientX - startX, dy = e.touches[0].clientY - startY;
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) moved = true;
+      }, { passive: true });
+      track.addEventListener('touchend', (e) => {
+        if (!dragging) return;
+        dragging = false;
+        if (!moved) return;
+        const dx = e.changedTouches[0].clientX - startX;
+        trySwipeTurnPage(dx);
+      });
+    }
+
+    // iframe是独立文档，之前靠"手势层"盖在上面接touch事件来做翻页，但这样会连带挡住
+    // iframe内部预设自己的可滚动区域（比如杂志预设每页自己就有内部滚动）。改成：
+    // 翻页滑动的检测挪到iframe内部自己做（见 wrapHtmlWithDefaultFont 注入的小脚本），
+    // 检测到明显的左右滑动就用 postMessage 告诉外层"翻页"；这里负责接收这个消息。
+    // 其余触摸完全不拦截，iframe内部滚动/点击都是原生的。
+    function handleSbSwipeMessage(event) {
+      if (!event.data || event.data.source !== 'sb-status-bar-viewer' || event.data.type !== 'swipe') return;
+      trySwipeTurnPage(event.data.dx);
+    }
+    window.addEventListener('message', handleSbSwipeMessage);
+    const cleanupMessageListener = () => window.removeEventListener('message', handleSbSwipeMessage);
+
+    document.body.appendChild(overlay);
+    buildViewer();
+  }
+
+  async function handleHeaderClick() {
+    const g = state.globalSettings.statusBarEnabled;
+    if (!g) return; // 全局关闭，点了没反应
+    const chat = state.chats[state.activeChatId];
+    if (!chat || !chat.settings.enableStatusBar || !chat.settings.statusBarPresetId) return;
+    const preset = await sbDB.presets.get(chat.settings.statusBarPresetId);
+    if (!preset) { alert('绑定的状态栏预设不存在了，去聊天设置里重新选一个'); return; }
+    await showStatusBarViewer(chat, preset);
+  }
+
+  function bindHeaderClick() {
+    const titleEl = document.getElementById('chat-header-title');
+    if (!titleEl || titleEl.dataset.sbBound) return;
+    titleEl.dataset.sbBound = '1';
+    titleEl.style.cursor = 'pointer';
+    titleEl.addEventListener('click', handleHeaderClick);
+  }
+
+  // ---------------- 全局开关：改成默认开启，且开关本体挪到"状态栏"App自己界面里管理，
+  // 不再依赖注入进API设置页那种做法（之前那种方式一直没能稳定生效）
+
+  // ---------------- 聊天设置：单角色面板 ----------------
+  async function injectChatSettingsPanel() {
+    const container = document.querySelector('#chat-settings-screen .settings-container');
+    if (!container || document.getElementById('status-bar-chat-panel')) return;
+
+    const section = document.createElement('div');
+    section.className = 'settings-section';
+    section.id = 'status-bar-chat-panel';
+    section.innerHTML = `
+      <div class="settings-item">
+        <label>📊 为这个角色生成状态栏</label>
+        <div class="settings-right"><input type="checkbox" id="sb-chat-enable-toggle"></div>
+      </div>
+      <div class="settings-item-block">
+        <label>使用哪个预设</label>
+        <select id="sb-chat-preset-select" style="width:100%;"></select>
+      </div>
+      <div class="settings-item-block">
+        <label>最多同时显示历史条数（默认20）</label>
+        <input type="number" id="sb-chat-history-limit" min="1" max="100" style="width:100%;">
+      </div>
+    `;
+    const anchor = Array.from(container.querySelectorAll(':scope > .settings-section'))
+      .find(sec => sec.textContent.includes('回复条数范围') || sec.textContent.includes('启用独立后台活动'));
+    container.insertBefore(section, anchor || container.firstChild);
+
+    document.getElementById('sb-chat-enable-toggle').addEventListener('change', async (e) => {
+      const chat = state.chats[state.activeChatId];
+      if (!chat) return;
+      chat.settings.enableStatusBar = e.target.checked;
+      await db.chats.put(chat);
+    });
+    document.getElementById('sb-chat-preset-select').addEventListener('change', async (e) => {
+      const chat = state.chats[state.activeChatId];
+      if (!chat) return;
+      chat.settings.statusBarPresetId = parseInt(e.target.value, 10) || null;
+      await db.chats.put(chat);
+    });
+    document.getElementById('sb-chat-history-limit').addEventListener('change', async (e) => {
+      const chat = state.chats[state.activeChatId];
+      if (!chat) return;
+      chat.settings.statusBarHistoryLimit = parseInt(e.target.value, 10) || 20;
+      await db.chats.put(chat);
+    });
+  }
+
+  async function loadChatSettingsPanel() {
+    const chat = state.chats[state.activeChatId];
+    const section = document.getElementById('status-bar-chat-panel');
+    if (!chat || chat.isGroup) { section?.style.setProperty('display', 'none'); return; }
+    section?.style.setProperty('display', '');
+
+    document.getElementById('sb-chat-enable-toggle').checked = !!chat.settings.enableStatusBar;
+    document.getElementById('sb-chat-history-limit').value = chat.settings.statusBarHistoryLimit || 20;
+
+    const presets = await sbDB.presets.toArray();
+    const select = document.getElementById('sb-chat-preset-select');
+    select.innerHTML = presets.length === 0
+      ? '<option value="">（预设库是空的，先去"状态栏"App里建一个）</option>'
+      : presets.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    if (chat.settings.statusBarPresetId) select.value = chat.settings.statusBarPresetId;
+  }
+
+  // ---------------- 初始化 ----------------
+  function init() {
+    if (state.globalSettings.statusBarEnabled === undefined) state.globalSettings.statusBarEnabled = true; // 默认开启
+    injectChatSettingsPanel();
+    bindHeaderClick();
+
+    if (!window.__statusBarShowScreenHooked) {
+      window.__statusBarShowScreenHooked = true;
+      const originalShowScreen = window.showScreen;
+      if (typeof originalShowScreen === 'function') {
+        window.showScreen = function (screenId) {
+          originalShowScreen(screenId);
+          if (screenId === 'chat-settings-screen') loadChatSettingsPanel();
+          if (screenId === 'chat-interface-screen') setTimeout(bindHeaderClick, 50);
+          if (screenId === 'status-bar-app-screen' && typeof window.__sbRenderPresetList === 'function') window.__sbRenderPresetList();
+        };
+      }
+    }
+    console.log('[状态栏] 初始化完成');
+  }
+
+  window.__statusBarDB = sbDB; // 供预设管理App(status-bar-manager.js)复用同一个库
+
+  document.addEventListener('DOMContentLoaded', () => {
+    function tryInit(retries) {
+      if (window.state && window.state.globalSettings && window.db && typeof window.showScreen === 'function' && typeof Dexie !== 'undefined' && document.getElementById('chat-settings-screen')) {
+        init();
+      } else if (retries > 0) {
+        setTimeout(() => tryInit(retries - 1), 300);
+      } else {
+        console.warn('[状态栏] 等待依赖超时');
+      }
+    }
+    tryInit(30);
+  });
+})();
