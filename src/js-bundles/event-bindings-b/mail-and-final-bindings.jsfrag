@@ -66,6 +66,12 @@
         }
         return;
       }
+      // 从 Liya 移植：点击聊天里转发的论坛帖子卡片，打开帖子详情
+      const forumShareCard = e.target.closest('.forum-share-card[data-forum-post-id]');
+      if (forumShareCard && typeof openForumPostDetail === 'function') {
+        openForumPostDetail(Number(forumShareCard.dataset.forumPostId));
+        return;
+      }
       const placeholder = e.target.closest('.recalled-message-placeholder');
       if (placeholder) {
         const chat = state.chats[state.activeChatId];
