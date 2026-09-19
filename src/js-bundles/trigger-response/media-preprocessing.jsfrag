@@ -616,6 +616,49 @@
             }
             continue;
 
+          case 'forum_post': {
+            // 从 Liya 移植：角色在正常聊天里顺手去论坛发帖
+            try {
+              const forumBoards = await db.forumBoards.orderBy('order').toArray();
+              const matchedBoard = forumBoards.find(b => b.name === msgData.boardName) || forumBoards[0];
+              if (matchedBoard && msgData.content) {
+                let altFields = {};
+                if (msgData.asAlt) {
+                  const matchedAlt = await db.forumAlts.where({ ownerType: 'char', ownerId: chatId }).and(a => a.altName === msgData.asAlt).first();
+                  if (matchedAlt) {
+                    altFields = { authorAltId: matchedAlt.id, authorDisplayName: matchedAlt.altName, authorAvatar: matchedAlt.altAvatar || '' };
+                  }
+                }
+                await db.forumPosts.add({
+                  boardId: matchedBoard.id,
+                  authorType: 'char',
+                  authorId: chatId,
+                  content: msgData.content,
+                  timestamp: Date.now(),
+                  likes: [],
+                  commentCount: 0,
+                  ...altFields,
+                });
+                console.log(`[论坛] "${chat.name}" 在正常聊天中顺手发了条论坛帖子`);
+
+                // 隐藏系统消息：让角色"记得"自己发过这条帖子，之后用户提起时能自然接上（用小号发的不主动暴露）
+                chat.history.push({
+                  role: 'system',
+                  content: `[系统提示：你刚才${altFields.authorAltId ? `用小号"${altFields.authorDisplayName}"` : ''}在论坛发了一条帖子，内容是："${msgData.content}"。如果用户后面聊起论坛/这条帖子相关的事，你可以自然地回应，不用刻意隐瞒（除非是用小号发的，那就不要主动暴露是你发的）。]`,
+                  timestamp: Date.now(),
+                  isHidden: true,
+                });
+
+                if (typeof renderForumFeed === 'function' && document.getElementById('forum-screen')?.classList.contains('active')) {
+                  await renderForumFeed();
+                }
+              }
+            } catch (e) {
+              console.warn('[论坛] 正常聊天触发的发帖失败', e);
+            }
+            continue;
+          }
+
           case 'qzone_post':
             const newPost = {
               type: msgData.postType || 'shuoshuo',

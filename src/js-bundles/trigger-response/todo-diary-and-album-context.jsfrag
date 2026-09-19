@@ -16,6 +16,13 @@
                 role: 'user',
                 content: `${prefix}[你发送了一条语音消息，内容是：'${msg.content}']`
               };
+              if (msg.type === 'forum_post_share') {
+                const d = msg.forumPostSnapshot || {};
+                return {
+                  role: 'user',
+                  content: `${prefix}[转发了一条论坛帖子${d.boardName ? `(板块：${d.boardName})` : ''}]\n作者: ${d.authorName || '未知'}\n内容: ${d.content || ''}`
+                };
+              }
               if (msg.type === 'reddit_share') {
                 const rData = msg.redditData;
                 return {
@@ -72,6 +79,9 @@
               } else if (msg.type === 'transfer') {
                 assistantMsgObject.amount = msg.amount;
                 assistantMsgObject.note = msg.note;
+              } else if (msg.type === 'forum_post_share') {
+                const d = msg.forumPostSnapshot || {};
+                assistantMsgObject.content = `[你转发了一条论坛帖子${d.boardName ? `(板块：${d.boardName})` : ''}，作者:${d.authorName || '未知'}，内容:${d.content || ''}]${msg.comment ? ` 你还说了句:"${msg.comment}"` : ''}`;
               } else if (msg.type === 'waimai_request') {
                 assistantMsgObject.productInfo = msg.productInfo;
                 assistantMsgObject.amount = msg.amount;

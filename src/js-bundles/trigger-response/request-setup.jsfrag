@@ -637,6 +637,12 @@ ${linkedContents}
 `;
         }
       }
+      if (typeof buildBannedWordsPromptBlock === 'function') {
+        worldBookContent += buildBannedWordsPromptBlock(chat);
+      }
+      if (typeof buildGroupThoughtChainBlock === 'function') {
+        worldBookContent += buildGroupThoughtChainBlock(chat);
+      }
 
 
       let musicContext = '';
