@@ -84,6 +84,7 @@
                          <!-- 按钮组在右 -->
                          <div class="avatar-btn-group">
                              <button class="settings-mini-btn" onclick="document.getElementById('ai-avatar-input').click()">更换</button>
+                             <button class="settings-mini-btn" id="ai-avatar-url-btn">URL</button>
                              <button class="settings-mini-btn" id="manage-ai-avatar-library-btn">图库</button>
                              <button class="settings-mini-btn change-frame-btn" data-type="ai">挂件</button>
                              <input type="file" id="ai-avatar-input" accept="image/*" hidden>
@@ -113,6 +114,7 @@
                          <img id="my-avatar-preview" class="settings-avatar">
                          <div class="avatar-btn-group">
                              <button class="settings-mini-btn" onclick="document.getElementById('my-avatar-input').click()">更换</button>
+                             <button class="settings-mini-btn" id="my-avatar-url-btn">URL</button>
                              <button class="settings-mini-btn" id="manage-my-avatar-library-btn">图库</button>
                              <button class="settings-mini-btn change-frame-btn" data-type="my">挂件</button>
                              <button class="settings-mini-btn" id="open-persona-library-btn">预设</button>
@@ -172,11 +174,48 @@
                 </label>
                 <textarea id="my-persona" rows="3" class="settings-textarea" placeholder="输入你的角色设定..."></textarea>
             </div>
+            <div class="settings-item-block" id="proactive-reply-group">
+                <label>主动回复间隔</label>
+                <div class="settings-desc" style="margin-bottom: 8px;">当距离AI上次回复超过N小时后，进入聊天会自动触发AI主动回复。输入0可关闭。</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="number" id="proactive-reply-hours-input" min="0" step="1" style="width:80px; text-align:center;" placeholder="12">
+                    <span>小时</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; height: 30px;">
+                    <label for="proactive-day-summary-toggle" style="line-height: 30px;">多日摘要压缩</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="proactive-day-summary-toggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="settings-desc" style="margin-top: 4px;">间隔超过48小时时，先生成一份逐日大纲再展开消息，避免间隔太久时AI偷懒把内容压缩成"仿佛只过了一小会儿"。关闭则直接按原来的方式生成。</div>
+                <button id="test-proactive-reply-btn" class="settings-full-btn" style="margin-top:10px;">🧪 立即测试(跳过等待,不影响正式设置)</button>
+            </div>
+            <div class="settings-item-block" id="send-translate-group">
+                <label>发送语言翻译</label>
+                <div class="settings-desc" style="margin-bottom: 8px;">选择后，你打字发送的内容会先自动翻译成对应语言(母语级别的自然翻译)再发出去，角色看到的就是翻译后的内容。选"不翻译"就是照常发中文原文。</div>
+                <select id="send-translate-language-select">
+                    <option value="">不翻译(发送原文)</option>
+                    <option value="ja">日语</option>
+                    <option value="en">英语</option>
+                    <option value="ko">韩语</option>
+                    <option value="fr">法语</option>
+                    <option value="de">德语</option>
+                    <option value="es">西班牙语</option>
+                    <option value="ru">俄语</option>
+                    <option value="zh-TW">繁体中文</option>
+                </select>
+            </div>
             
             <div class="settings-item-block" id="group-members-group">
                 <label>群成员管理</label>
                 <div id="group-members-settings" class="horizontal-scroll-list"></div> 
                 <button id="manage-members-btn" class="settings-full-btn">管理所有群成员</button>
+            </div>
+            <div class="settings-item-block" id="chat-banned-words-group">
+                <label>本聊天专属屏蔽词</label>
+                <div class="settings-desc" style="margin-bottom: 8px;">这里加的词只对当前这个聊天生效，全局屏蔽词在主屏幕"屏蔽词"里管理。</div>
+                <button id="open-chat-banned-words-btn" class="settings-full-btn">管理本聊天屏蔽词</button>
             </div>
             <div class="settings-item-block" id="spectator-memory-settings-group" style="display: none;">
                 <label>旁观记忆设置</label>
@@ -313,10 +352,49 @@
                      <input type="number" id="ai-action-cooldown-input" class="settings-num-input">
                 </div>
             </div>
+            <div class="settings-item" id="ai-random-interval-min-group">
+                <label>随机间隔 - 最小 (分钟)</label>
+                <div class="settings-right">
+                     <input type="number" id="ai-random-interval-min-input" min="1" step="1" value="10" class="settings-num-input">
+                </div>
+            </div>
+            <div class="settings-item" id="ai-random-interval-max-group">
+                <label>随机间隔 - 最大 (分钟)</label>
+                <div class="settings-right">
+                     <input type="number" id="ai-random-interval-max-input" min="1" step="1" value="25" class="settings-num-input">
+                </div>
+            </div>
             <div class="settings-item" id="group-cooldown-group">
                 <label>群聊行动冷却 (分钟)</label>
                 <div class="settings-right">
                      <input type="number" id="group-action-cooldown-input" class="settings-num-input">
+                </div>
+            </div>
+            <div class="settings-item" id="group-random-interval-min-group">
+                <label>随机间隔 - 最小 (分钟)</label>
+                <div class="settings-right">
+                     <input type="number" id="group-random-interval-min-input" min="1" step="1" value="10" class="settings-num-input">
+                </div>
+            </div>
+            <div class="settings-item" id="group-random-interval-max-group">
+                <label>随机间隔 - 最大 (分钟)</label>
+                <div class="settings-right">
+                     <input type="number" id="group-random-interval-max-input" min="1" step="1" value="25" class="settings-num-input">
+                </div>
+            </div>
+            <div class="settings-item" id="chat-dnd-enabled-group">
+                <div>
+                    <label>勿扰时间段</label>
+                    <div class="settings-desc">开启后，这段时间内不会主动发后台消息（你主动找TA聊天不受影响）</div>
+                </div>
+                <label class="toggle-switch"> <input type="checkbox" id="chat-dnd-enabled-switch"> <span class="slider"></span> </label>
+            </div>
+            <div class="settings-item" id="chat-dnd-time-group">
+                <label>勿扰开始 ~ 结束</label>
+                <div class="settings-right" style="display:flex; align-items:center; gap:6px;">
+                     <input type="time" id="chat-dnd-start-input" value="23:00" class="settings-num-input" style="width:auto;">
+                     <span>~</span>
+                     <input type="time" id="chat-dnd-end-input" value="07:00" class="settings-num-input" style="width:auto;">
                 </div>
             </div>
 
@@ -551,6 +629,17 @@
                     <div style="font-size: 12px; color: var(--text-secondary);">AI可以主动发动态、评论、点赞</div>
                 </div>
                 <select id="chat-enable-qzone-actions-select" style="padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--secondary-bg);">
+                    <option value="null">使用全局设置</option>
+                    <option value="true">开启</option>
+                    <option value="false">关闭</option>
+                </select>
+            </div>
+            <div class="settings-item" id="ai-behavior-forum-post-item">
+                <div>
+                    <div style="font-weight: 500;">启用论坛自主发帖</div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">AI可以在委屈/求助/想分享时去论坛发帖（复用豆瓣帖子库）</div>
+                </div>
+                <select id="chat-enable-forum-post-select" style="padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--secondary-bg);">
                     <option value="null">使用全局设置</option>
                     <option value="true">开启</option>
                     <option value="false">关闭</option>

@@ -71,7 +71,7 @@
   <link rel="stylesheet" href="css/settings/prompt-entries.css?v=0.0.43">
   <meta name="theme-color" content="#000000">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="manifest" href="manifest.json?v=0.0.36-pwa2">
+  <link rel="manifest" href="manifest.json?v=0.0.36-pwa3">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="EPhone">
@@ -223,6 +223,7 @@
   <script src="modules/character/import/parsers-and-create.js?v=0.0.36" defer></script>
   <script src="modules/character-export.js?v=0.0.36" defer></script>
   <script src="modules/data/cleanup-and-statistics.js?v=0.0.36" defer></script>
+  <script src="modules/data/liya-cleanup-extras.js?v=0.0.1" defer></script>
   <script src="modules/data/custom-fonts.js?v=0.0.36" defer></script>
   <script src="modules/data/cleanup-wizard.js?v=0.0.36" defer></script>
   <script src="modules/ui/icon-customization.js?v=0.0.36" defer></script>
@@ -255,6 +256,19 @@
   <script src="modules/memory/manual-summary.js?v=0.0.36" defer></script>
   <script src="modules/phone/cphone/diary-editing.js?v=0.0.36" defer></script>
   <script src="modules/character/thought-history.js?v=0.0.36" defer></script>
+  <!-- ===== 从 Liya 移植的功能（保持 Liya 中的相对加载顺序） ===== -->
+  <script src="modules/ui/desktop-pet.js?v=0.0.1" defer></script>
+  <script src="modules/chat/reminder-manager.js?v=0.0.1" defer></script>
+  <script src="modules/apps/theater-app.js?v=0.0.3" defer></script>
+  <script src="modules/apps/kk-checkin.js?v=0.0.2" defer></script>
+  <script src="modules/chat/status-bar.js?v=0.0.17" defer></script>
+  <script src="modules/chat/status-bar-manager.js?v=0.0.1" defer></script>
+  <script src="modules/worldbook/char-picker.js?v=0.0.1" defer></script>
+  <script src="modules/social/forum.js?v=0.14.0" defer></script>
+  <script src="modules/chat/group-titles.js?v=0.0.7" defer></script>
+  <script src="modules/chat/banned-words.js?v=0.0.6" defer></script>
+  <script src="modules/chat/send-translate.js?v=0.0.2" defer></script>
+  <script src="modules/chat/proactive-reply.js?v=0.0.24" defer></script>
   <!-- 第八层：初始化（必须在所有模块之后） -->
   <!-- 数据定义（无依赖） -->
   <script src="modules/init-avatar-frames.js?v=0.0.36" defer></script>
@@ -300,6 +314,9 @@
   <script src="modules/assistant/helper.js?v=0.0.36" defer></script>
   <script src="force-update.js?v=0.0.36" defer></script>
   <script src="modules/floating-ball.js?v=0.0.36" defer></script>
+  <script src="modules/ui/keyboard-fix.js?v=0.0.36" defer></script>
+  <script src="js/fullscreen-guard.js?v=0.0.1" defer></script>
+  <script src="modules/chat/smart-sticker-v7.js?v=0.0.1" defer></script>
   
   <!-- 保活音频播放器样式（从内联 style 拆分） -->
   <link rel="stylesheet" href="css/keep-alive-player.css?v=0.0.36">
@@ -310,5 +327,8 @@
   <link rel="stylesheet" href="css/settings/style-scheme-2.css?v=0.0.37">
   <link rel="stylesheet" href="css/couple-invite.css?v=0.0.36">
   <link rel="stylesheet" href="css/floating-ball.css?v=0.0.36">
+  <link rel="stylesheet" href="css/social/forum.css?v=0.13.0">
+  <link rel="stylesheet" href="css/apps/kk-checkin.css?v=0.0.2">
+  <link rel="stylesheet" href="css/chat/group-titles.css?v=0.0.14">
 </head>
 <body>

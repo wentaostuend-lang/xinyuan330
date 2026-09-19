@@ -71,6 +71,23 @@
         </div>
       </div>
     </div>
+
+    <div id="clear-album-photos-modal" class="modal">
+      <div class="modal-content" style="height: 70%;">
+        <div class="modal-header">
+          <span>选择要清空照片的相册</span>
+          <label>
+            <input type="checkbox" id="select-all-albums-for-photo-clear"> 全选
+          </label>
+        </div>
+        <div class="modal-body" id="clear-album-photos-list" style="padding: 0;">
+        </div>
+        <div class="modal-footer">
+          <button class="cancel" id="cancel-clear-album-photos-btn">取消</button>
+          <button class="save btn-danger" id="confirm-clear-album-photos-btn">确认清空</button>
+        </div>
+      </div>
+    </div>
     <div id="clear-chat-html-modal" class="modal">
       <div class="modal-content" style="height: 75%;">
         <div class="modal-header">
@@ -169,6 +186,17 @@
         <span class="action-btn" id="refresh-distribution-btn" title="刷新数据">🔄</span>
       </div>
       <div class="list-container" id="data-distribution-container" style="padding: 15px;">
+        <p style="text-align: center; padding: 40px 0; color: var(--text-secondary);">正在加载数据...</p>
+      </div>
+    </div>
+
+    <div id="chats-breakdown-screen" class="screen">
+      <div class="header">
+        <span class="back-btn" id="chats-breakdown-back-btn">‹</span>
+        <span>🔍 聊天记录构成分析</span>
+        <span class="action-btn" id="refresh-chats-breakdown-btn" title="刷新数据">🔄</span>
+      </div>
+      <div class="list-container" id="chats-breakdown-container" style="padding: 15px;">
         <p style="text-align: center; padding: 40px 0; color: var(--text-secondary);">正在加载数据...</p>
       </div>
     </div>
