@@ -117,6 +117,10 @@
     const bubble = document.createElement('div');
     bubble.className = `message-bubble ${isUser ? 'user' : 'ai'}`;
     bubble.dataset.timestamp = msg.timestamp;
+    // 从 Liya 移植：发送语言翻译——记住原文，点击气泡可显示/隐藏
+    if (isUser && typeof msg.originalContent === 'string' && msg.originalContent) {
+      bubble.dataset.sendTranslateOriginal = msg.originalContent;
+    }
 
     const timestampEl = document.createElement('span');
     timestampEl.className = 'timestamp';
@@ -182,7 +186,7 @@
     } else if (typeof rawContent === 'string' && rawContent.trim().startsWith('<') && rawContent.trim().endsWith('>')) {
       contentHtml = rawContent;
       bubble.classList.add('is-raw-html');
-    } else if (msg.type === 'offline_text' || msg.type === 'share_link' || msg.type === 'share_card' || msg.type === 'location_share' || msg.type === 'ai_image' || msg.type === 'user_photo' || msg.type === 'voice_message' || msg.type === 'transfer' || msg.type === 'waimai_request' || msg.type === 'waimai_order' || msg.type === 'red_packet' || msg.type === 'poll' || msg.type === 'gift' || msg.type === 'realimag' || msg.type === 'naiimag' || msg.type === 'googleimag' || msg.type === 'openaiimag' || msg.type === 'kinship_request' || msg.type === 'forwarded_email' || msg.type === 'reddit_share' || msg.type === 'playlist_share' || msg.type === 'couple_invite' || msg.type === 'couple_invite_response') {
+    } else if (msg.type === 'offline_text' || msg.type === 'share_link' || msg.type === 'share_card' || msg.type === 'location_share' || msg.type === 'ai_image' || msg.type === 'user_photo' || msg.type === 'voice_message' || msg.type === 'transfer' || msg.type === 'waimai_request' || msg.type === 'waimai_order' || msg.type === 'red_packet' || msg.type === 'poll' || msg.type === 'gift' || msg.type === 'realimag' || msg.type === 'naiimag' || msg.type === 'googleimag' || msg.type === 'openaiimag' || msg.type === 'kinship_request' || msg.type === 'forwarded_email' || msg.type === 'reddit_share' || msg.type === 'forum_post_share' || msg.type === 'playlist_share' || msg.type === 'couple_invite' || msg.type === 'couple_invite_response') {
 
       if (msg.type === 'offline_text') {
 
@@ -229,6 +233,21 @@
             }
           }).join('');
         }
+      } else if (msg.type === 'forum_post_share') {
+        // 从 Liya 移植：转发到聊天里的论坛帖子卡片（点击卡片打开帖子详情，事件在 event-bindings-b 里）
+        bubble.classList.add('is-card-like');
+        const snap = msg.forumPostSnapshot || {};
+        const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        contentHtml = `
+          <div class="forum-share-card" data-forum-post-id="${esc(msg.forumPostId)}">
+            <div class="forum-share-card-header">
+              ${snap.avatar ? `<img src="${esc(snap.avatar)}" class="forum-share-card-avatar">` : ''}
+              <span class="forum-share-card-name">${esc(snap.authorName || '未知用户')}</span>
+              ${snap.boardName ? `<span class="forum-share-card-board">· ${esc(snap.boardName)}</span>` : ''}
+            </div>
+            <div class="forum-share-card-content">${esc(snap.content || '')}</div>
+            <div class="forum-share-card-footer">论坛帖子</div>
+          </div>`;
       } else if (msg.type === 'share_link') {
         bubble.classList.add('is-link-share', 'is-card-like');
         contentHtml = `<div class="link-share-card" data-timestamp="${msg.timestamp}"><div class="title">${msg.title || '无标题'}</div><div class="description">${msg.description || '点击查看详情...'}</div><div class="footer"><svg class="footer-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span>${msg.source_name || '链接分享'}</span></div></div>`;

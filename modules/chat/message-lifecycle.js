@@ -161,6 +161,11 @@
     showScreen('chat-interface-screen');
     window.updateListenTogetherIconProxy(state.activeChatId);
 
+    // 从 Liya 移植：进入聊天时检查一次是否需要触发主动回复
+    if (typeof checkAndTriggerProactiveReply === 'function') {
+      checkAndTriggerProactiveReply(chat);
+    }
+
 
     const isGroup = chat.isGroup || false;
 
