@@ -253,7 +253,21 @@
     document.getElementById('couplespace-api-key').value = state.apiConfig.couplespaceApiKey || '';
     document.getElementById('couplespace-model-input').value = state.apiConfig.couplespaceModel || '';
     document.getElementById('background-activity-switch').checked = state.globalSettings.enableBackgroundActivity || false;
+    // 从 Liya 移植：后台活动间隔模式
+    const bgIntervalMode = state.globalSettings.backgroundActivityMode || 'random';
+    const bgModeSelect = document.getElementById('background-interval-mode-select');
+    if (bgModeSelect) bgModeSelect.value = bgIntervalMode;
     document.getElementById('background-interval-input').value = state.globalSettings.backgroundActivityInterval || 60;
+    const bgMinInput = document.getElementById('background-interval-min-input');
+    const bgMaxInput = document.getElementById('background-interval-max-input');
+    if (bgMinInput) bgMinInput.value = state.globalSettings.backgroundActivityIntervalMin || 10;
+    if (bgMaxInput) bgMaxInput.value = state.globalSettings.backgroundActivityIntervalMax || 25;
+    const bgFixedGroup = document.getElementById('background-interval-fixed-group');
+    const bgRandomGroup = document.getElementById('background-interval-random-group');
+    if (bgFixedGroup) bgFixedGroup.style.display = bgIntervalMode === 'fixed' ? '' : 'none';
+    if (bgRandomGroup) bgRandomGroup.style.display = bgIntervalMode === 'fixed' ? 'none' : '';
+    const globalForumPostSwitch = document.getElementById('global-enable-forum-post-switch');
+    if (globalForumPostSwitch) globalForumPostSwitch.checked = state.globalSettings.enableForumPost !== false;
     document.getElementById('block-cooldown-input').value = state.globalSettings.blockCooldownHours || 1;
     
     // 新增：加载后台查看用户手机设置
