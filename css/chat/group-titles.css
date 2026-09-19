@@ -1,0 +1,157 @@
+/* ================= 群头衔 / 等级系统 (从原项目 -k--main 移植 + 新增等级功能) ================= */
+
+/* -- 群成员管理列表 -- */
+.member-management-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  border-bottom: 1px solid var(--border-color, #eee);
+}
+.member-management-item .avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  margin-right: 12px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.member-management-item .info {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.member-management-item .info .name {
+  font-weight: 500;
+}
+.member-management-item .info .tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.member-management-item .role-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: bold;
+  color: white;
+  flex-shrink: 0;
+}
+.role-tag.owner { background-color: #ffc107; }
+.role-tag.admin { background-color: #28a745; }
+.member-management-item .level-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: bold;
+  color: #fff;
+  flex-shrink: 0;
+}
+.member-management-item .level-tag.tier-default { background: linear-gradient(135deg, #b9c1cc, #8b93a1); }
+.member-management-item .level-tag.tier-title { background: linear-gradient(135deg, #d79bff, #a238e0); }
+.member-management-item .level-tag.tier-admin { background: linear-gradient(135deg, #6fdc8c, #28a745); }
+.member-management-item .level-tag.tier-owner { background: linear-gradient(135deg, #ffd76a, #ffa726); }
+.member-management-item .title-tag {
+  font-size: 11px;
+  color: var(--text-secondary, #666);
+  background-color: #f0f2f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+#phone-screen.dark-mode .member-management-item .title-tag {
+  background-color: #3a3a3c;
+}
+.member-management-item .points-hint {
+  font-size: 10px;
+  color: #aaa;
+}
+.member-management-item .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  max-width: 40%;
+}
+.member-management-item .actions .action-btn {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  background: #f7f7f9;
+  color: #333;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.member-management-item .actions .action-btn.danger {
+  color: #ff3b30;
+  border-color: #ffd0cd;
+  background: #fff2f1;
+}
+
+/* -- 聊天气泡里的 Lv+头衔 长条标签 (放在名字前面，仿参考图的直角长条风格) -- */
+.group-level-title-tag {
+  display: inline-block;
+  white-space: nowrap;
+  margin-right: 5px;
+  margin-bottom: 0;
+  font-size: 10px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.2px;
+  color: #fff;
+  padding: 1px 7px;
+  border-radius: 6px;
+  vertical-align: middle;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
+}
+/* 默认三档颜色：无头衔=灰 / 有头衔=紫 / 管理员或群主=绿；群主可通过自定义颜色覆盖这三档(内联style) */
+.group-level-title-tag.tier-default { background: linear-gradient(135deg, #b9c1cc, #8b93a1); }
+.group-level-title-tag.tier-title { background: linear-gradient(135deg, #d79bff, #a238e0); }
+.group-level-title-tag.tier-admin { background: linear-gradient(135deg, #6fdc8c, #28a745); }
+.group-level-title-tag.tier-owner { background: linear-gradient(135deg, #ffd76a, #ffa726); }
+
+/* -- 用户自己在群聊里发言时，气泡上方的同款标签(镜像显示在右侧) -- */
+.sender-name {
+  white-space: nowrap;
+  width: max-content;
+  max-width: none;
+  overflow: visible;
+}
+.message-wrapper.user .user-sender-name {
+  position: absolute;
+  top: -22px;
+  right: 0;
+  margin-right: 50px;
+  margin-bottom: 16px !important;
+  text-align: right;
+  font-size: 11px;
+  white-space: nowrap;
+}
+/* AI一侧同理加大间距，跟用户这边保持一致 */
+.message-wrapper.ai .sender-name {
+  top: -22px !important;
+  margin-bottom: 16px !important;
+}
+/* 带头衔标签的气泡是绝对定位挂在气泡上方的，会占用/吃掉消息之间原本的gap空间，
+   导致连续几条消息看起来贴得很近，这里给这类气泡额外加一点顶部间距做补偿 */
+.message-wrapper:has(.sender-name) {
+  margin-top: 14px;
+}
+
+/* -- 发送语言翻译：气泡下方的原文小字提示 -- */
+.send-translate-original-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.6;
+  font-style: italic;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 提示这条气泡可以点开看原文 */
+.message-bubble[data-send-translate-original] {
+  cursor: pointer;
+}
