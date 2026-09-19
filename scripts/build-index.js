@@ -74,7 +74,7 @@ const generatedShell = `<!DOCTYPE html>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="EPhone">
   <title>EPhone</title>
-  <link rel="manifest" href="manifest.json?v=0.0.36-pwa2">
+  <link rel="manifest" href="manifest.json?v=0.0.36-pwa3">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <script src="modules/bootstrap/register-service-worker.js"></script>
