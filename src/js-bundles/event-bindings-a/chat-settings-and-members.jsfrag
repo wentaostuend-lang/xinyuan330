@@ -832,6 +832,36 @@
         );
       }
 
+      // ===== 从 Liya 移植：随机间隔 / 勿扰 / 发送翻译 / 主动回复 / 论坛发帖 =====
+      {
+        const rMinId = chat.isGroup ? 'group-random-interval-min-input' : 'ai-random-interval-min-input';
+        const rMaxId = chat.isGroup ? 'group-random-interval-max-input' : 'ai-random-interval-max-input';
+        chat.settings.randomIntervalMin = Math.max(1, parseInt(document.getElementById(rMinId).value) || 10);
+        chat.settings.randomIntervalMax = Math.max(1, parseInt(document.getElementById(rMaxId).value) || 25);
+        // 间隔变了就作废旧的排期，下一次心跳重新随机
+        chat.nextCheckTimestamp = 0;
+
+        const dndSwitch = document.getElementById('chat-dnd-enabled-switch');
+        if (dndSwitch) chat.settings.dndEnabled = dndSwitch.checked;
+        const dndStartInput = document.getElementById('chat-dnd-start-input');
+        if (dndStartInput) chat.settings.dndStart = dndStartInput.value || '23:00';
+        const dndEndInput = document.getElementById('chat-dnd-end-input');
+        if (dndEndInput) chat.settings.dndEnd = dndEndInput.value || '07:00';
+
+        const sendTranslateSelect = document.getElementById('send-translate-language-select');
+        if (sendTranslateSelect) chat.settings.sendTranslateLanguage = sendTranslateSelect.value || '';
+
+        const proactiveReplyInput = document.getElementById('proactive-reply-hours-input');
+        if (proactiveReplyInput) chat.settings.proactiveReplyHours = Math.max(0, parseInt(proactiveReplyInput.value) || 0);
+        const proactiveDaySummaryToggle = document.getElementById('proactive-day-summary-toggle');
+        if (proactiveDaySummaryToggle) chat.settings.enableDaySummaryCompression = proactiveDaySummaryToggle.checked;
+
+        const forumPostSelect = document.getElementById('chat-enable-forum-post-select');
+        if (forumPostSelect && !chat.isGroup) {
+          chat.settings.enableForumPost = forumPostSelect.value === 'null' ? null : forumPostSelect.value === 'true';
+        }
+      }
+
       await db.chats.put(chat);
       if (!chat.isGroup) {
         await syncCharacterNameInGroups(chat);
