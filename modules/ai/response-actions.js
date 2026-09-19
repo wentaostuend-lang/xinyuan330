@@ -2,6 +2,14 @@
     const chat = state.chats[state.activeChatId];
     if (!chat) return;
 
+    // 从 Liya 移植：如果最后一条消息是"主动回复"生成的，走专门的 reroll 逻辑，
+    // 按当时真实的离开时长重新生成一整批，而不是当成普通对话回复来重开
+    const lastVisibleMsg = chat.history.filter(msg => !msg.isHidden).slice(-1)[0];
+    if (lastVisibleMsg?.proactiveBatchId && typeof rerollProactiveReply === 'function') {
+      await rerollProactiveReply(chat.id, lastVisibleMsg.proactiveBatchId);
+      return;
+    }
+
     const lastUserMsgIndex = chat.history.findLastIndex(msg => msg.role === 'user' && !msg.isHidden);
 
     if (lastUserMsgIndex === -1) {
@@ -136,6 +144,12 @@ ${linkedContents}
 # --- 世界书设定结束 ---
 `;
         }
+      }
+      if (typeof buildBannedWordsPromptBlock === 'function') {
+        worldBookContent += buildBannedWordsPromptBlock(chat);
+      }
+      if (typeof buildGroupThoughtChainBlock === 'function') {
+        worldBookContent += buildGroupThoughtChainBlock(chat);
       }
       let musicContext = '';
       if (musicState.isActive && musicState.activeChatId === chat.id) {
@@ -348,6 +362,9 @@ ${linkedContents}
             }
           }
           continue;
+        }
+        if (typeof aiMessage.content === 'string' && typeof applyBannedWordsFilter === 'function') {
+          aiMessage.content = await applyBannedWordsFilter(aiMessage.content, chat);
         }
         chat.history.push(aiMessage);
         appendMessage(aiMessage, chat);

@@ -85,6 +85,12 @@ ${linkedContents}
 `;
         }
       }
+      if (typeof buildBannedWordsPromptBlock === 'function') {
+        worldBookContent += buildBannedWordsPromptBlock(chat);
+      }
+      if (typeof buildGroupThoughtChainBlock === 'function') {
+        worldBookContent += buildGroupThoughtChainBlock(chat);
+      }
 
 
       let longTermMemoryContext = '# 长期记忆 (最高优先级，这是群内已经确立的事实，所有角色必须严格遵守)\n';
@@ -390,6 +396,9 @@ ${linkedContents}
         }
 
         if (aiMessage) {
+          if (typeof aiMessage.content === 'string' && typeof applyBannedWordsFilter === 'function') {
+            aiMessage.content = await applyBannedWordsFilter(aiMessage.content, chat);
+          }
           chat.history.push(aiMessage);
           appendMessage(aiMessage, chat);
           await new Promise(resolve => setTimeout(resolve, Math.random() * 1200 + 800));

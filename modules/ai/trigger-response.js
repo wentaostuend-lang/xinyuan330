@@ -637,6 +637,12 @@ ${linkedContents}
 `;
         }
       }
+      if (typeof buildBannedWordsPromptBlock === 'function') {
+        worldBookContent += buildBannedWordsPromptBlock(chat);
+      }
+      if (typeof buildGroupThoughtChainBlock === 'function') {
+        worldBookContent += buildGroupThoughtChainBlock(chat);
+      }
 
 
       let musicContext = '';
@@ -1614,6 +1620,13 @@ ${enabledEntries}
                 };
               }
               if (msg.type === 'couple_invite' || msg.type === 'couple_invite_response') return null;
+              if (msg.type === 'forum_post_share') {
+                const d = msg.forumPostSnapshot || {};
+                return {
+                  role: 'user',
+                  content: `${prefix}[转发了一条论坛帖子${d.boardName ? `(板块：${d.boardName})` : ''}]\n作者: ${d.authorName || '未知'}\n内容: ${d.content || ''}`
+                };
+              }
               if (msg.type === 'waimai_request') return {
                 role: 'user',
                 content: `${prefix}[系统提示：你于时间戳 ${msg.timestamp} 发起了外卖代付请求，商品是“${msg.productInfo}”，金额是 ${msg.amount} 元。]`
@@ -1649,6 +1662,9 @@ ${enabledEntries}
                 assistantMsgObject.amount = msg.amount;
                 if (msg.currency) assistantMsgObject.currency = msg.currency;
                 assistantMsgObject.note = msg.note;
+              } else if (msg.type === 'forum_post_share') {
+                const d = msg.forumPostSnapshot || {};
+                assistantMsgObject.content = `[你转发了一条论坛帖子${d.boardName ? `(板块：${d.boardName})` : ''}，作者:${d.authorName || '未知'}，内容:${d.content || ''}]${msg.comment ? ` 你还说了句:"${msg.comment}"` : ''}`;
               } else if (msg.type === 'waimai_request') {
                 assistantMsgObject.productInfo = msg.productInfo;
                 assistantMsgObject.amount = msg.amount;
@@ -2388,6 +2404,36 @@ ${getActiveThoughtsPrompt()}
           const characterBondContext = window.CharacterBond ? window.CharacterBond.getPromptContext(chat, lastVisibleUserMessage) : '';
           if (characterBondContext) systemPrompt += `\n\n${characterBondContext}`;
 
+          // 从 Liya 移植：正常聊天时也有极小概率去论坛发帖（受"论坛自主发帖"开关控制，聊天单独设置优先于全局）
+          try {
+            const forumAllowedInChat = (chat.settings.enableForumPost !== null && chat.settings.enableForumPost !== undefined)
+              ? chat.settings.enableForumPost
+              : (state.globalSettings.enableForumPost !== false);
+            if (forumAllowedInChat && !chat.isGroup && db.forumBoards) {
+              const forumBoardsForChat = await db.forumBoards.orderBy('order').toArray();
+              if (forumBoardsForChat.length > 0) {
+                const forumAltsForChat = await db.forumAlts.where({ ownerType: 'char', ownerId: chat.id }).toArray();
+                systemPrompt += `
+### D. 论坛(极小概率触发！！不是每次回复都要考虑，正常聊天该怎么聊还怎么聊，绝大多数时候完全不要提及这个)
+-   **去论坛发帖**: \`{"type": "forum_post", "boardName": "板块名，从这些里选一个：${forumBoardsForChat.map(b => b.name).join('/')}", "content": "帖子内容"${forumAltsForChat.length > 0 ? `, "asAlt": "小号名字(可选，从这些里选：${forumAltsForChat.map(a => a.altName).join('/')})"` : ''}}\`
+    只有聊到一半突然有感而发/手痒想发个牢骚/想分享点什么的时候才偶尔用一次，概率大概几十分之一，不要频繁触发，也不要为了用而用。
+`;
+              }
+            }
+          } catch (e) {
+            console.warn('[论坛] 正常聊天读取板块列表失败，跳过论坛发帖指令', e);
+          }
+
+          // 从 Liya 移植：状态栏（全局开关 + 该角色绑定了预设才生效），随 update_thoughts 一起输出 status_bar 字段
+          if (state.globalSettings.statusBarEnabled && chat.settings.enableStatusBar && chat.settings.statusBarPresetId && window.__statusBarDB) {
+            try {
+              const sbPreset = await window.__statusBarDB.presets.get(chat.settings.statusBarPresetId);
+              if (sbPreset && sbPreset.promptSuffix) {
+                systemPrompt += `\n\n## 状态栏更新（必须执行）\n状态栏内容【禁止】写进聊天正文/回复里，它不是说给对方听的话，对方也看不到。请把它作为 \`update_thoughts\` 指令里的一个额外字段，跟心声/散记一起放进【同一个】JSON对象里输出：\n\`{"type": "update_thoughts", "heartfelt_voice": "...", "random_jottings": "...", "status_bar": "..."}\`\n（如果心声功能没开、本轮没有别的理由输出update_thoughts，也请单独补一条这个指令，heartfelt_voice/random_jottings可以留空，但status_bar必须给。）\n- **status_bar** 字段的内容格式为：\n${sbPreset.promptSuffix}\n（这是对当前场景状态的真实总结，不是台词。只填这一轮里确实明确发生/体现出来的信息，没有明确信息的字段就填"未知"，不要为了填满格式而编造内容，也不要写成"角色1"、"xxx2"这类占位编号。）\n- 【重要-防止重复】status_bar要基于这一轮最新剧情重新判断，某个字段确实没变可以保留原值，但不要整条原样照抄上一轮，要体现出随剧情推进的变化。`;
+              }
+            } catch (e) { console.warn('[状态栏] 读取预设失败，跳过本次注入', e); }
+          }
+
           systemPrompt = processPromptWithSettings(systemPrompt, 'single');
 
           messagesPayload = filteredHistory.map(msg => {
@@ -2485,6 +2531,13 @@ ${getActiveThoughtsPrompt()}
                 role: 'user',
                 content: `${prefix}[你发送了一条语音消息，内容是：'${msg.content}']`
               };
+              if (msg.type === 'forum_post_share') {
+                const d = msg.forumPostSnapshot || {};
+                return {
+                  role: 'user',
+                  content: `${prefix}[转发了一条论坛帖子${d.boardName ? `(板块：${d.boardName})` : ''}]\n作者: ${d.authorName || '未知'}\n内容: ${d.content || ''}`
+                };
+              }
               if (msg.type === 'reddit_share') {
                 const rData = msg.redditData;
                 return {
@@ -2541,6 +2594,9 @@ ${getActiveThoughtsPrompt()}
               } else if (msg.type === 'transfer') {
                 assistantMsgObject.amount = msg.amount;
                 assistantMsgObject.note = msg.note;
+              } else if (msg.type === 'forum_post_share') {
+                const d = msg.forumPostSnapshot || {};
+                assistantMsgObject.content = `[你转发了一条论坛帖子${d.boardName ? `(板块：${d.boardName})` : ''}，作者:${d.authorName || '未知'}，内容:${d.content || ''}]${msg.comment ? ` 你还说了句:"${msg.comment}"` : ''}`;
               } else if (msg.type === 'waimai_request') {
                 assistantMsgObject.productInfo = msg.productInfo;
                 assistantMsgObject.amount = msg.amount;
@@ -4017,6 +4073,49 @@ ${getActiveThoughtsPrompt()}
               }
             }
             continue;
+
+          case 'forum_post': {
+            // 从 Liya 移植：角色在正常聊天里顺手去论坛发帖
+            try {
+              const forumBoards = await db.forumBoards.orderBy('order').toArray();
+              const matchedBoard = forumBoards.find(b => b.name === msgData.boardName) || forumBoards[0];
+              if (matchedBoard && msgData.content) {
+                let altFields = {};
+                if (msgData.asAlt) {
+                  const matchedAlt = await db.forumAlts.where({ ownerType: 'char', ownerId: chatId }).and(a => a.altName === msgData.asAlt).first();
+                  if (matchedAlt) {
+                    altFields = { authorAltId: matchedAlt.id, authorDisplayName: matchedAlt.altName, authorAvatar: matchedAlt.altAvatar || '' };
+                  }
+                }
+                await db.forumPosts.add({
+                  boardId: matchedBoard.id,
+                  authorType: 'char',
+                  authorId: chatId,
+                  content: msgData.content,
+                  timestamp: Date.now(),
+                  likes: [],
+                  commentCount: 0,
+                  ...altFields,
+                });
+                console.log(`[论坛] "${chat.name}" 在正常聊天中顺手发了条论坛帖子`);
+
+                // 隐藏系统消息：让角色"记得"自己发过这条帖子，之后用户提起时能自然接上（用小号发的不主动暴露）
+                chat.history.push({
+                  role: 'system',
+                  content: `[系统提示：你刚才${altFields.authorAltId ? `用小号"${altFields.authorDisplayName}"` : ''}在论坛发了一条帖子，内容是："${msgData.content}"。如果用户后面聊起论坛/这条帖子相关的事，你可以自然地回应，不用刻意隐瞒（除非是用小号发的，那就不要主动暴露是你发的）。]`,
+                  timestamp: Date.now(),
+                  isHidden: true,
+                });
+
+                if (typeof renderForumFeed === 'function' && document.getElementById('forum-screen')?.classList.contains('active')) {
+                  await renderForumFeed();
+                }
+              }
+            } catch (e) {
+              console.warn('[论坛] 正常聊天触发的发帖失败', e);
+            }
+            continue;
+          }
 
           case 'qzone_post':
             const newPost = {
@@ -5665,6 +5764,9 @@ ${getActiveThoughtsPrompt()}
         }
 
         if (aiMessage) {
+          if (typeof aiMessage.content === 'string' && typeof applyBannedWordsFilter === 'function') {
+            aiMessage.content = await applyBannedWordsFilter(aiMessage.content, chat);
+          }
           if (chat.settings.enableBilingualMode && window.languagePolicy && (aiMessage.type === 'text' || aiMessage.type === 'voice_message' || !aiMessage.type)) {
             const languageParts = window.languagePolicy.splitContent(aiMessage.content);
             const languageSettings = window.languagePolicy.resolvePolicyForSender(chat, aiMessage.senderName || msgData.name);
@@ -5681,6 +5783,10 @@ ${getActiveThoughtsPrompt()}
             };
           }
           chat.history.push(aiMessage);
+          if (chat.isGroup && typeof awardGroupActivity === 'function') {
+            const speakerMember = chat.members.find(m => m.originalName === aiMessage.senderName || m.groupNickname === aiMessage.senderName);
+            if (speakerMember) awardGroupActivity(chat, speakerMember.id);
+          }
           if (window.CharacterBond) window.CharacterBond.onMessageSaved(chat, aiMessage);
           if (!isViewingThisChat) {
             chat.unreadCount = (chat.unreadCount || 0) + 1;
