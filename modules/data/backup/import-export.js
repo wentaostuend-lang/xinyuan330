@@ -61,7 +61,19 @@
         watchTogetherPlaylist,
         mcpConnections,
         mcpActivities,
-        mcpSettings
+        mcpSettings,
+        forumBoards,
+        forumPosts,
+        forumComments,
+        forumNpcs,
+        forumAlts,
+        forumDMs,
+        forumDMThreads,
+        forumHotTopics,
+        forumAvatarPool,
+        forumAskBoxQuestions,
+        forumFollows,
+        forumBlocks
       ] = await Promise.all([
         db.chats.toArray(),
         db.worldBooks.toArray(),
@@ -116,7 +128,19 @@
         db.watchTogetherPlaylist.toArray(),
         db.mcpConnections.toArray(),
         db.mcpActivities.toArray(),
-        db.mcpSettings.get('main')
+        db.mcpSettings.get('main'),
+        db.forumBoards.toArray(),
+        db.forumPosts.toArray(),
+        db.forumComments.toArray(),
+        db.forumNpcs.toArray(),
+        db.forumAlts.toArray(),
+        db.forumDMs.toArray(),
+        db.forumDMThreads.toArray(),
+        db.forumHotTopics.toArray(),
+        db.forumAvatarPool.toArray(),
+        db.forumAskBoxQuestions.toArray(),
+        db.forumFollows.toArray(),
+        db.forumBlocks.toArray()
       ]);
 
       // 方案3：导出时移除API历史记录
@@ -179,6 +203,7 @@
         mcpConnections: sanitizeMcpConnectionsForBackup(mcpConnections),
         mcpActivities,
         mcpSettings,
+        forumBoards, forumPosts, forumComments, forumNpcs, forumAlts, forumDMs, forumDMThreads, forumHotTopics, forumAvatarPool, forumAskBoxQuestions, forumFollows, forumBlocks,
         
         // 情侣空间 localStorage 数据
         localStorage: coupleSpaceLocalStorage
@@ -308,7 +333,19 @@
         mcpConnections: 'MCP连接',
         mcpActivities: 'MCP活动记录',
         mcpSettings: 'MCP设置',
-        mcpSecrets: 'MCP本机凭证'
+        mcpSecrets: 'MCP本机凭证',
+        forumBoards: '论坛板块',
+        forumPosts: '论坛帖子',
+        forumComments: '论坛评论',
+        forumNpcs: '论坛网友',
+        forumAlts: '论坛小号',
+        forumDMs: '论坛私信',
+        forumDMThreads: '论坛私信会话',
+        forumHotTopics: '论坛热点',
+        forumAvatarPool: '论坛头像池',
+        forumAskBoxQuestions: '论坛提问箱',
+        forumFollows: '论坛关注',
+        forumBlocks: '论坛屏蔽'
       };
 
       // 统计各表数据
@@ -617,6 +654,18 @@
       'mcpConnections': 'MCP连接',
       'mcpActivities': 'MCP活动记录',
       'mcpSettings': 'MCP设置',
+      'forumBoards': '论坛板块',
+      'forumPosts': '论坛帖子',
+      'forumComments': '论坛评论',
+      'forumNpcs': '论坛网友',
+      'forumAlts': '论坛小号',
+      'forumDMs': '论坛私信',
+      'forumDMThreads': '论坛私信会话',
+      'forumHotTopics': '论坛热点',
+      'forumAvatarPool': '论坛头像池',
+      'forumAskBoxQuestions': '论坛提问箱',
+      'forumFollows': '论坛关注',
+      'forumBlocks': '论坛屏蔽',
       'localStorage': '情侣空间数据'
     };
 
@@ -781,6 +830,18 @@
       'mcpConnections': 'MCP连接',
       'mcpActivities': 'MCP活动记录',
       'mcpSettings': 'MCP设置',
+      'forumBoards': '论坛板块',
+      'forumPosts': '论坛帖子',
+      'forumComments': '论坛评论',
+      'forumNpcs': '论坛网友',
+      'forumAlts': '论坛小号',
+      'forumDMs': '论坛私信',
+      'forumDMThreads': '论坛私信会话',
+      'forumHotTopics': '论坛热点',
+      'forumAvatarPool': '论坛头像池',
+      'forumAskBoxQuestions': '论坛提问箱',
+      'forumFollows': '论坛关注',
+      'forumBlocks': '论坛屏蔽',
       'localStorage': '情侣空间数据'
     };
 
@@ -1008,6 +1069,18 @@
         if (Array.isArray(backupData.mcpConnections)) await db.mcpConnections.bulkPut(sanitizeMcpConnectionsForBackup(backupData.mcpConnections));
         if (Array.isArray(backupData.mcpActivities)) await db.mcpActivities.bulkPut(backupData.mcpActivities);
         if (backupData.mcpSettings) await db.mcpSettings.put(backupData.mcpSettings);
+        if (Array.isArray(backupData.forumBoards)) await db.forumBoards.bulkPut(backupData.forumBoards);
+        if (Array.isArray(backupData.forumPosts)) await db.forumPosts.bulkPut(backupData.forumPosts);
+        if (Array.isArray(backupData.forumComments)) await db.forumComments.bulkPut(backupData.forumComments);
+        if (Array.isArray(backupData.forumNpcs)) await db.forumNpcs.bulkPut(backupData.forumNpcs);
+        if (Array.isArray(backupData.forumAlts)) await db.forumAlts.bulkPut(backupData.forumAlts);
+        if (Array.isArray(backupData.forumDMs)) await db.forumDMs.bulkPut(backupData.forumDMs);
+        if (Array.isArray(backupData.forumDMThreads)) await db.forumDMThreads.bulkPut(backupData.forumDMThreads);
+        if (Array.isArray(backupData.forumHotTopics)) await db.forumHotTopics.bulkPut(backupData.forumHotTopics);
+        if (Array.isArray(backupData.forumAvatarPool)) await db.forumAvatarPool.bulkPut(backupData.forumAvatarPool);
+        if (Array.isArray(backupData.forumAskBoxQuestions)) await db.forumAskBoxQuestions.bulkPut(backupData.forumAskBoxQuestions);
+        if (Array.isArray(backupData.forumFollows)) await db.forumFollows.bulkPut(backupData.forumFollows);
+        if (Array.isArray(backupData.forumBlocks)) await db.forumBlocks.bulkPut(backupData.forumBlocks);
       });
       
       // 3. 如果备份中有 localStorage 数据，则恢复

@@ -17,6 +17,7 @@
       '快捷回复': ['quickReplies', 'quickReplyCategories'],
       '邮件系统': ['emails', 'mailThreads', 'mailContacts', 'mailAccounts', 'mailEvents', 'mailPublicBoxes', 'mailSettings'],
       'MCP连接': ['mcpConnections', 'mcpActivities', 'mcpSettings'],
+      '论坛': ['forumBoards', 'forumPosts', 'forumComments', 'forumNpcs', 'forumAlts', 'forumDMs', 'forumDMThreads', 'forumHotTopics', 'forumAvatarPool', 'forumAskBoxQuestions', 'forumFollows', 'forumBlocks'],
       '外观设置': ['appearancePresets']
     };
 
