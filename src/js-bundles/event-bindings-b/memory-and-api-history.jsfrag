@@ -986,7 +986,12 @@ window.initEventBindingsB = function(state, db) {
       btn.addEventListener('click', async () => {
         const url = await showCustomPrompt('网络图片', '请输入头像的图片URL', '', 'url');
         if (url && url.trim()) {
-          document.getElementById(previewId).src = url.trim();
+          const preview = document.getElementById(previewId);
+          preview.src = url.trim();
+          // 链接打不开就马上提醒，别等保存了才发现头像没出来
+          preview.decode().catch(() => {
+            if (typeof showToast === 'function') showToast('这个图片链接加载失败，可能已失效或被图床拦截，换个链接试试', 'error');
+          });
         }
       });
     };
