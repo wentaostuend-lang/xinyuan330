@@ -2,7 +2,8 @@
 // chat/batch-avatar.js
 // 批量设置头像：粘贴一串图片链接 → 自动识别并显示预览图 → 每张勾选要应用到哪个角色
 //
-// 入口：聊天列表右上角的「批量头像」图标（也可以在控制台调用 openBatchAvatarModal()）。
+// 入口：设置页的「批量设置头像」按钮、悬浮球菜单里的「批量设置头像」（也可以在控制台调用 openBatchAvatarModal()）。
+// 注意：不放在聊天列表顶栏里——有些自定义 CSS 会按位置重排顶栏按钮，多一个按钮就会错位。
 // 应用后写入：
 //   单聊  角色头像 chat.settings.aiAvatar / 我的头像 chat.settings.myAvatar
 //   群聊  群头像   chat.settings.groupAvatar
@@ -272,7 +273,8 @@
   }
 
   function bindEntry() {
-    const btn = document.getElementById('batch-avatar-btn');
+    // 入口：设置页「批量设置头像」按钮、悬浮球菜单里的「批量设置头像」（见 floating-ball.js）
+    const btn = document.getElementById('open-batch-avatar-btn');
     if (btn && !btn.dataset.bound) {
       btn.dataset.bound = '1';
       btn.addEventListener('click', openModal);
