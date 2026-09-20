@@ -302,6 +302,9 @@
   "modules/floating-ball.js",
   "modules/ui/keyboard-fix.js",
   "js/fullscreen-guard.js",
+  "modules/ui/avatar-guard.js",
+  "modules/chat/batch-avatar.js",
+  "modules/chat/return-to-chat-sync.js",
   "modules/chat/smart-sticker-v7.js",
   "css/keep-alive-player.css",
   "css/auth-intro.css",
@@ -313,6 +316,7 @@
   "css/social/forum.css",
   "css/apps/kk-checkin.css",
   "css/chat/group-titles.css",
+  "css/chat/batch-avatar.css",
   "js/time-system.js",
   "js/auth-system.js"
 ]
