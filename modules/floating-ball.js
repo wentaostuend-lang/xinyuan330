@@ -160,6 +160,14 @@
         </svg>
         <span>批量勿扰时间段</span>
       </div>
+      <div class="fb-menu-item" data-action="batch-avatar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+          <circle cx="9" cy="10" r="1.6"></circle>
+          <path d="M21 16l-5-5-8 9"></path>
+        </svg>
+        <span>批量设置头像</span>
+      </div>
       <div class="fb-menu-item fb-menu-item-switch" id="fb-global-dnd-item">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -844,6 +852,10 @@
       case 'batch-dnd':
         closeMenu();
         openBatchDndPanel();
+        break;
+      case 'batch-avatar':
+        closeMenu();
+        if (typeof window.openBatchAvatarModal === 'function') window.openBatchAvatarModal();
         break;
       case 'role-api':
         closeMenu(); // 关闭菜单
