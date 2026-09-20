@@ -74,6 +74,76 @@ function notifyProactiveMessage(chat, msg) {
 // ============================================================
 const proactiveGenerationState = {};
 
+// 用户此刻是否真的在这个聊天的窗口里（聊天界面正显示，并且就是这个聊天）。
+// 跟正常回复流程判断"是否正在看这个聊天"的条件保持一致，只看 activeChatId 不够：
+// 离开聊天窗口后 activeChatId 可能还留着。
+function isUserViewingChat(chat) {
+  const screen = document.getElementById('chat-interface-screen');
+  return !!chat && !!screen && screen.classList.contains('active') && state.activeChatId === chat.id;
+}
+
+// 在窗口里时显示"正在输入...(点击暂停)"（生成开始时用户可能还不在窗口里，进来以后要补上）
+function showProactiveTypingUi(chat, onClick) {
+  try {
+    if (chat.isGroup) {
+      const typingIndicator = document.getElementById('typing-indicator');
+      if (typingIndicator) {
+        typingIndicator.textContent = '成员们正在输入...(点击暂停)';
+        typingIndicator.style.display = 'block';
+        typingIndicator.style.cursor = 'pointer';
+        typingIndicator.removeEventListener('click', onClick);
+        typingIndicator.addEventListener('click', onClick);
+      }
+    } else {
+      const chatHeaderTitle = document.getElementById('chat-header-title');
+      if (chatHeaderTitle) {
+        chatHeaderTitle.textContent = '对方正在输入...(点击暂停)';
+        chatHeaderTitle.classList.add('typing-status');
+        chatHeaderTitle.style.cursor = 'pointer';
+        chatHeaderTitle.removeEventListener('click', onClick);
+        chatHeaderTitle.addEventListener('click', onClick);
+      }
+    }
+  } catch (e) {
+    console.warn('[主动回复] 显示"正在输入"状态失败', e);
+  }
+}
+
+// 兜底：主动回复不管是成功、被暂停还是中途出错，最后都要把"正在输入...(点击暂停)"收起来，
+// 否则一旦生成过程中抛了异常，界面会一直卡在"对方正在输入中"。
+function resetProactiveTypingUi(chat) {
+  try {
+    if (!chat || state.activeChatId !== chat.id) return;
+    if (chat.isGroup) {
+      const typingIndicator = document.getElementById('typing-indicator');
+      if (typingIndicator && typingIndicator.textContent.includes('点击暂停')) {
+        typingIndicator.style.display = 'none';
+        typingIndicator.style.cursor = '';
+      }
+    } else {
+      const chatHeaderTitle = document.getElementById('chat-header-title');
+      if (chatHeaderTitle && chatHeaderTitle.textContent.includes('点击暂停')) {
+        chatHeaderTitle.textContent = chat.name;
+        chatHeaderTitle.classList.remove('typing-status');
+        chatHeaderTitle.style.cursor = '';
+      }
+    }
+  } catch (e) {
+    console.warn('[主动回复] 收起"正在输入"状态失败', e);
+  }
+}
+
+// 论坛表访问：数据库里没有这张表（比如浏览器还在用旧版数据库脚本）或查询出错时，
+// 不要让整个主动回复跟着失败，直接当成"没有论坛数据"。
+async function safeForumQuery(queryFn, fallback) {
+  try {
+    return await queryFn();
+  } catch (e) {
+    console.warn('[主动回复] 读取论坛数据失败，已跳过论坛相关内容', e);
+    return fallback;
+  }
+}
+
 // 点击"对方正在输入..."/"成员们正在输入..."时调用，中断当前这次主动回复的生成
 function cancelProactiveGeneration(chatId) {
   const gen = proactiveGenerationState[chatId];
@@ -268,7 +338,7 @@ async function generateProactiveMessages(chat, elapsedHours, lastTimestamp) {
     return; // 没配置API就悄悄跳过，不打扰用户
   }
 
-  const isViewingThisChat = state.activeChatId === chat.id;
+  const isViewingThisChat = isUserViewingChat(chat);
   const chatHeaderTitle = document.getElementById('chat-header-title');
   const typingIndicator = document.getElementById('typing-indicator');
 
@@ -291,19 +361,12 @@ async function generateProactiveMessages(chat, elapsedHours, lastTimestamp) {
   }
 
   const restoreTypingIndicator = () => {
-    if (!isViewingThisChat) return;
-    if (chat.isGroup) {
-      if (typingIndicator) {
-        typingIndicator.style.display = 'none';
-        typingIndicator.style.cursor = '';
-        typingIndicator.removeEventListener('click', onTypingIndicatorClick);
-      }
-    } else if (chatHeaderTitle) {
-      chatHeaderTitle.textContent = chat.name;
-      chatHeaderTitle.classList.remove('typing-status');
-      chatHeaderTitle.style.cursor = '';
-      chatHeaderTitle.removeEventListener('click', onTypingIndicatorClick);
-    }
+    // 不再依赖"生成开始时在不在窗口"这个过期的判断：用户中途进/出窗口都要能正确收起
+    const ti = document.getElementById('typing-indicator');
+    const hd = document.getElementById('chat-header-title');
+    if (ti) ti.removeEventListener('click', onTypingIndicatorClick);
+    if (hd) hd.removeEventListener('click', onTypingIndicatorClick);
+    resetProactiveTypingUi(chat);
   };
 
   const myNickname = chat.settings.myNickname || '你';
@@ -383,10 +446,10 @@ ${enableThoughts ? '- heartfelt_voice/random_jottings 分别是角色此刻的�
   }
 
   // 论坛板块列表：forum_post这个action要用到，得在systemPrompt构建之前拿到
-  const forumBoardsForProactive = await db.forumBoards.orderBy('order').toArray().catch(() => []);
-  const forumCharAltsForProactive = await db.forumAlts.where({ ownerType: 'char', ownerId: chat.id }).toArray().catch(() => []);
+  const forumBoardsForProactive = await safeForumQuery(() => db.forumBoards.orderBy('order').toArray(), []);
+  const forumCharAltsForProactive = await safeForumQuery(() => db.forumAlts.where({ ownerType: 'char', ownerId: chat.id }).toArray(), []);
   // 最近的论坛帖子摘要，给forum_share_post用：char可以选一条转发到聊天里(比如看到个热帖想转给你看)
-  const forumRecentPostsForShare = await db.forumPosts.orderBy('timestamp').reverse().limit(15).toArray().catch(() => []);
+  const forumRecentPostsForShare = await safeForumQuery(() => db.forumPosts.orderBy('timestamp').reverse().limit(15).toArray(), []);
 
   const systemPrompt = `
 # 场景
@@ -827,10 +890,24 @@ ${thoughtsAndStatusBlock}
   builtMessages.forEach(msg => { msg.proactiveBatchId = batchId; }); // 打上批次标记，方便reroll时精准定位删除
 
   let committedCount = 0;
-  if (isViewingThisChat && builtMessages.length > 0) {
-    for (const msg of builtMessages) {
+  // "在不在窗口里"要在真正开始弹的这一刻判断，而不是生成开始的时候：API请求可能等了十几二十秒，
+  // 这期间用户可能进了窗口，也可能离开了。在窗口里 → 像正常消息一样一条条弹出；不在 → 直接存进去、算未读。
+  if (isUserViewingChat(chat) && builtMessages.length > 0) {
+    showProactiveTypingUi(chat, onTypingIndicatorClick);
+    for (let i = 0; i < builtMessages.length; i++) {
+      const msg = builtMessages[i];
       if (proactiveGenerationState[chat.id]?.cancelled) {
         console.log('[主动回复] 展示过程中被用户暂停，剩余消息不再继续弹出');
+        break;
+      }
+
+      if (!isUserViewingChat(chat)) {
+        // 弹的过程中用户离开了窗口：剩下的不用再做动画，直接存进去，按未读算
+        const rest = builtMessages.slice(i);
+        rest.forEach(m => { chat.history.push(m); notifyProactiveMessage(chat, m); });
+        committedCount += rest.length;
+        chat.unreadCount = (chat.unreadCount || 0) + rest.length;
+        await db.chats.put(chat);
         break;
       }
 
@@ -839,6 +916,7 @@ ${thoughtsAndStatusBlock}
       await new Promise(resolve => setTimeout(resolve, typingDelay));
 
       if (proactiveGenerationState[chat.id]?.cancelled) break; // 等待的过程中被暂停，这条也不发了
+      if (!isUserViewingChat(chat)) { i--; continue; } // 等的过程中离开了窗口：回到循环开头走"直接存"的分支
 
       // 不再强制每条都插时间戳，交给appendMessage自己按平时那套"超过10分钟才显示"的
       // 分组规则判断——这样弹动画时看到的分组，和退出重进/翻历史记录时看到的分组完全一致
@@ -863,17 +941,18 @@ ${thoughtsAndStatusBlock}
     await db.chats.put(chat);
   }
 
-  if (isViewingThisChat) {
+  if (isUserViewingChat(chat)) {
     chat.unreadCount = 0; // 用户当前正在看这个聊天，不算未读
   }
   await db.chats.put(chat);
 
-  if (isViewingThisChat && typeof renderChatInterface === 'function') {
+  if (isUserViewingChat(chat) && typeof renderChatInterface === 'function') {
     renderChatInterface(chat.id);
   }
   if (typeof renderChatList === 'function') renderChatList();
   } finally {
     if (proactiveGenerationState[chat.id]) proactiveGenerationState[chat.id].inProgress = false;
+    resetProactiveTypingUi(chat);
   }
 }
 
@@ -957,7 +1036,7 @@ async function generateGroupProactiveMessages(chat, elapsedHours, lastTimestamp)
     return;
   }
 
-  const isViewingThisChat = state.activeChatId === chat.id;
+  const isViewingThisChat = isUserViewingChat(chat);
   const typingIndicator = document.getElementById('typing-indicator');
   const onTypingIndicatorClick = () => cancelProactiveGeneration(chat.id);
 
@@ -968,11 +1047,9 @@ async function generateGroupProactiveMessages(chat, elapsedHours, lastTimestamp)
     typingIndicator.addEventListener('click', onTypingIndicatorClick);
   }
   const restoreTypingIndicator = () => {
-    if (isViewingThisChat && typingIndicator) {
-      typingIndicator.style.display = 'none';
-      typingIndicator.style.cursor = '';
-      typingIndicator.removeEventListener('click', onTypingIndicatorClick);
-    }
+    const ti = document.getElementById('typing-indicator');
+    if (ti) ti.removeEventListener('click', onTypingIndicatorClick);
+    resetProactiveTypingUi(chat);
   };
 
   const myNickname = chat.settings.myNickname || '你';
@@ -1194,15 +1271,27 @@ ${extraBlocks}
   builtMessages.forEach(msg => { msg.proactiveBatchId = batchId; });
 
   let committedCount = 0;
-  if (isViewingThisChat && builtMessages.length > 0) {
+  // 同单聊：在不在窗口里，到真正开始弹的这一刻再判断
+  if (isUserViewingChat(chat) && builtMessages.length > 0) {
     // 你正在看这个群：像实时群聊一样，一条一条弹出来，"成员们正在输入..."贯穿整个过程直到全部弹完
-    if (typingIndicator) {
-      typingIndicator.textContent = '成员们正在输入...(点击暂停)';
-      typingIndicator.style.display = 'block';
-    }
+    showProactiveTypingUi(chat, onTypingIndicatorClick);
     for (let i = 0; i < builtMessages.length; i++) {
       if (proactiveGenerationState[chat.id]?.cancelled) {
         console.log('[主动回复] 群聊展示过程中被用户暂停，剩余消息不再继续弹出');
+        break;
+      }
+
+      if (!isUserViewingChat(chat)) {
+        // 弹的过程中离开了群聊窗口：剩下的直接存进去，按未读算
+        for (let j = i; j < builtMessages.length; j++) {
+          chat.history.push(builtMessages[j]);
+          const restMember = builtSpeakers[j];
+          if (restMember) speakerIds.add(restMember.id);
+          notifyProactiveMessage(chat, builtMessages[j]);
+          committedCount++;
+        }
+        chat.unreadCount = (chat.unreadCount || 0) + (builtMessages.length - i);
+        await db.chats.put(chat);
         break;
       }
 
@@ -1213,6 +1302,7 @@ ${extraBlocks}
       await new Promise(resolve => setTimeout(resolve, typingDelay));
 
       if (proactiveGenerationState[chat.id]?.cancelled) break;
+      if (!isUserViewingChat(chat)) { i--; continue; }
 
       // 不再强制每条都插时间戳，交给appendMessage按平时的分组规则判断，保持跟历史记录一致
       if (typeof appendMessage === 'function') appendMessage(msg, chat);
@@ -1242,16 +1332,17 @@ ${extraBlocks}
     if (typeof awardGroupActivity === 'function') await awardGroupActivity(chat, memberId);
   }
 
-  if (isViewingThisChat) {
+  if (isUserViewingChat(chat)) {
     chat.unreadCount = 0;
   }
   await db.chats.put(chat);
 
-  if (isViewingThisChat && typeof renderChatInterface === 'function') {
+  if (isUserViewingChat(chat) && typeof renderChatInterface === 'function') {
     renderChatInterface(chat.id);
   }
   if (typeof renderChatList === 'function') renderChatList();
   } finally {
     if (proactiveGenerationState[chat.id]) proactiveGenerationState[chat.id].inProgress = false;
+    resetProactiveTypingUi(chat);
   }
 }
