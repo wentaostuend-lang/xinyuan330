@@ -144,4 +144,53 @@ db.version(62).stores({
   focusEvents: '++id, sessionId, type, timestamp'
 });
 
+// ===== 从 Liya 移植：论坛 / 约会大作战（版本号顺延到 xinyuan 的 v62 之后，与 Liya 的 v65 对齐） =====
+// 论坛：板块/帖子/评论/网友/小号/私信/热点，首次升级时写入三个默认板块
+db.version(63).stores({
+  forumBoards: '++id, name, order',
+  forumPosts: '++id, boardId, timestamp, authorType, authorId',
+  forumComments: '++id, postId, timestamp, authorType, authorId',
+  forumNpcs: '++id, name, npcGroupId, enableBackgroundActivity, actionCooldownMinutes, lastActionTimestamp',
+  forumAlts: '++id, ownerType, ownerId, altName',
+  forumDMs: '++id, threadId, timestamp',
+  forumDMThreads: '++id, participantType, participantId, lastMessageTimestamp',
+  forumHotTopics: '++id, keyword, heat, generatedAt',
+}).upgrade(async tx => {
+  // 初始化三个默认板块，只在库里还没有任何板块时才插入，避免重复迁移时插两遍
+  const existing = await tx.table('forumBoards').count();
+  if (existing === 0) {
+    await tx.table('forumBoards').bulkAdd([
+      { name: '悄悄话', description: '匿名倾诉，说说不敢当面讲的话', worldview: '', order: 0 },
+      { name: '闲聊灌水', description: '随便聊聊，没营养也没关系', worldview: '', order: 1 },
+      { name: '实时热点', description: '追热搜、聊时事', worldview: '', order: 2 },
+    ]);
+  }
+});
+
+// 论坛：网友头像池 + 提问箱 + 关注/屏蔽名单
+db.version(64).stores({
+  forumAvatarPool: '++id, url',
+  forumAskBoxQuestions: '++id, targetKind, targetKey, timestamp',
+  forumFollows: '++id, &profileKey, timestamp',
+  forumBlocks: '++id, &profileKey, timestamp'
+});
+
+// 约会大作战：从 keephone 项目移植（功能暂未启用，先保留表结构以便日后接入）
+db.version(65).stores({
+  datingScenes: '&uid, imageUrl',
+  datingPresets: '++id, name, settings.spriteGroupId',
+  datingSpriteGroups: '++id, name',
+  datingSprites: '++id, groupId, description, url',
+  datingHistory: '++id, characterId, timestamp'
+});
+
+// 全新安装时（没有旧库可升级）也要有三个默认论坛板块；升级路径由上面 v63 的 upgrade 负责
+db.on('populate', tx => {
+  return tx.table('forumBoards').bulkAdd([
+    { name: '悄悄话', description: '匿名倾诉，说说不敢当面讲的话', worldview: '', order: 0 },
+    { name: '闲聊灌水', description: '随便聊聊，没营养也没关系', worldview: '', order: 1 },
+    { name: '实时热点', description: '追热搜、聊时事', worldview: '', order: 2 },
+  ]);
+});
+
 window.db = db;

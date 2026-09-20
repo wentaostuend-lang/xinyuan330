@@ -976,6 +976,22 @@ window.initEventBindingsB = function(state, db) {
     };
     setupFileUpload('ai-avatar-input', (base64) => document.getElementById('ai-avatar-preview').src = base64);
     setupFileUpload('my-avatar-input', (base64) => document.getElementById('my-avatar-preview').src = base64);
+
+    // 从 Liya 移植：直接用URL设置头像（不经过图库，省内存，简单快捷）
+    // 注意：不能用浏览器自带的 prompt()——安装到主屏幕的全屏模式下它会被系统屏蔽，点了没反应。
+    // 这里和锁屏壁纸等其它 URL 按钮一样，使用应用内的输入弹窗。
+    const bindAvatarUrlBtn = (btnId, previewId) => {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.addEventListener('click', async () => {
+        const url = await showCustomPrompt('网络图片', '请输入头像的图片URL', '', 'url');
+        if (url && url.trim()) {
+          document.getElementById(previewId).src = url.trim();
+        }
+      });
+    };
+    bindAvatarUrlBtn('ai-avatar-url-btn', 'ai-avatar-preview');
+    bindAvatarUrlBtn('my-avatar-url-btn', 'my-avatar-preview');
     setupFileUpload('group-avatar-input', (base64) => document.getElementById('group-avatar-preview').src = base64);
     setupFileUpload('member-avatar-input', (base64) => document.getElementById('member-avatar-preview').src = base64);
     setupFileUpload('bg-input', async (base64) => {
@@ -3841,6 +3857,12 @@ window.initEventBindingsB = function(state, db) {
             openRedditDetail(msg.redditData);
           }
         }
+        return;
+      }
+      // 从 Liya 移植：点击聊天里转发的论坛帖子卡片，打开帖子详情
+      const forumShareCard = e.target.closest('.forum-share-card[data-forum-post-id]');
+      if (forumShareCard && typeof openForumPostDetail === 'function') {
+        openForumPostDetail(Number(forumShareCard.dataset.forumPostId));
         return;
       }
       const placeholder = e.target.closest('.recalled-message-placeholder');
