@@ -80,7 +80,13 @@
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     const screenToShow = document.getElementById(screenId);
     if (screenToShow) screenToShow.classList.add('active');
-    if (screenId === 'chat-interface-screen') window.updateListenTogetherIconProxy(state.activeChatId);
+    if (screenId === 'chat-interface-screen') {
+      window.updateListenTogetherIconProxy(state.activeChatId);
+      // 离开聊天时消息 DOM 已释放；从聊天设置返回后需按当前记录重新渲染。
+      if (currentActiveScreen?.id === 'chat-settings-screen' && state.activeChatId) {
+        renderChatInterface(state.activeChatId);
+      }
+    }
     if (screenId === 'font-settings-screen') {
       loadFontPresetsDropdown();
       document.getElementById('font-url-input').value = state.globalSettings.fontUrl || '';
@@ -166,7 +172,6 @@
 
     switch (viewId) {
       case 'qzone-screen':
-        views['qzone-screen'].style.backgroundColor = '#ffffff';
         updateUnreadIndicator(0);
         renderQzoneScreen();
         renderQzonePosts();

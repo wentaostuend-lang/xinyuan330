@@ -184,6 +184,12 @@ db.version(65).stores({
   datingHistory: '++id, characterId, timestamp'
 });
 
+// 用户自制小组件：定义与每次放置填写的私有内容分开保存。
+db.version(66).stores({
+  customWidgetPackages: '&id, name, updatedAt',
+  customWidgetInstances: '&id, packageId, updatedAt'
+});
+
 // 全新安装时（没有旧库可升级）也要有三个默认论坛板块；升级路径由上面 v63 的 upgrade 负责
 db.on('populate', tx => {
   return tx.table('forumBoards').bulkAdd([

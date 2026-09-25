@@ -159,6 +159,8 @@ if (!window.__appBootstrapStarted) {
       notificationVolume: 1.0, // 消息提示音音量 (0.0-1.0)
       soundPresets: [], // 消息提示音预设列表
       widgetData: {},
+      homeLayoutMode: 'classic',
+      freeHomeLayout: null,
       globalChatBackground: '',
       enableAiDrawing: true,
       showPhoneFrame: false,
@@ -223,30 +225,10 @@ if (!window.__appBootstrapStarted) {
       };
     }
 
-    // 强制清除并更新 CPhone 和 豆瓣 的旧缓存或旧图床链接
-    let hasUpdatedAppIcons = false;
-    if (state.globalSettings.appIcons) {
-      const currentCharPhone = state.globalSettings.appIcons['char-phone'];
-      const currentDouban = state.globalSettings.appIcons['douban'];
-      // 只要不是最新的代码矢量图标，就强制重置为最新代码矢量图标
-      if (currentCharPhone !== defaultGlobalSettings.appIcons['char-phone']) {
-        state.globalSettings.appIcons['char-phone'] = defaultGlobalSettings.appIcons['char-phone'];
-        hasUpdatedAppIcons = true;
-      }
-      if (currentDouban !== defaultGlobalSettings.appIcons['douban']) {
-        state.globalSettings.appIcons['douban'] = defaultGlobalSettings.appIcons['douban'];
-        hasUpdatedAppIcons = true;
-      }
-    }
-
     state.globalSettings.appIcons = {
       ...defaultGlobalSettings.appIcons,
       ...(state.globalSettings.appIcons || {})
     };
-
-    if (hasUpdatedAppIcons) {
-      db.globalSettings.put(state.globalSettings).catch(console.error);
-    }
     state.globalSettings.cphoneAppIcons = {
       ...defaultGlobalSettings.cphoneAppIcons,
       ...(state.globalSettings.cphoneAppIcons || {})
@@ -255,6 +237,30 @@ if (!window.__appBootstrapStarted) {
       ...defaultGlobalSettings.myphoneAppIcons,
       ...(state.globalSettings.myphoneAppIcons || {})
     };
+
+    // 仅迁移明确的官方旧默认图标。其他 URL/Base64 均属于用户自定义内容，必须保留。
+    const appIconDefaultsMigrationVersion = 1;
+    const savedAppIconDefaultsMigrationVersion = Number(state.globalSettings.appIconDefaultsMigrationVersion) || 0;
+    if (savedAppIconDefaultsMigrationVersion < appIconDefaultsMigrationVersion) {
+      const legacyDefaultAppIcons = {
+        'char-phone': new Set([
+          'https://i.postimg.cc/pXj9h20L/IMG-7275.jpg'
+        ]),
+        'douban': new Set([
+          'https://i.postimg.cc/Pq2xJN1g/IMG-7301.jpg'
+        ])
+      };
+
+      Object.entries(legacyDefaultAppIcons).forEach(([iconId, legacyDefaults]) => {
+        const savedIcon = state.globalSettings.appIcons[iconId];
+        if (legacyDefaults.has(savedIcon)) {
+          state.globalSettings.appIcons[iconId] = defaultGlobalSettings.appIcons[iconId];
+        }
+      });
+
+      state.globalSettings.appIconDefaultsMigrationVersion = appIconDefaultsMigrationVersion;
+      db.globalSettings.put(state.globalSettings).catch(console.error);
+    }
 
     // 启动阶段会多次按 id 关联群成员；建立只读索引，避免角色较多时反复全表扫描。
     const startupChatById = new Map();
@@ -608,6 +614,7 @@ if (!window.__appBootstrapStarted) {
 
     // ==================== Features (from init-features.js) ====================
     window.initFeatures(state, db);
+    if (window.FreeHomeLayout) await window.FreeHomeLayout.init(state, db);
 
     initLockScreen();
     checkForUpdates();

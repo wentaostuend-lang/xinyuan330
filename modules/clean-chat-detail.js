@@ -208,6 +208,7 @@
     const oldScreen = document.getElementById('chat-settings-screen');
     if (oldScreen) oldScreen.style.display = '';
     showScreen('chat-interface-screen');
+    if (state.activeChatId) renderChatInterface(state.activeChatId);
   }
 
   function restoreElements() {
