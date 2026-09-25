@@ -47,7 +47,8 @@ const fragmentScriptPaths = fragmentScripts.map(
 );
 
 const embeddedAssets = [
-  'archive/330--main/index.html'
+  'archive/330--main/index.html',
+  'tutorial.html'
 ];
 
 const generatedFragmentScripts = fragmentScripts.map((fragment, index) => ({
