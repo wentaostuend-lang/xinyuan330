@@ -408,7 +408,7 @@
 
 .mcp-sheet {
   width: 100%;
-  max-height: calc(100% - 34px);
+  max-height: calc(100% - max(34px, calc(12px + var(--screen-top-inset, 0px))));
   border-radius: 8px 8px 0 0;
   background: var(--secondary-bg, #fff);
   display: flex;
