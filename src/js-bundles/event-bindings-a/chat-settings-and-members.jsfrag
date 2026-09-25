@@ -869,8 +869,9 @@
       }
       applyLyricsBarPosition(chat);
       applyScopedCss(chat.settings.customCss, '#chat-messages', 'custom-bubble-style');
+      const returningFromSettings = document.getElementById('chat-settings-screen').classList.contains('active');
       showScreen('chat-interface-screen');
-      renderChatInterface(state.activeChatId);
+      if (!returningFromSettings) renderChatInterface(state.activeChatId);
       renderChatList();
       if (shouldOpenPetSetup && window.CharacterBond) {
         window.CharacterBond.showBondModal('pet', chat);
