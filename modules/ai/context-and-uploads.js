@@ -525,9 +525,9 @@
     // 针对任意剩余的 ${xxx}，仅匹配由字母、数字、下划线、小数点组成的变量，避免破坏复杂的脚本结构
     p = p.replace(/\$\{([a-zA-Z0-9_.]+)\}/g, '{{$1}}');
 
-    // 2. 将 {{xxx}} 变量映射到 contextMap 真实数据。
-    // 最多递归 5 次，使作为条目内容插入的变量也能展开，同时避免循环引用。
-    const replaceOnePass = input => input.replace(/\{\{([^{}]+)\}\}/g, (match, key) => {
+    // 2. 将模板本身的 {{xxx}} 变量映射到 contextMap 真实数据。
+    // 只替换一次：人设、世界书、线下预设等插入内容属于数据，不能再次作为模板执行。
+    return p.replace(/\{\{([^{}]+)\}\}/g, (match, key) => {
       const k = key.trim();
       
       if (contextMap[k] !== undefined) return contextMap[k];
@@ -564,11 +564,5 @@
       
       return match;
     });
-    for (let pass = 0; pass < 5; pass++) {
-      const next = replaceOnePass(p);
-      if (next === p) break;
-      p = next;
-    }
-    return p;
   }
 
