@@ -2,7 +2,7 @@
 class UpdateNotification {
   constructor() {
     this.storageKey = 'update_notification_dismissed';
-    this.currentVersion = '9.18'; // 当前更新版本号
+    this.currentVersion = '9.23'; // 当前更新版本号
     this.countdownSeconds = 5;
     this.countdownInterval = null;
   }
@@ -23,29 +23,14 @@ class UpdateNotification {
       <div class="update-item important-note">注意：首次打开最好使用魔法</div>
       <div class="update-item tips">有任何问题请通过DC私信联系 <a href="https://discord.com/users/1353222930875551804" target="_blank" style="color: #4A9EFF;">点击前往</a>，其他渠道可能无法及时回复</div>
       <div class="update-item important-note">使用提示：请留意 API 设置页面的小人菜单，新增功能入口都在这里哦。</div>
-      <div class="update-divider">9.18 本次更新</div>
-      <div class="update-item">1. 修复简洁 API 模式及部分美化场景下的卡顿问题，优化整体使用流畅度。</div>
-      <div class="update-item important-note">2. 感谢 <strong>穗穗 / 笨蛋小姐</strong> 提供及公开分享的相关代码与实现思路。本次参考并结合当前版本进行了适配，包括情侣空间、iOS 安全区、语音电话、本地音乐资源处理等部分内容。由于涉及内容较多，不在此逐项列出，可前往「引用第三方」中查看具体引用范围及来源。</div>
-      <div class="update-item">3. 优化备份与记忆管理：修复分类备份 BUG；新增独立的「分类备份」入口、记忆导出类型选择和记忆单独导入功能。</div>
-      <div class="update-item">4. 新增真实语音发送与语音对话功能，安卓设备同样可以使用。</div>
-      <div class="update-item">5. 修复酒馆角色卡导入世界书时，默认关闭的世界书条目可能丢失的问题。</div>
-      <div class="update-item">6. 优化向量记忆与结构化记忆，修复部分处理异常，优化写入、读取及转换流程，提升大量记忆情况下的稳定性。</div>
-      <div class="update-item">7. 修复导入书籍时部分书名出现乱码的问题。</div>
-      <div class="update-item">8. 优化向量记忆的多语言兼容，更好地处理不同语言的记忆内容。</div>
-      <div class="update-item">9. 全面优化双语功能：可分别设置原文输出与翻译方式，自由开关双语，并在高级设置中自定义双语提示词。</div>
-      <div class="update-item">10. 优化时间感知，改进角色对当前时间、日期及时间变化的理解，并优化相关信息注入与处理。</div>
-      <div class="update-item">11. 优化邮件系统：新增向陌生人发送邮件、邮件回信及主动发送信件，优化邮件往来与交互逻辑。</div>
-      <div class="update-item">12. 修复心声中 HTML / CSS 内容较多时可能导致页面卡顿的问题。</div>
-      <div class="update-item">13. 优化番茄钟功能及部分交互体验。</div>
-      <div class="update-item">14. 新增「小火人 / 火花」互动功能。</div>
-      <div class="update-item">15. 新增提示词分层管理，支持按用途拆分、编辑查找及控制作用范围；分层设计灵感来源于 <strong>1900老师</strong>，感谢分享与授权。</div>
-      <div class="update-item">16. 修复部分情况下旁白内容被错误识别成角色本人发言的问题。</div>
-      <div class="update-item">17. 优化部分页面 UI 与移动端使用体验，包括弹窗、安全区域及不同屏幕尺寸下的显示。</div>
-      <div class="update-item">18. 进一步适配 iOS 安全区与动态视口，优化顶部、底部安全区域及键盘弹出后的页面高度处理，减少页面被遮挡或弹窗超出屏幕。</div>
-      <div class="update-item">19. 优化世界书页面显示与操作体验，调整列表、编辑页面和部分按钮样式。</div>
-      <div class="update-item">20. 情侣空间新增历史奖励检查：支持预览、逐条确认修复，避免历史奖励重复补发。</div>
-      <div class="update-item">21. 优化部分公共组件、语言设置、时间感知、角色关系及提示词相关模块，减少不同功能之间互相影响的问题。</div>
-      <div class="update-item tips">本次更新涉及内容较多，如果出现遗漏或异常欢迎反馈。</div>
+      <div class="update-divider">9.23 本次更新</div>
+      <div class="update-item">1. 新增自由布局，支持自定义小组件。</div>
+      <div class="update-item">2. 补充教程 App 的内容。</div>
+      <div class="update-item">3. 修复返回按钮位置偏下、从聊天设置返回后页面渲染异常的问题。</div>
+      <div class="update-item important-note">4. 修复图标被覆盖的问题。更新后需重新设置一次，后续不会再被覆盖。</div>
+      <div class="update-item">5. 修复线下预设重复发送、API 保存失败的问题。</div>
+      <div class="update-item">6. 修复朋友圈在夜间模式下变白的问题。</div>
+      <div class="update-item">7. 修复 MCP 及类似 App 在 iOS 上的安全区适配问题。</div>
     `;
 
     return `

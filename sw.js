@@ -2,7 +2,7 @@
 // 【智能缓存策略】- 根据资源类型使用不同的缓存策略，优化加载速度
 
 // 缓存版本号（智能缓存策略）
-const CACHE_VERSION = 'v0.0.38-liya-port';
+const CACHE_VERSION = 'v0.0.38-liya-port-ios-safe-area';
 const CACHE_NAME = `ephone-cache-${CACHE_VERSION}`;
 const DESKTOP_FEATURE_CACHE_TO_REMOVE = 'ephone-cache-v0.0.36-pwa-install-2';
 
@@ -10,6 +10,7 @@ const DESKTOP_FEATURE_CACHE_TO_REMOVE = 'ephone-cache-v0.0.36-pwa-install-2';
 // 避免移动端因为某一个资源请求挂起而一直无法完成 PWA 安装。
 const CORE_URLS_TO_CACHE = [
   './index.html',
+  './tutorial.html',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',
