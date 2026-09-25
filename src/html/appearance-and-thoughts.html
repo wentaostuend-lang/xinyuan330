@@ -28,6 +28,33 @@
         <!-- 1. 壁纸与背景 -->
         <div class="settings-header">壁纸与背景</div>
         <div class="settings-section">
+            <div class="settings-item home-layout-setting">
+                <label for="home-layout-select">桌面布局</label>
+                <div class="settings-right">
+                    <select id="home-layout-select" class="settings-select" aria-label="桌面布局">
+                        <option value="classic">经典布局</option>
+                        <option value="free">自由布局</option>
+                    </select>
+                </div>
+            </div>
+            <div class="settings-item home-layout-setting home-layout-preset-item">
+                <div class="home-layout-preset-header">
+                    <label>自由布局预设</label>
+                    <span id="home-layout-settings-status" role="status" aria-live="polite"></span>
+                </div>
+                <div class="home-layout-preset-actions">
+                    <div class="home-layout-preset-row home-layout-preset-primary-row">
+                        <select id="home-layout-preset-select" class="settings-select" aria-label="自由布局预设"><option value="">选择预设</option></select>
+                        <button id="home-layout-preset-save" class="settings-mini-btn" type="button">保存</button>
+                    </div>
+                    <div class="home-layout-preset-row home-layout-preset-tools-row">
+                        <button id="home-layout-preset-export" class="settings-mini-btn" type="button">导出</button>
+                        <button id="home-layout-preset-import" class="settings-mini-btn" type="button">导入</button>
+                        <button id="home-layout-preset-delete" class="settings-mini-btn" type="button">删除</button>
+                    </div>
+                    <input id="home-layout-preset-file" type="file" accept=".json,application/json" class="hidden-input">
+                </div>
+            </div>
             <!-- EPhone 主屏幕 -->
             <div class="settings-item">
                 <label>主屏幕壁纸</label>
