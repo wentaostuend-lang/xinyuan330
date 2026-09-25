@@ -33,7 +33,7 @@
         doubanPosts,
         stickerCategories,
 
-        appearancePresets,
+        appearancePresets, customWidgetPackages, customWidgetInstances,
 
         presets,
         presetCategories,
@@ -99,7 +99,7 @@
         db.doubanPosts.toArray(),
         db.stickerCategories.toArray(),
 
-        db.appearancePresets.toArray(),
+        db.appearancePresets.toArray(), db.customWidgetPackages.toArray(), db.customWidgetInstances.toArray(),
 
         db.presets.toArray(),
         db.presetCategories.toArray(),
@@ -149,6 +149,16 @@
       // 导出情侣空间相关的 localStorage 数据
       const coupleSpaceLocalStorage = exportCoupleSpaceLocalStorage();
 
+      // 状态栏预设存放在独立的 LiyaStatusBarDB，不属于主 db，需单独读取
+      let statusBarPresets = [];
+      if (window.__statusBarDB) {
+        try {
+          statusBarPresets = await window.__statusBarDB.presets.toArray();
+        } catch (error) {
+          console.error('读取状态栏预设失败:', error);
+        }
+      }
+
       Object.assign(backupData, {
         chats: cleanedChats,
         worldBooks,
@@ -174,7 +184,8 @@
         doubanPosts,
         stickerCategories,
 
-        appearancePresets,
+        appearancePresets, customWidgetPackages, customWidgetInstances,
+        statusBarPresets,
 
         presets,
         presetCategories,
@@ -304,6 +315,9 @@
         doubanPosts: '豆瓣帖子',
         stickerCategories: '表情包分类',
         appearancePresets: '外观预设',
+        customWidgetPackages: '自制小组件',
+        customWidgetInstances: '小组件个人内容',
+        statusBarPresets: '状态栏预设',
         presets: '预设',
         presetCategories: '预设分类',
         npcs: 'NPC',
@@ -634,6 +648,9 @@
       'soundPresets': '声音预设',
       'renderingRules': '渲染规则',
       'appearancePresets': '外观预设',
+      'customWidgetPackages': '自制小组件',
+      'customWidgetInstances': '小组件个人内容',
+      'statusBarPresets': '状态栏预设',
       'npcs': 'NPCs',
       'npcGroups': 'NPC分组',
       'doubanPosts': '豆瓣动态',
@@ -810,6 +827,9 @@
       'soundPresets': '声音预设',
       'renderingRules': '渲染规则',
       'appearancePresets': '外观预设',
+      'customWidgetPackages': '自制小组件',
+      'customWidgetInstances': '小组件个人内容',
+      'statusBarPresets': '状态栏预设',
       'npcs': 'NPCs',
       'npcGroups': 'NPC分组',
       'doubanPosts': '豆瓣动态',
@@ -942,11 +962,23 @@
         }
       }
 
+      // 状态栏预设存放在独立的 LiyaStatusBarDB，不属于主 db，需在事务外单独处理
+      if (typesToMerge.includes('statusBarPresets')) {
+        const statusBarPresetsData = dataToMerge.statusBarPresets;
+        if (Array.isArray(statusBarPresetsData) && window.__statusBarDB) {
+          try {
+            await window.__statusBarDB.presets.bulkPut(statusBarPresetsData);
+          } catch (error) {
+            console.error('合并状态栏预设失败:', error);
+          }
+        }
+      }
+
       // 处理数据库表
       await db.transaction('rw', db.tables, async () => {
         for (const type of typesToMerge) {
-          // 跳过 localStorage，它已经在上面处理了
-          if (type === 'localStorage') continue;
+          // 跳过 localStorage 和 statusBarPresets，它们已经在上面单独处理了
+          if (type === 'localStorage' || type === 'statusBarPresets') continue;
           
           const data = dataToMerge[type];
           if (!data) continue;
@@ -1038,6 +1070,8 @@
         if (Array.isArray(backupData.doubanPosts)) await db.doubanPosts.bulkPut(backupData.doubanPosts);
         if (Array.isArray(backupData.stickerCategories)) await db.stickerCategories.bulkPut(backupData.stickerCategories);
         if (Array.isArray(backupData.appearancePresets)) await db.appearancePresets.bulkPut(backupData.appearancePresets);
+        if (Array.isArray(backupData.customWidgetPackages)) await db.customWidgetPackages.bulkPut(backupData.customWidgetPackages);
+        if (Array.isArray(backupData.customWidgetInstances)) await db.customWidgetInstances.bulkPut(backupData.customWidgetInstances);
         if (Array.isArray(backupData.presets)) await db.presets.bulkPut(backupData.presets);
         if (Array.isArray(backupData.presetCategories)) await db.presetCategories.bulkPut(backupData.presetCategories);
         if (Array.isArray(backupData.npcs)) await db.npcs.bulkPut(backupData.npcs);
@@ -1082,7 +1116,16 @@
         if (Array.isArray(backupData.forumFollows)) await db.forumFollows.bulkPut(backupData.forumFollows);
         if (Array.isArray(backupData.forumBlocks)) await db.forumBlocks.bulkPut(backupData.forumBlocks);
       });
-      
+
+      // 状态栏预设存放在独立的 LiyaStatusBarDB，不属于主 db，事务外单独恢复
+      if (Array.isArray(backupData.statusBarPresets) && window.__statusBarDB) {
+        try {
+          await window.__statusBarDB.presets.bulkPut(backupData.statusBarPresets);
+        } catch (error) {
+          console.error('恢复状态栏预设失败:', error);
+        }
+      }
+
       // 3. 如果备份中有 localStorage 数据，则恢复
       if (backupData.localStorage) {
         console.log('正在恢复情侣空间 localStorage 数据...');

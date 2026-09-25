@@ -18,7 +18,8 @@
       '邮件系统': ['emails', 'mailThreads', 'mailContacts', 'mailAccounts', 'mailEvents', 'mailPublicBoxes', 'mailSettings'],
       'MCP连接': ['mcpConnections', 'mcpActivities', 'mcpSettings'],
       '论坛': ['forumBoards', 'forumPosts', 'forumComments', 'forumNpcs', 'forumAlts', 'forumDMs', 'forumDMThreads', 'forumHotTopics', 'forumAvatarPool', 'forumAskBoxQuestions', 'forumFollows', 'forumBlocks'],
-      '外观设置': ['appearancePresets']
+      '外观设置': ['appearancePresets', 'customWidgetPackages', 'customWidgetInstances'],
+      '状态栏预设': ['statusBarPresets']
     };
 
     // 需要按角色/群聊过滤的数据类别
@@ -514,6 +515,15 @@
         }
       }
 
+      // 状态栏预设存放在独立的 LiyaStatusBarDB，不属于主 db，需单独提取
+      if (categoryNames.includes('状态栏预设') && window.__statusBarDB) {
+        try {
+          backupData.data.statusBarPresets = await window.__statusBarDB.presets.toArray();
+        } catch (error) {
+          console.error('读取状态栏预设失败:', error);
+        }
+      }
+
       // 长期/结构化/向量记忆存放在 chats 记录内部，记忆分类需单独提取，
       // 避免为了迁移记忆而覆盖聊天记录和角色设置。
       if (categoryNames.includes('记忆与记录')) {
@@ -764,6 +774,19 @@
 
       for (const tableName in data) {
         if (tableName === 'mcpSecrets') continue;
+        if (tableName === 'statusBarPresets') {
+          const records = Array.isArray(data.statusBarPresets) ? data.statusBarPresets : [];
+          if (records.length && window.__statusBarDB) {
+            try {
+              await window.__statusBarDB.presets.bulkPut(records);
+              importedTables++;
+              importedRecords += records.length;
+            } catch (error) {
+              console.error('导入状态栏预设失败:', error);
+            }
+          }
+          continue;
+        }
         if (tableName === 'chatMemories') {
           const records = Array.isArray(data.chatMemories) ? data.chatMemories : [];
           for (const record of records) {
