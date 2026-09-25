@@ -199,10 +199,9 @@
                /* 霓虹光晕 */
            }
 
-           /* 1. 头部：不再根据手机刘海自动变高，强制固定 */
+           /* 1. 头部：保留原有留白，并避开系统顶部安全区 */
            .alipay-header-area {
-               /* 核心：直接写死数字，不使用 env() 变量 */
-               padding-top: 25px !important;
+               padding-top: max(25px, calc(10px + var(--screen-top-inset, 0px))) !important;
 
                /* 保持下方留白给卡片上浮 */
                padding-bottom: 50px !important;
