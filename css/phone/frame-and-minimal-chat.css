@@ -449,7 +449,7 @@
            }
 
            body:not(.frame-mode-active) #phone-screen.dynamic-island-active #chat-interface-screen>.header {
-               padding-top: 48px !important;
+               padding-top: max(48px, calc(15px + var(--screen-top-inset, 0px))) !important;
            }
 
            /* --- 歌词循环滚动 (Marquee) 动画 --- */
