@@ -408,6 +408,7 @@
 
 
       const messageEl = await createMessageElement(msg, chat, true);
+      if (renderVersion !== chatRenderVersion || state.activeChatId !== chatId) return;
 
       if (messageEl) {
         fragment.appendChild(messageEl);
@@ -415,6 +416,7 @@
     }
 
 
+    if (renderVersion !== chatRenderVersion || state.activeChatId !== chatId) return;
     messagesContainer.appendChild(fragment);
 
     currentRenderedCount = initialMessages.length;
@@ -436,24 +438,18 @@
     });
 
 
+    const scrollToLatest = () => {
+      if (renderVersion !== chatRenderVersion || state.activeChatId !== chatId) return;
+      if (!document.getElementById('chat-interface-screen').classList.contains('active')) return;
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    };
     Promise.all(imageLoadPromises).then(() => {
-
-      if (renderVersion !== chatRenderVersion || state.activeChatId !== chatId) return;
-
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      console.log('所有初始图片加载完成，已滚动到底部。');
+      requestAnimationFrame(scrollToLatest);
     }).catch(err => {
-
-      if (renderVersion !== chatRenderVersion || state.activeChatId !== chatId) return;
-
       console.error("等待图片加载时出错:", err);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      requestAnimationFrame(scrollToLatest);
     });
-    setTimeout(() => {
-      if (renderVersion === chatRenderVersion && state.activeChatId === chatId) {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      }
-    }, 0);
+    requestAnimationFrame(() => requestAnimationFrame(scrollToLatest));
   }
 
 
