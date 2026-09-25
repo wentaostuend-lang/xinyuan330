@@ -1077,9 +1077,13 @@
            }
 
            #phone-screen.dark-mode #chat-list-screen,
-           #phone-screen.dark-mode #qzone-screen .qzone-content,
            #phone-screen.dark-mode #memories-view {
                background-color: #000000;
+           }
+
+           #phone-screen.dark-mode #qzone-screen,
+           #phone-screen.dark-mode #qzone-screen .qzone-content {
+               background-color: #000000 !important;
            }
 
            #phone-screen.dark-mode #chat-list {
