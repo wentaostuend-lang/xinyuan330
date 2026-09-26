@@ -280,8 +280,12 @@
         return { pattern, flags: flags.includes('g') ? flags : flags + 'g' };
       }
     }
-    // 没有斜杠包裹，当成裸正则处理，兼容手写的情况
-    return { pattern: trimmed, flags: 'g' };
+    // 没有斜杠包裹，当成裸正则处理，兼容手写/其他社区格式导出的情况。
+    // 默认带上 's' (dotAll)：AI生成的字段内容经常会带真实换行（歌词、日记分段等），
+    // 没有这个 flag 的话 . 匹配不到换行符，只要有一个字段里混进一个换行，
+    // 整条正则就会匹配失败，导致状态栏该出的都不出来（表现为"渲染不完整"）。
+    // 这个 flag 只会让匹配更宽松，不会让原本能匹配的正则匹配失败，所以默认加上是安全的。
+    return { pattern: trimmed, flags: 'gs' };
   }
 
   function buildRegex(source) {
