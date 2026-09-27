@@ -65,6 +65,28 @@
     triggerAiInCallAction(null);
   }
 
+  // 强制本轮只回复"上一条AI回复之后、直到现在"这一整段新消息（可能是好几条），
+  // 忽略/不重复处理更早已经回复过的消息。一次性指令：用完即清。
+  async function handleForceReplyLatest() {
+    const chat = state.chats[state.activeChatId];
+    if (!chat) return;
+
+    const hasUserMsg = chat.history.some(m => m.role === 'user' && !m.isHidden);
+    if (!hasUserMsg) {
+      await showCustomAlert('无法执行', '当前聊天里还没有你发送的消息。');
+      return;
+    }
+
+    const lastAiMsg = [...chat.history].reverse().find(m => m.role === 'assistant' && !m.isHidden);
+
+    state.forceReplyLatestOnly = {
+      chatId: chat.id,
+      sinceTimestamp: lastAiMsg ? lastAiMsg.timestamp : 0
+    };
+
+    await triggerAiResponse();
+  }
+
   async function handlePropelAction() {
     const chat = state.chats[state.activeChatId];
     if (!chat) return;

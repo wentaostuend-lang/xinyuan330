@@ -4461,6 +4461,7 @@ window.initEventBindingsB = function(state, db) {
     document.getElementById('regenerate-call-btn').addEventListener('click', handleRegenerateCallResponse);
 
 
+    document.getElementById('force-reply-latest-btn').addEventListener('click', handleForceReplyLatest);
     document.getElementById('propel-btn').addEventListener('click', handlePropelAction);
 
 

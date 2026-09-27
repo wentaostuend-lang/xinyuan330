@@ -2434,6 +2434,20 @@ ${getActiveThoughtsPrompt()}
             } catch (e) { console.warn('[状态栏] 读取预设失败，跳过本次注入', e); }
           }
 
+          // 强制聚焦最新一批消息：一次性指令，读取后立即清空，只影响这一轮生成
+          if (state.forceReplyLatestOnly && state.forceReplyLatestOnly.chatId === chat.id) {
+            const sinceTs = state.forceReplyLatestOnly.sinceTimestamp;
+            const focusMsgs = chat.history.filter(m => m.role === 'user' && !m.isHidden && m.timestamp > sinceTs);
+            state.forceReplyLatestOnly = null;
+            if (focusMsgs.length > 0) {
+              const focusList = focusMsgs.map(m => {
+                const preview = typeof m.content === 'string' ? m.content.slice(0, 80) : '[图片/多媒体消息]';
+                return `"(Timestamp: ${m.timestamp}) ${preview}"`;
+              }).join('\n');
+              systemPrompt += `\n\n## 强制聚焦指令（本轮必须严格遵守）\n用户点了"强制只回复最新消息"。本轮你【只】需要针对下面这${focusMsgs.length}条用户消息（这是用户在你上一次回复之后新发的，可能不止一条，都算在本轮要回应的范围内）做出回应：\n${focusList}\n对话历史里更早的用户消息你之前已经回复过了，本轮【绝对不要】再重新回应、总结或重复处理它们，也不要把它们当成本轮还没处理的新消息。`;
+            }
+          }
+
           systemPrompt = processPromptWithSettings(systemPrompt, 'single');
 
           messagesPayload = filteredHistory.map(msg => {
