@@ -526,6 +526,7 @@
 
 
       const timezoneSelect = document.getElementById('time-zone-select');
+      document.getElementById('time-zone-search-input').value = '';
 
       const timezones = Intl.supportedValuesOf('timeZone');
       timezoneSelect.innerHTML = '';
@@ -537,6 +538,7 @@
       });
 
       timezoneSelect.value = chat.settings.timeZone || 'Asia/Shanghai';
+      window.TimeAwareness?.updateRoleTimePreview(true);
       document.getElementById('enable-synth-music-switch').checked = chat.settings.enableSynthMusic || false;
       document.getElementById('narrator-mode-toggle').checked = chat.settings.enableNarratorMode || false;
       

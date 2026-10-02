@@ -2,7 +2,7 @@
 class UpdateNotification {
   constructor() {
     this.storageKey = 'update_notification_dismissed';
-    this.currentVersion = '10.2'; // 当前更新版本号
+    this.currentVersion = '10.2-role-time-zone'; // 当前更新版本号
     this.countdownSeconds = 5;
     this.countdownInterval = null;
   }
@@ -46,6 +46,7 @@ class UpdateNotification {
       <div class="update-item">20. 优化字体设置：支持明确切换默认、网络和本地字体来源，预览与正式设置分离；新增加载状态、失败提示、重新加载和退出未保存提醒，完善字体、字号应用范围及预设保存。</div>
       <div class="update-item">21. 修复字体恢复和缓存问题：改善本地字体重启恢复、旧外观导入、快速切换字体及重新加载仍使用旧缓存的情况。</div>
       <div class="update-item">22. 完善记忆备份与导入导出：新增概况、时间规则及相关记录随备份保存；修复相同时间戳记忆编辑、删除可能选错条目，以及精炼旧记忆后跳过尚未总结聊天的问题。</div>
+      <div class="update-item">23. 修复时间感知中用户与角色时间混用的问题：现在会分别提供双方的当地时间，避免你这边说“早安”，角色那边明明是晚上却也当成早晨。聊天设置中新增“角色所在地 / 时区”，可查看双方当前时间和时差，自动处理跨日及夏令时，默认跟随你的时区；群聊成员也可单独设置，并同步适配主动消息、语音／视频通话和一起看等场景。自定义世界时间仍支持暂停和流逝倍率。</div>
       <div class="update-divider">共同更新 · 反馈中心试用</div>
       <div class="update-item">新增私密反馈和公开反馈入口，可提交建议、报错并附带截图；公开内容经审核后展示。作者回复后，可回到原浏览器查看并继续交流。</div>
       <div class="update-item tips">反馈投稿需要联网完成安全验证。中国大陆网络下，验证可能无法加载，投稿暂不保证稳定可用；遇到问题可稍后重试，或继续使用原有反馈渠道。</div>

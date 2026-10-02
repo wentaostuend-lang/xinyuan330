@@ -610,6 +610,8 @@ ${linkedContents}
     }
 
 
+    const callTimeContext = window.TimeAwareness?.buildLocalContext(chat);
+    if (callTimeContext) inCallPrompt += `\n\n${callTimeContext}`;
     const callGuidance = window.GenerationAdjustments ? await window.GenerationAdjustments.prepare(chat, { manual: !!userInput }) : null;
     if (callGuidance) inCallPrompt += callGuidance.block;
     const messagesForApi = [{
@@ -1280,6 +1282,8 @@ ${worldBookContent}
 `;
     }
 
+    const callTimeContext = window.TimeAwareness?.buildLocalContext(chat);
+    if (callTimeContext) inCallPrompt += `\n\n${callTimeContext}`;
     const callGuidance = window.GenerationAdjustments ? await window.GenerationAdjustments.prepare(chat, { manual: !!userInput }) : null;
     if (callGuidance) inCallPrompt += callGuidance.block;
     const messagesForApi = [{

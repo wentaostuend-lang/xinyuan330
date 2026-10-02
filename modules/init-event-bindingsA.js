@@ -3503,6 +3503,7 @@ window.initEventBindingsA = async function(state, db) {
 
 
       const timezoneSelect = document.getElementById('time-zone-select');
+      document.getElementById('time-zone-search-input').value = '';
 
       const timezones = Intl.supportedValuesOf('timeZone');
       timezoneSelect.innerHTML = '';
@@ -3514,6 +3515,7 @@ window.initEventBindingsA = async function(state, db) {
       });
 
       timezoneSelect.value = chat.settings.timeZone || 'Asia/Shanghai';
+      window.TimeAwareness?.updateRoleTimePreview(true);
       document.getElementById('enable-synth-music-switch').checked = chat.settings.enableSynthMusic || false;
       document.getElementById('narrator-mode-toggle').checked = chat.settings.enableNarratorMode || false;
       
@@ -4022,6 +4024,7 @@ window.initEventBindingsA = async function(state, db) {
       }
       member.groupNickname = newNickname;
       member.persona = document.getElementById('member-persona-input').value;
+      window.TimeAwareness?.saveMemberTimeZone(member);
 
       const newAvatarUrl = document.getElementById('member-avatar-preview').src;
 
@@ -4061,6 +4064,7 @@ window.initEventBindingsA = async function(state, db) {
 
       document.getElementById('member-name-input').value = member.groupNickname;
       document.getElementById('member-persona-input').value = member.persona;
+      window.TimeAwareness?.populateRoleTimeZones(document.getElementById('member-time-zone-select'), window.TimeAwareness.getMemberTimeZone(member));
 
 
 
@@ -4096,6 +4100,7 @@ window.initEventBindingsA = async function(state, db) {
       }
       member.groupNickname = newNickname;
       member.persona = document.getElementById('member-persona-input').value;
+      window.TimeAwareness?.saveMemberTimeZone(member);
 
       const newAvatarUrl = document.getElementById('member-avatar-preview').src;
 

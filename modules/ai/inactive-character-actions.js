@@ -92,7 +92,10 @@
     const customTimeInfo = window.getCustomTime ? window.getCustomTime(chat) : null;
     const customTimeEnabled = customTimeInfo && customTimeInfo.enabled;
     
-    if (customTimeEnabled) {
+    const perceptionClock = window.TimeAwareness?.getClockInfo(chat, now.getTime());
+    if (perceptionClock) {
+      ({ currentTime, localizedDate } = perceptionClock);
+    } else if (customTimeEnabled) {
       const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
       const weekDay = weekDays[customTimeInfo.date.getDay()];
       currentTime = `${customTimeInfo.year}年${customTimeInfo.month}月${customTimeInfo.day}日${weekDay} ${String(customTimeInfo.hour).padStart(2, '0')}:${String(customTimeInfo.minute).padStart(2, '0')}`;
@@ -126,7 +129,7 @@
     const lastMessage = chat.history.filter(m => !m.isHidden && !m.isExcluded).slice(-1)[0];
 
     if (chat.settings.enableTimePerception) {
-      timeOfDayGreeting = getTimeOfDayGreeting(localizedDate);
+      timeOfDayGreeting = perceptionClock?.timeOfDayGreeting || getTimeOfDayGreeting(localizedDate);
       if (window.TimeAwareness) {
         const result = window.TimeAwareness.buildContext({
           chat,
@@ -540,7 +543,7 @@ ${backgroundTimeAwarenessContext || `- **时间**: 当前是${currentTime} (${ti
         })()}
         ${multiLayeredSummaryContext}   
         ${linkedMemoryContext}
-        ${chat.settings.enableTimePerception ? `-   **当前时间**:${currentTime} (${timeOfDayGreeting})` : ''}
+        ${chat.settings.enableTimePerception ? (window.TimeAwareness ? window.TimeAwareness.buildLocalContext(chat) : `-   **当前时间**:${currentTime} (${timeOfDayGreeting})`) : ''}
         ${chat.settings.enableTimePerception ? `-   **对话状态**: ${timeContextText}` : ''}
 # 可用表情包
 - 当你需要发送表情时，你【必须】从下面的列表中【精确地选择一个】含义（meaning）。

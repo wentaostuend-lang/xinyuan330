@@ -72,7 +72,10 @@
       const customTimeInfo2 = window.getCustomTime ? window.getCustomTime(chat) : null;
       const customTimeEnabled = customTimeInfo2 && customTimeInfo2.enabled;
       
-      if (customTimeEnabled) {
+      const perceptionClock = window.TimeAwareness?.getClockInfo(chat, now.getTime());
+      if (perceptionClock) {
+        ({ currentTime, localizedDate } = perceptionClock);
+      } else if (customTimeEnabled) {
         const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
         const weekDay = weekDays[customTimeInfo2.date.getDay()];
         currentTime = `${customTimeInfo2.year}年${customTimeInfo2.month}月${customTimeInfo2.day}日${weekDay} ${String(customTimeInfo2.hour).padStart(2, '0')}:${String(customTimeInfo2.minute).padStart(2, '0')}`;
@@ -98,7 +101,7 @@
             mode: 'groupBackground',
             currentTime,
             localizedDate,
-            timeOfDayGreeting: getTimeOfDayGreeting(localizedDate),
+            timeOfDayGreeting: perceptionClock?.timeOfDayGreeting || getTimeOfDayGreeting(localizedDate),
             isGroup: true
           });
           timeContextText = result.context || result.timeContextText;
@@ -342,7 +345,7 @@ ${linkedContents}
       systemPrompt = `
         # 你的任务
         你是一个群聊AI导演。你现在控制着一个名为"${chat.name}"的群聊。
-        ${chat.settings.enableTimePerception ? `当前时间是 ${currentTime}。` : ''}
+        ${chat.settings.enableTimePerception ? (window.TimeAwareness ? window.TimeAwareness.buildLocalContext(chat) : `当前时间是 ${currentTime}。`) : ''}
         ${timeContextText ? `${timeContextText} ` : ''}你的任务是根据群成员的性格、世界观、参考记忆、最近的动态和当前情景，【选择一个或多个角色】，让他们主动发起一段对话，打破沉默，让群聊重新活跃起来。
 # 【交互铁律：角色间必须互动！】
 1.  你的核心任务是**导演一场生动的群聊**，而不仅仅是让角色轮流发言。

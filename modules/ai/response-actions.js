@@ -110,12 +110,13 @@
 
       const now = new Date();
       const chinaTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (3600000 * 8));
-      const currentTime = chinaTime.toLocaleString('zh-CN', {
+      const perceptionClock = window.TimeAwareness?.getClockInfo(chat, now.getTime());
+      const currentTime = perceptionClock?.currentTime || chinaTime.toLocaleString('zh-CN', {
         timeZone: 'Asia/Shanghai',
         dateStyle: 'full',
         timeStyle: 'short'
       });
-      const timeOfDayGreeting = getTimeOfDayGreeting(chinaTime);
+      const timeOfDayGreeting = perceptionClock?.timeOfDayGreeting || getTimeOfDayGreeting(chinaTime);
       const myNickname = chat.settings.myNickname || '我';
 
       let worldBookContent = '';
@@ -237,7 +238,7 @@ ${linkedContents}
         'userStatus': chat.settings.userStatus ? chat.settings.userStatus.text : '在线' + (chat.settings.userStatus && chat.settings.userStatus.isBusy ? '(忙碌中)' : ''),
         'userProfileContext': userProfileContext,
         'nameHistoryContext': nameHistoryContext,
-        'timePerceptionContext': chat.settings.enableTimePerception ? `- **当前时间**: ${currentTime} (${timeOfDayGreeting})` : '',
+        'timePerceptionContext': chat.settings.enableTimePerception ? (window.TimeAwareness ? window.TimeAwareness.buildLocalContext(chat) : `- **当前时间**: ${currentTime} (${timeOfDayGreeting})`) : '',
         'weatherContext': '', // 推进时省略天气
         'timeContext': '',
         'musicContextStr': musicContext ? '你们正在一起听歌，' + musicContext : '你们没有在听歌。',
@@ -268,6 +269,9 @@ ${linkedContents}
       };
 
       let systemPrompt = replaceTemplateVars(systemPromptTemplate, contextMapPropel);
+      if (contextMapPropel.timePerceptionContext && !systemPrompt.includes(contextMapPropel.timePerceptionContext)) {
+        systemPrompt += `\n\n${contextMapPropel.timePerceptionContext}`;
+      }
 
       systemPrompt = processPromptWithSettings(systemPrompt, chat.isGroup && chat.settings.isOfflineMode ? 'group_offline' : 'single');
 

@@ -798,11 +798,22 @@
                 </label>
             </div>
             <div class="settings-item-block" id="time-zone-group" style="display: none;">
-                <label>时区设置</label>
+                <label for="time-zone-select">我的时区</label>
                 <div style="margin-top: 10px; width: 100%;">
-                    <input type="search" id="time-zone-search-input" placeholder="搜索时区..." class="settings-textarea" style="height: 36px; padding: 8px; margin-bottom: 8px;">
+                    <input type="search" id="time-zone-search-input" placeholder="搜索城市 / 时区..." class="settings-textarea" style="height: 36px; padding: 8px; margin-bottom: 8px;">
                     <select id="time-zone-select" class="settings-select" style="width: 100%; padding: 10px; background-color: #f5f5f7;"></select>
                 </div>
+                <div id="character-time-zone-group" class="role-time-zone-control">
+                    <label for="character-time-zone-select">角色所在地 / 时区</label>
+                    <select id="character-time-zone-select" class="settings-select"><option value="">跟随我的时区</option></select>
+                    <div class="settings-desc time-awareness-inline-desc">选择一次即可自动换算双方时间，包括跨日和夏令时。</div>
+                    <div id="role-time-preview" class="role-time-preview">
+                        <span class="role-time-preview-label">我的时间</span><span id="role-time-preview-user">—</span>
+                        <span class="role-time-preview-label">角色时间</span><span id="role-time-preview-character">—</span>
+                        <span class="role-time-preview-label">当前时差</span><span id="role-time-preview-difference">—</span>
+                    </div>
+                </div>
+                <div id="group-time-zone-hint" class="settings-desc time-awareness-inline-desc" hidden>各成员沿用自己的角色时区，可在群成员设置中修改。</div>
             </div>
 
             <!-- 自定义时间 -->

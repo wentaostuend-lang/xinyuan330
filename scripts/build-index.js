@@ -9,7 +9,7 @@ const fragmentManifestPath = path.join(projectRoot, 'html-fragments.json');
 const scriptManifestPath = path.join(projectRoot, 'modules', 'bootstrap', 'html-fragment-manifest.js');
 const generatedFragmentDirectory = path.join(projectRoot, 'generated', 'html-fragments');
 const feedbackAssetRevision = 'feedback-20260930-workbench';
-const layoutAssetRevision = '20261002-release';
+const layoutAssetRevision = '20261002-role-time-zone';
 const fontAssetRevision = 'fonts-20261001';
 
 const fragments = [

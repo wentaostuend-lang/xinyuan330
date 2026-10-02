@@ -5,6 +5,49 @@
   color: var(--text-secondary, #8e8e93);
 }
 
+.role-time-zone-control {
+  min-width: 0;
+  margin-top: 10px;
+}
+
+.role-time-zone-control > label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.role-time-zone-control .settings-select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-overflow: ellipsis;
+}
+
+#group-time-zone-hint {
+  margin-top: 8px;
+}
+
+.role-time-preview {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  gap: 5px 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color, #e5e5ea);
+  color: var(--text-color, #333);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.role-time-preview > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.role-time-preview-label {
+  color: var(--text-secondary, #8e8e93);
+}
+
 .time-awareness-settings {
   background: var(--secondary-bg, #fff);
   border-top: 1px solid var(--border-color, #e5e5ea);

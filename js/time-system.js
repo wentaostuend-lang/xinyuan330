@@ -108,6 +108,137 @@
     return localStorage.getItem(CUSTOM_TIME_PAUSED_KEY) === 'true';
   }
 
+  const TIME_ZONE_LABELS = {
+    'Asia/Shanghai': '中国 · 北京 / 上海', 'Asia/Hong_Kong': '中国 · 香港',
+    'Asia/Taipei': '中国 · 台北', 'Asia/Tokyo': '日本 · 东京', 'Asia/Seoul': '韩国 · 首尔',
+    'Asia/Singapore': '新加坡', 'Asia/Kolkata': '印度 · 加尔各答', 'Asia/Dubai': '阿联酋 · 迪拜',
+    'America/New_York': '美国 · 纽约', 'America/Los_Angeles': '美国 · 洛杉矶',
+    'America/Chicago': '美国 · 芝加哥', 'America/Denver': '美国 · 丹佛',
+    'America/Phoenix': '美国 · 凤凰城', 'America/Anchorage': '美国 · 安克雷奇',
+    'Pacific/Honolulu': '美国 · 檀香山', 'America/Toronto': '加拿大 · 多伦多',
+    'America/Vancouver': '加拿大 · 温哥华', 'Europe/London': '英国 · 伦敦',
+    'Europe/Paris': '法国 · 巴黎', 'Europe/Berlin': '德国 · 柏林',
+    'Europe/Moscow': '俄罗斯 · 莫斯科', 'Australia/Sydney': '澳大利亚 · 悉尼',
+    'Pacific/Auckland': '新西兰 · 奥克兰', 'UTC': '协调世界时 · UTC'
+  };
+
+  function validTimeZone(value, fallback = 'Asia/Shanghai') {
+    if (value) {
+      try { new Intl.DateTimeFormat('zh-CN', { timeZone: value }); return value; } catch (_) {}
+    }
+    return fallback;
+  }
+
+  function populateRoleTimeZones(select, value = '') {
+    if (!select) return;
+    const zones = [...new Set([...Object.keys(TIME_ZONE_LABELS), ...(Intl.supportedValuesOf?.('timeZone') || []), ...(value ? [value] : [])])];
+    select.innerHTML = '';
+    for (const zone of ['', ...zones]) {
+      const option = document.createElement('option');
+      option.value = zone;
+      option.textContent = zone ? (TIME_ZONE_LABELS[zone] || zone) : '跟随我的时区';
+      select.appendChild(option);
+    }
+    select.value = value;
+  }
+
+  function getMemberTimeZone(member) {
+    const profile = window.state?.chats?.[member.id];
+    return profile?.settings?.characterTimeZone ?? member.characterTimeZone ?? '';
+  }
+
+  function saveMemberTimeZone(member) {
+    const select = document.getElementById('member-time-zone-select');
+    if (!select || !member) return;
+    member.characterTimeZone = select.value;
+    const profile = window.state?.chats?.[member.id];
+    if (profile) {
+      profile.settings = profile.settings || {};
+      profile.settings.characterTimeZone = select.value;
+    }
+  }
+
+  function localTime(timestamp, timeZone, name) {
+    const date = new Date(timestamp);
+    const fields = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+    }).formatToParts(date).map(part => [part.type, part.value]));
+    // 仅用于现有的日期/时段 getter；真实时间戳始终使用 timestamp。
+    const localizedDate = new Date(0);
+    localizedDate.setFullYear(Number(fields.year), Number(fields.month) - 1, Number(fields.day));
+    localizedDate.setHours(Number(fields.hour), Number(fields.minute), Number(fields.second), 0);
+    const wallTime = new Date(0);
+    wallTime.setUTCFullYear(Number(fields.year), Number(fields.month) - 1, Number(fields.day));
+    wallTime.setUTCHours(Number(fields.hour), Number(fields.minute), Number(fields.second), 0);
+    const hour = Number(fields.hour);
+    return {
+      name, timeZone, date: localizedDate, dateKey: `${fields.year}-${fields.month}-${fields.day}`,
+      utcOffsetMinutes: Math.round((wallTime.getTime() - Math.floor(timestamp / 1000) * 1000) / 60000),
+      dateText: date.toLocaleDateString('zh-CN', { timeZone, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+      timeText: `${fields.hour}:${fields.minute}`,
+      formatted: date.toLocaleString('zh-CN', { timeZone, dateStyle: 'full', timeStyle: 'short' }),
+      period: hour < 5 ? '凌晨' : hour < 9 ? '早上' : hour < 13 ? '上午' : hour < 18 ? '下午' : '晚上'
+    };
+  }
+
+  function getClockInfo(chat, nowTimestamp = Date.now()) {
+    const worldClock = window.MemoryWorldTime?.clock(chat, nowTimestamp);
+    const custom = worldClock ? null : window.getCustomTime?.(chat);
+    const timestamp = worldClock?.time ?? (custom?.enabled ? (custom.timestamp ?? custom.date.getTime()) : nowTimestamp);
+    const userZone = validTimeZone(chat?.settings?.timeZone);
+    const user = localTime(timestamp, userZone, '用户');
+    const characters = chat?.isGroup
+      ? (chat.members || []).map(member => localTime(timestamp, validTimeZone(getMemberTimeZone(member), userZone), member.originalName || member.groupNickname || '角色'))
+      : [localTime(timestamp, validTimeZone(chat?.settings?.characterTimeZone, userZone), chat?.originalName || chat?.name || '角色')];
+    const primary = chat?.isGroup ? user : characters[0];
+    return { timestamp, user, characters, currentTime: primary.formatted, localizedDate: primary.date, timeOfDayGreeting: primary.period };
+  }
+
+  function updateRoleTimePreview(force = false) {
+    const preview = document.getElementById('role-time-preview');
+    const chat = window.state?.chats?.[window.state.activeChatId];
+    if (!preview || !chat || chat.isGroup) return;
+    if (!force && (document.hidden || preview.getClientRects?.().length === 0)) return;
+    const draft = { ...chat, settings: {
+      ...chat.settings,
+      timeZone: document.getElementById('time-zone-select')?.value || chat.settings.timeZone,
+      characterTimeZone: document.getElementById('character-time-zone-select')?.value ?? chat.settings.characterTimeZone
+    } };
+    const { user, characters } = getClockInfo(draft);
+    const role = characters[0];
+    const format = local => `${local.dateKey} ${local.timeText}（${local.period}）`;
+    setValueText('role-time-preview-user', format(user));
+    setValueText('role-time-preview-character', format(role));
+    const difference = role.utcOffsetMinutes - user.utcOffsetMinutes;
+    const minutes = Math.abs(difference);
+    const duration = [Math.floor(minutes / 60) ? `${Math.floor(minutes / 60)}小时` : '',
+      minutes % 60 ? `${minutes % 60}分钟` : ''].join('');
+    setValueText('role-time-preview-difference', difference ? `角色比我${difference > 0 ? '快' : '慢'}${duration}` : '无时差，双方时间相同');
+  }
+
+  function setValueText(id, text) {
+    const element = document.getElementById(id);
+    if (element && element.textContent !== text) element.textContent = text;
+  }
+
+  function localTimeFacts(info, config) {
+    if (!config.facts.date && !config.facts.time && !config.facts.period) return [];
+    return [info.user, ...info.characters].map((local, index) => {
+      const content = [config.facts.date && local.dateText, config.facts.time && local.timeText,
+        config.facts.period && local.period].filter(Boolean).join('，');
+      return `${index === 0 ? '用户' : `角色「${local.name}」`}当地时间（${TIME_ZONE_LABELS[local.timeZone] || local.timeZone}，${local.timeZone}）：${content}`;
+    });
+  }
+
+  const LOCAL_TIME_RULE = '用户的“早安／晚安”等问候可以对应用户当地时间，不代表角色也处于相同时段。可以自然回应用户的问候；角色描述自己的日期、天色、作息和“今天／昨天／明天”时，须以该角色当地时间为准。不要强行纠正用户，也不要每轮刻意解释时差。';
+
+  function buildLocalContext(chat, nowTimestamp = Date.now()) {
+    if (!chat?.settings?.enableTimePerception) return '';
+    const facts = localTimeFacts(getClockInfo(chat, nowTimestamp), getChatTimeAwarenessConfig(chat));
+    return facts.length ? `# 双方当地时间\n${facts.map(item => `- ${item}`).join('\n')}\n- ${LOCAL_TIME_RULE}` : '';
+  }
+
   function loadPauseHistory() {
     try {
       const history = JSON.parse(localStorage.getItem(CUSTOM_TIME_PAUSE_HISTORY_KEY) || '[]');
@@ -168,6 +299,7 @@
   // 更新时间预览（显示流逝后的实时时间）
   let previewTimer = null;
   function updatePreview() {
+    updateRoleTimePreview(true);
     const customTimeEnabled = localStorage.getItem('custom-time-enabled') === 'true';
     if (customTimeEnabled) {
       const d = calcElapsedCustomTime();
@@ -518,30 +650,28 @@
         }
       : resolveInteractionGap(chat, options.history || chat.history, options.mode || 'reply', nowTimestamp, config);
 
-    const activeTime = window.getCustomTime?.(chat);
-    const currentDate = options.localizedDate instanceof Date ? options.localizedDate : activeTime?.enabled ? activeTime.date : new Date(nowTimestamp);
-    const currentTime = options.currentTime || activeTime?.formatted || currentDate.toLocaleString('zh-CN');
-    const period = options.timeOfDayGreeting || '';
+    const clockInfo = getClockInfo(chat, nowTimestamp);
+    const currentTime = clockInfo.currentTime;
+    const period = clockInfo.timeOfDayGreeting;
     const gapMinutes = gap.gapMs === Infinity ? Infinity : Math.floor(gap.gapMs / 60000);
     const isReturn = !gap.firstInteraction && gapMinutes >= Math.max(0, Number(config.minGapMinutes) || 0);
     const previousClock = gap.previousMessage?.memoryClock;
     const previousTime = previousClock && window.MemoryWorldTime ? window.MemoryWorldTime.messageTime(gap.previousMessage) : Number(gap.previousMessage?.timestamp);
-    const lastTime = gap.previousMessage?.timestamp ? (previousClock && window.MemoryWorldTime
-      ? window.MemoryWorldTime.format(previousTime, previousClock.timeZone)
-      : new Date(previousTime).toLocaleString('zh-CN')) : '无';
+    const primaryTime = chat.isGroup ? clockInfo.user : clockInfo.characters[0];
+    const lastTime = gap.previousMessage?.timestamp ? localTime(previousTime, primaryTime.timeZone).formatted : '无';
     const gapText = gap.gapMs === Infinity ? '首次互动' : formatGapDuration(gap.gapMs, config.durationStyle);
-    const crossedDay = gap.previousMessage?.timestamp
-      ? (previousClock && window.MemoryWorldTime ? window.MemoryWorldTime.localDate(previousTime, previousClock.timeZone) : new Date(Number(gap.previousMessage.timestamp))).toDateString() !== currentDate.toDateString()
-      : false;
     const relationship = chat.relationship?.status || chat.settings.relationshipStatus || '未特别说明';
     const recentState = gap.previousMessage ? `上一条可见消息由${gap.previousMessage.role === 'user' ? '用户' : '角色'}发送` : '暂无历史互动';
-    const facts = [];
-    if (config.facts.date) facts.push(`当前日期与星期：${currentDate.toLocaleDateString('zh-CN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`);
-    if (config.facts.time) facts.push(`当前感知时间：${currentTime}`);
-    if (config.facts.period && period) facts.push(`当前时间段：${period}`);
+    const facts = localTimeFacts(clockInfo, config);
     if (config.facts.gap) facts.push(`有效互动间隔：${gapText}`);
-    if (config.facts.lastInteraction) facts.push(`上次互动时间：${lastTime}`);
-    if (config.facts.crossDay) facts.push(`是否跨天：${crossedDay ? '是' : '否'}`);
+    if (config.facts.lastInteraction) facts.push(`上次互动时间：${lastTime}（${primaryTime.timeZone}）`);
+    if (config.facts.crossDay) {
+      [clockInfo.user, ...clockInfo.characters].forEach((local, index) => {
+        const crossedDay = gap.previousMessage?.timestamp ? localTime(previousTime, local.timeZone).dateKey !== local.dateKey : false;
+        facts.push(`${index === 0 ? '用户' : `角色「${local.name}」`}是否跨天：${crossedDay ? '是' : '否'}`);
+      });
+    }
+    const localTimeRule = config.facts.date || config.facts.time || config.facts.period ? `\n- ${LOCAL_TIME_RULE}` : '';
 
     const behavior = config.behavior;
     const isBackgroundMode = options.mode === 'background' || options.mode === 'groupBackground';
@@ -596,7 +726,7 @@
     if (!isReturn) {
       const inactiveLabel = isBackgroundMode ? '长时间未互动' : '回来';
       return {
-        context: facts.length ? `# 时间感知事实\n${facts.map(item => `- ${item}`).join('\n')}\n- 当前不满足“${inactiveLabel}”触发条件，不要额外制造相关反应。` : '',
+        context: facts.length ? `# 时间感知事实\n${facts.map(item => `- ${item}`).join('\n')}${localTimeRule}\n- 当前不满足“${inactiveLabel}”触发条件，不要额外制造相关反应。` : '',
         isReturn: false,
         gapMs: gap.gapMs,
         timeContextText,
@@ -605,7 +735,7 @@
     }
 
     const ruleTitle = isBackgroundMode ? '长时间未互动时的后台行动规则' : '回来时的角色反应规则';
-    const context = `# 时间感知事实\n${facts.map(item => `- ${item}`).join('\n')}\n- 间隔级别：${getGapBand(gapMinutes)}\n\n# ${ruleTitle}\n${reactionRule}\n${behaviorRules.filter(Boolean).map(item => `- ${item}`).join('\n')}`;
+    const context = `# 时间感知事实\n${facts.map(item => `- ${item}`).join('\n')}${localTimeRule}\n- 间隔级别：${getGapBand(gapMinutes)}\n\n# ${ruleTitle}\n${reactionRule}\n${behaviorRules.filter(Boolean).map(item => `- ${item}`).join('\n')}`;
     return { context, isReturn: true, gapMs: gap.gapMs, timeContextText, longTimeNoSee: true };
   }
 
@@ -699,6 +829,11 @@
 
   function loadSettingsUi(chat) {
     writeTimeAwarenessUi(getChatTimeAwarenessConfig(chat));
+    populateRoleTimeZones(document.getElementById('character-time-zone-select'), chat?.settings?.characterTimeZone || '');
+    const roleZoneGroup = document.getElementById('character-time-zone-group');
+    if (roleZoneGroup) roleZoneGroup.hidden = Boolean(chat?.isGroup);
+    const memberHint = document.getElementById('group-time-zone-hint');
+    if (memberHint) memberHint.hidden = !chat?.isGroup;
     const groupOptions = document.getElementById('time-awareness-group-options');
     if (groupOptions) groupOptions.hidden = !chat?.isGroup;
     updateTimeAwarenessUiState();
@@ -706,6 +841,8 @@
 
   function saveSettingsUi(chat) {
     if (!chat?.settings) return;
+    const roleZone = document.getElementById('character-time-zone-select');
+    if (roleZone && !chat.isGroup) chat.settings.characterTimeZone = roleZone.value;
     chat.settings.timeAwareness = readTimeAwarenessUi();
     chat.settings.timeAwarenessVersion = 1;
   }
@@ -738,6 +875,10 @@
     if (!timePerceptionToggle || timePerceptionToggle.dataset.timeAwarenessBound === 'true') return;
     timePerceptionToggle.dataset.timeAwarenessBound = 'true';
     timePerceptionToggle.addEventListener('change', updateTimeAwarenessUiState);
+    ['time-zone-select', 'character-time-zone-select'].forEach(id => {
+      document.getElementById(id)?.addEventListener('change', () => updateRoleTimePreview(true));
+    });
+    setInterval(() => updateRoleTimePreview(), 1000);
     document.getElementById(uiIds.preset)?.addEventListener('change', event => applyPresetToUi(event.target.value));
     document.getElementById(uiIds.promptMode)?.addEventListener('change', event => {
       const textarea = document.getElementById(uiIds.customPrompt);
@@ -779,7 +920,11 @@
       const output = document.getElementById('time-awareness-preview-output');
       const chat = window.state?.chats?.[window.state.activeChatId];
       if (!output || !chat) return;
-      const temporaryChat = { ...chat, settings: { ...chat.settings, enableTimePerception: true, timeAwareness: readTimeAwarenessUi() } };
+      const temporaryChat = { ...chat, settings: {
+        ...chat.settings, enableTimePerception: true, timeAwareness: readTimeAwarenessUi(),
+        timeZone: document.getElementById('time-zone-select')?.value || chat.settings.timeZone,
+        characterTimeZone: chat.isGroup ? chat.settings.characterTimeZone : (document.getElementById('character-time-zone-select')?.value ?? chat.settings.characterTimeZone)
+      } };
       const simulatedGapMinutes = parseInt(document.getElementById('time-awareness-preview-gap')?.value, 10) || 180;
       const result = buildTimeAwarenessContext({ chat: temporaryChat, simulatedGapMinutes, currentTime: window.getCustomTime?.(temporaryChat).formatted });
       output.textContent = result.context || '当前配置不会注入时间感知内容。';
@@ -844,6 +989,12 @@
   }
 
   window.TimeAwareness = {
+    updateRoleTimePreview,
+    getClockInfo,
+    buildLocalContext,
+    populateRoleTimeZones,
+    getMemberTimeZone,
+    saveMemberTimeZone,
     defaults: TIME_AWARENESS_DEFAULTS,
     presetRules: PRESET_RULES,
     normalizeConfig: normalizeTimeAwarenessConfig,

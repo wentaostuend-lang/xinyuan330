@@ -1650,14 +1650,14 @@ window.initFeatures = function(state, db) {
 
     document.getElementById('time-zone-search-input')?.addEventListener('input', (e) => {
       const searchTerm = e.target.value.toLowerCase();
-      const selectEl = document.getElementById('time-zone-select');
+      const selects = [document.getElementById('time-zone-select'), document.getElementById('character-time-zone-select')].filter(Boolean);
 
 
-      for (const option of selectEl.options) {
+      for (const option of selects.flatMap(select => Array.from(select.options))) {
         const optionText = option.textContent.toLowerCase();
 
 
-        if (optionText.includes(searchTerm)) {
+        if (!option.value || optionText.includes(searchTerm)) {
           option.style.display = '';
         } else {
 
@@ -4885,7 +4885,7 @@ ${truthGameHistoryContext}
 
         // 构建基础系统提示词
         let basePrompt = `# 核心任务
-你正在和用户一起观看视频。当前时间：${currentDateTime}，视频播放时间：${currentTime}。
+你正在和用户一起观看视频。${chat.settings.enableTimePerception && window.TimeAwareness ? window.TimeAwareness.buildLocalContext(chat) : `当前时间：${currentDateTime}`}，视频播放时间：${currentTime}。
 
 # 你的角色设定
 ${chat.settings.aiPersona}

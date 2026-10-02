@@ -6,7 +6,7 @@
   "modules/bootstrap/register-service-worker.js",
   "modules/bootstrap/html-fragment-manifest.js",
   "modules/bootstrap/document-loader.js",
-  "generated/html-fragments/document-head.js?v=20261002-release",
+  "generated/html-fragments/document-head.js?v=20261002-role-time-zone",
   "generated/html-fragments/intro-and-home.js",
   "generated/html-fragments/health-and-couple.js",
   "generated/html-fragments/cphone.js",

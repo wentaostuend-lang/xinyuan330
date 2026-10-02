@@ -113,6 +113,7 @@ window.initEventBindingsB = function(state, db) {
               customCss: chat.settings.customCss,
               enableTimePerception: chat.settings.enableTimePerception,
               timeZone: chat.settings.timeZone,
+              characterTimeZone: chat.settings.characterTimeZone,
               enableBackgroundActivity: chat.settings.enableBackgroundActivity,
               actionCooldownMinutes: chat.settings.actionCooldownMinutes,
               enableTodoList: chat.settings.enableTodoList,
@@ -285,6 +286,7 @@ window.initEventBindingsB = function(state, db) {
         chat.settings.customCss = savedSettings.customCss;
         chat.settings.enableTimePerception = savedSettings.enableTimePerception;
         chat.settings.timeZone = savedSettings.timeZone;
+        if (Object.prototype.hasOwnProperty.call(savedSettings, 'characterTimeZone')) chat.settings.characterTimeZone = savedSettings.characterTimeZone;
         chat.settings.enableBackgroundActivity = savedSettings.enableBackgroundActivity;
         chat.settings.actionCooldownMinutes = savedSettings.actionCooldownMinutes;
         chat.settings.enableTodoList = savedSettings.enableTodoList;

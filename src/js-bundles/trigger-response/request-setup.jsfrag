@@ -560,7 +560,9 @@
       const customTimeInfo = window.getCustomTime ? window.getCustomTime(chat) : null;
       const customTimeEnabled = customTimeInfo && customTimeInfo.enabled;
       
-      if (customTimeEnabled) {
+      if (window.TimeAwareness) {
+        ({ currentTime, localizedDate, timeOfDayGreeting } = window.TimeAwareness.getClockInfo(chat, now.getTime()));
+      } else if (customTimeEnabled) {
         const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
         const weekDay = weekDays[customTimeInfo.date.getDay()];
         currentTime = `${customTimeInfo.year}年${customTimeInfo.month}月${customTimeInfo.day}日${weekDay} ${String(customTimeInfo.hour).padStart(2, '0')}:${String(customTimeInfo.minute).padStart(2, '0')}`;
@@ -578,7 +580,7 @@
         }));
       }
       
-      timeOfDayGreeting = getTimeOfDayGreeting(localizedDate);
+      if (!window.TimeAwareness) timeOfDayGreeting = getTimeOfDayGreeting(localizedDate);
       let systemPrompt, messagesPayload;
       const lastHiddenMessage = chat.history.filter(m => m.isHidden).pop();
       if (lastHiddenMessage && (lastHiddenMessage.content.includes('视频通话刚刚结束') || lastHiddenMessage.content.includes('语音通话刚刚结束'))) {

@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="css/core/shared-components.css?v=0.0.39-restored-components">
   <link rel="stylesheet" href="css/core/feedback-and-chat.css?v=0.0.36">
   <link rel="stylesheet" href="css/chat/content-and-settings.css?v=0.0.37-home-widgets">
-  <link rel="stylesheet" href="css/chat/time-awareness.css?v=0.0.40">
+  <link rel="stylesheet" href="css/chat/time-awareness.css?v=20261002-role-time-preview">
   <link rel="stylesheet" href="css/ui/search-and-character-apps.css?v=0.0.54-august-thoughts-layout">
   <link rel="stylesheet" href="css/phone/character-details.css?v=0.0.36">
   <link rel="stylesheet" href="css/ui/home-and-voice.css?v=0.0.37-home-swipe">
@@ -92,7 +92,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js" defer></script>
-  <script src="update-notification.js?v=10.2-release" defer></script>
+  <script src="update-notification.js?v=20261002-role-time-zone" defer></script>
   <script src="modules/memory/thought-chain-manager.js?v=0.0.36" defer></script>
   <script src="modules/online/manager.js?v=0.0.36" defer></script>
   <script src="modules/online/integration.js?v=0.0.36" defer></script>
@@ -127,12 +127,12 @@
   <script src="modules/ai/response-parser.js?v=0.0.36" defer></script>
   <script src="modules/ai/spectator-group.js?v=20261001-normal-memory" defer></script>
   <script src="modules/ai/mcp-chat-orchestrator.js?v=0.0.36" defer></script>
-  <script src="modules/ai/trigger-response.js?v=20261001-world-time" defer></script>
+  <script src="modules/ai/trigger-response.js?v=20261002-role-time-zone" defer></script>
   <script src="modules/ai/generation-adjustments.js?v=20261001" defer></script>
   <script src="modules/ai/model-communication.js?v=20261001" defer></script>
-  <script src="modules/ai/response-actions.js?v=20261001-normal-memory" defer></script>
-  <script src="modules/ai/inactive-character-actions.js?v=20261001-world-time" defer></script>
-  <script src="modules/ai/group-actions.js?v=20261001-world-time" defer></script>
+  <script src="modules/ai/response-actions.js?v=20261002-role-time-zone" defer></script>
+  <script src="modules/ai/inactive-character-actions.js?v=20261002-role-time-zone" defer></script>
+  <script src="modules/ai/group-actions.js?v=20261002-role-time-zone" defer></script>
   <!-- 第五层：功能模块 -->
   <script src="modules/music-online-services.js?v=0.0.36" defer></script>
   <script src="modules/music-player.js?v=20261001-music-sync" defer></script>
@@ -150,7 +150,7 @@
   <script src="modules/memory/structured-summary-menu.js?v=20261001-memory" defer></script>
   <script src="modules/memory/summary-orchestration.js?v=20261001-normal-memory" defer></script>
   <script src="modules/memory/memory-screen.js?v=0.0.36" defer></script>
-  <script src="modules/video-voice-call.js?v=elevenlabs-20261001" defer></script>
+  <script src="modules/video-voice-call.js?v=20261002-role-time-zone" defer></script>
   <script src="modules/message-actions.js?v=elevenlabs-20261001" defer></script>
   <script src="modules/media/image/nai-presets.js?v=0.0.36-perf1" defer></script>
   <script src="modules/media/image/generation-providers.js?v=0.0.36-perf1" defer></script>
@@ -291,9 +291,9 @@
   <!-- PIN/城市（依赖 DOM） -->
   <script src="modules/init-pin-city.js?v=0.0.36" defer></script>
   <!-- 事件绑定和功能（依赖 state, db） -->
-  <script src="modules/init-event-bindingsA.js?v=20261001-world-time" defer></script>
-  <script src="modules/init-event-bindingsB.js?v=fonts-20261001" defer></script>
-  <script src="modules/init-features.js?v=0.0.36-perf1" defer></script>
+  <script src="modules/init-event-bindingsA.js?v=20261002-role-time-preview" defer></script>
+  <script src="modules/init-event-bindingsB.js?v=20261002-role-time-zone" defer></script>
+  <script src="modules/init-features.js?v=20261002-role-time-zone" defer></script>
   <!-- 主入口（最后加载，调用 init） -->
   <script src="modules/init-and-state.js?v=20261001-world-time" defer></script>
   <!-- 第九层：DOMContentLoaded 外部的独立模块 -->
