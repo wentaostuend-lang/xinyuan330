@@ -493,7 +493,7 @@
 
     await db.chats.put(chat);
     hideTransferActionModal();
-    renderChatInterface(state.activeChatId);
+    renderChatInterface(state.activeChatId, { preserveScroll: true });
     renderChatList();
   }
 

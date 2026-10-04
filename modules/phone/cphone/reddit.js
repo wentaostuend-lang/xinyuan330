@@ -36,7 +36,7 @@
     switchToCharScreen('char-browser-article-screen');
     const newBackBtn = backBtn.cloneNode(true);
     backBtn.parentNode.replaceChild(newBackBtn, backBtn);
-    newBackBtn.onclick = () => { if (isFromChat) { showScreen('chat-interface-screen'); } else { switchToCharScreen('char-reddit-screen'); } };
+    newBackBtn.onclick = () => { if (isFromChat) { showScreen('chat-interface-screen'); if (state.activeChatId) renderChatInterface(state.activeChatId); } else { switchToCharScreen('char-reddit-screen'); } };
     headerActions.innerHTML = '';
     const forwardBtn = document.createElement('span');
     forwardBtn.className = 'action-btn';

@@ -858,7 +858,7 @@
     }
     
     if (typeof window.renderChatInterface === 'function') {
-      window.renderChatInterface(state.activeChatId);
+      window.renderChatInterface(state.activeChatId, { preserveScroll: true });
     }
   }
 

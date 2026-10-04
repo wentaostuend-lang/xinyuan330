@@ -148,10 +148,6 @@
 
         // 3. 返回聊天界面
         showScreen('chat-interface-screen');
-        // 如果刚才有新消息推入（余额支付通知），刷新一下界面
-        if (paymentMethod === 'balance') {
-          renderChatInterface(state.activeChatId);
-        }
       }
     }
   }

@@ -517,7 +517,7 @@
     document.getElementById('character-bond-modal').classList.remove('visible');
     updateSettingsSummary(chat);
     refreshVisibleUi(chat);
-    if (typeof renderChatInterface === 'function' && state.activeChatId === chat.id) renderChatInterface(chat.id);
+    if (typeof renderChatInterface === 'function' && state.activeChatId === chat.id) renderChatInterface(chat.id, { preserveScroll: true });
     showToast(`${name} 已加入这段单聊`);
   }
 

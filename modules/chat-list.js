@@ -89,6 +89,8 @@
       // 从聊天设置或长期记忆返回时，重新渲染当前消息并定位到最新一条。
       if (['chat-settings-screen', 'long-term-memory-screen'].includes(currentActiveScreen?.id) && state.activeChatId) {
         renderChatInterface(state.activeChatId);
+      } else if (['browser-screen', 'todo-list-screen', 'shopping-screen', 'cart-screen'].includes(currentActiveScreen?.id) && state.activeChatId) {
+        renderChatInterface(state.activeChatId);
       }
     }
     if (screenId === 'font-settings-screen') {

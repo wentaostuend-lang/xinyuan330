@@ -286,7 +286,7 @@
     });
     await db.chats.put(chat);
     closeBatchExcludeManager();
-    renderChatInterface(state.activeChatId);
+    renderChatInterface(state.activeChatId, { preserveScroll: true });
     updateTokenCountDisplay();
     console.log(`[批量管理] ${exclude ? '排除' : '恢复'}了 ${count} 条消息`);
   }
@@ -1126,7 +1126,7 @@
 
     await db.chats.put(chat);
     document.getElementById('message-editor-modal').classList.remove('visible');
-    renderChatInterface(state.activeChatId);
+    renderChatInterface(state.activeChatId, { preserveScroll: true });
     await showCustomAlert('成功', '消息已更新！');
   }
 
@@ -1335,7 +1335,7 @@
 
     if (editedRawBlocks.length === 0) {
       await db.chats.put(chat);
-      renderChatInterface(state.activeChatId);
+      renderChatInterface(state.activeChatId, { preserveScroll: true });
       renderChatList();
       document.getElementById('ai-response-editor-modal').classList.remove('visible');
       lastRawAiResponse = '';
@@ -1958,7 +1958,7 @@
       await db.chats.bulkPut(Array.from(privateChatsToSave.values()));
     }
 
-    renderChatInterface(state.activeChatId);
+    renderChatInterface(state.activeChatId, { preserveScroll: true });
     renderChatList();
     document.getElementById('ai-response-editor-modal').classList.remove('visible');
 
@@ -2040,7 +2040,7 @@
 
 
     await db.chats.put(chat);
-    renderChatInterface(state.activeChatId);
+    renderChatInterface(state.activeChatId, { preserveScroll: true });
 
     if (isUserRecall) {
       renderChatList();

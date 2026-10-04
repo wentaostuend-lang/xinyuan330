@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>聊天定位修复验证</title>
+<link rel="stylesheet" href="../../css/chat-ui.css">
+<style>
+body{font:15px system-ui;margin:16px;background:#f8f8fb;color:#333}button,textarea{font:inherit}button{padding:7px;margin:3px}textarea{width:90%;height:60px}pre{white-space:pre-wrap}
+.screen{display:none}.screen.active{display:block}#phone-screen{width:390px;max-width:100%;border:1px solid #ccc;border-radius:12px;overflow:hidden;background:white}#chat-messages{height:390px;overflow:auto;padding:12px;box-sizing:border-box;display:flex;flex-direction:column;gap:14px}.message-wrapper{flex-shrink:0;display:flex}.message-wrapper.user{justify-content:flex-end}.message-bubble{display:flex;gap:8px;max-width:92%;padding:9px;background:#f4e5f0;border-radius:10px;overflow-wrap:anywhere}.message-wrapper.ai .message-bubble{background:#eee}.content{min-width:0}.avatar{width:24px;height:24px;border-radius:50%}.timestamp{display:none}.header{padding:8px;border-bottom:1px solid #ddd}#chat-lock-overlay,#message-editor-modal{display:none}.loader-container{height:20px;flex-shrink:0}#return-to-latest-btn{display:none}
+</style>
+<h1>聊天定位修复验证</h1>
+<p>使用项目的消息渲染、编辑和页面切换代码；聊天和保存均在内存中，不访问用户数据库。</p>
+<button id="run">运行一次完整检查</button>
+<button id="latest">返回最新</button><button id="older">查看旧消息</button>
+<div id="phone-screen">
+  <div id="chat-interface-screen" class="screen active">
+    <div class="header"><span id="chat-header-title"></span><span id="chat-header-title-wrapper"></span><span id="chat-header-status"><span class="status-text"></span></span></div>
+    <div id="chat-messages"></div>
+    <div id="chat-input-area"></div><div id="chat-lock-overlay"><div id="chat-lock-content"></div></div>
+    <button id="return-to-latest-btn">返回最新消息</button>
+  </div>
+  <div id="browser-screen" class="screen"><div class="header">文章详情</div><button class="back">返回聊天</button></div>
+  <div id="todo-list-screen" class="screen"><div class="header">待办列表</div><button class="back">返回聊天</button></div>
+  <div id="shopping-screen" class="screen"><div class="header">购物</div><button class="back">返回聊天</button></div>
+  <div id="cart-screen" class="screen"><div class="header">购物车</div><button class="back">返回聊天</button></div>
+  <div id="chat-settings-screen" class="screen"><div class="header">聊天设置</div><button class="back">返回聊天</button></div>
+  <div id="long-term-memory-screen" class="screen"><div class="header">长期记忆</div><button class="back">返回聊天</button></div>
+  <div id="search-history-screen" class="screen"></div><div id="voice-call-screen" class="screen"></div>
+  <div id="character-phone-screen" class="screen"><div id="char-browser-article-screen"><div class="header"><button class="back-btn">返回</button><span id="char-article-title"></span><div class="header-actions"></div></div><div id="char-article-content"></div></div></div>
+</div>
+<div><textarea id="edit-content" aria-label="编辑消息"></textarea><button id="save">保存更改</button><button id="recall">撤回当前消息</button></div>
+<div id="message-editor-modal"></div><pre id="results">等待检查</pre>
+<script src="chat-scroll-smoke-setup.js"></script>
+<script src="../../modules/chat/interface-core.js"></script>
+<script src="../../modules/chat/message-element.js"></script>
+<script src="../../modules/chat/message-lifecycle.js"></script>
+<script src="../../modules/message-actions.js"></script>
+<script src="../../modules/chat-list.js"></script>
+<script src="../../modules/phone/cphone/reddit.js"></script>
+<script src="chat-scroll-smoke.js"></script>
+</html>

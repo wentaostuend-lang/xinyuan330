@@ -5,7 +5,30 @@
   // 用途：切换聊天/离开聊天后让旧异步渲染失效，并断开已离屏媒体 DOM 的资源引用。
   // 不删除 chat.history，不改变消息窗口数量、历史加载、通知或任何聊天数据。
   let chatRenderVersion = 0;
+  let chatScrollRestoreVersion = null;
   const pendingChatImageLoads = new WeakMap();
+  const chatMessageReferences = new WeakMap();
+
+  function captureChatScrollPosition(chatId) {
+    const container = document.getElementById('chat-messages');
+    if (!container || container.dataset.chatId !== String(chatId) ||
+        !document.getElementById('chat-interface-screen').classList.contains('active')) return null;
+    const top = container.getBoundingClientRect().top + container.clientTop;
+    const anchors = Array.from(container.querySelectorAll('.message-wrapper'), element => ({
+      message: chatMessageReferences.get(element),
+      timestamp: Number(element.dataset.timestamp ?? element.querySelector('.message-bubble[data-timestamp]')?.dataset.timestamp),
+      offset: element.getBoundingClientRect().top - top,
+      bottom: element.getBoundingClientRect().bottom - top
+    }));
+    if (!anchors.length) return null;
+    return {
+      atBottom: container.scrollHeight - container.clientHeight - container.scrollTop <= 40,
+      anchors,
+      visibleIndex: Math.max(0, anchors.findIndex(anchor => anchor.bottom > 0)),
+      historyMode: state.isViewingHistoryMode,
+      historyCenterTimestamp: state.historyCenterTimestamp
+    };
+  }
 
   function waitForChatImage(img) {
     return new Promise(resolve => {
@@ -26,6 +49,7 @@
 
   function disposeChatMessageDom() {
     chatRenderVersion++;
+    chatScrollRestoreVersion = null;
     const messagesContainer = document.getElementById('chat-messages');
     if (!messagesContainer) return;
     messagesContainer.querySelectorAll('img, video, audio').forEach(media => {
@@ -45,6 +69,7 @@
       }
     });
     messagesContainer.replaceChildren();
+    delete messagesContainer.dataset.chatId;
   }
 // chat-interface.js
 // 聊天界面模块：renderChatInterface、loadMoreMessages、
@@ -158,6 +183,7 @@
     const messagesContainer = document.getElementById('chat-messages');
     disposeChatMessageDom();
     const renderVersion = chatRenderVersion;
+    messagesContainer.dataset.chatId = chatId;
     showLoader(messagesContainer, 'center'); // 临时显示加载
 
     // 寻找目标消息索引
@@ -204,6 +230,7 @@
 
       if (renderVersion !== chatRenderVersion || state.activeChatId !== chatId) return;
       if (messageEl) {
+        chatMessageReferences.set(messageEl, msg);
         fragment.appendChild(messageEl);
       }
     }
@@ -219,16 +246,18 @@
     }, 100);
   }
 
-  async function renderChatInterface(chatId) {
+  async function renderChatInterface(chatId, options = {}) {
+    const scrollPosition = options.preserveScroll ? captureChatScrollPosition(chatId) : null;
+    const preserveHistoryMode = scrollPosition && !scrollPosition.atBottom && scrollPosition.historyMode;
     if (window.ReplyGuardian && typeof window.ReplyGuardian.renderChatBanner === 'function') {
       window.ReplyGuardian.renderChatBanner(chatId).catch(error => {
         console.warn('[回复守护] 更新聊天状态条失败:', error);
       });
     }
-    state.isViewingHistoryMode = false;
-    state.historyCenterTimestamp = null;
+    state.isViewingHistoryMode = !!preserveHistoryMode;
+    state.historyCenterTimestamp = preserveHistoryMode ? scrollPosition.historyCenterTimestamp : null;
     const returnBtn = document.getElementById('return-to-latest-btn');
-    if (returnBtn) returnBtn.style.display = 'none';
+    if (returnBtn) returnBtn.style.display = preserveHistoryMode ? 'block' : 'none';
 
     applyButtonOrder();
     cleanupWaimaiTimers();
@@ -384,10 +413,29 @@
 
     disposeChatMessageDom();
     const renderVersion = chatRenderVersion;
+    chatScrollRestoreVersion = renderVersion;
+    messagesContainer.dataset.chatId = chatId;
+    try {
     const history = chat.history;
     currentRenderedCount = 0;
     const renderWindow = state.globalSettings.chatRenderWindow || 50;
-    const initialMessages = history.slice(-renderWindow);
+    let startIndex = Math.max(0, history.length - renderWindow);
+    let endIndex = history.length;
+    if (scrollPosition && !scrollPosition.atBottom) {
+      // 保留对象引用可跟随编辑时重排的时间戳；数据库重读的消息用原时间戳匹配。
+      const indexes = new Map(history.map((message, index) => [message, index]));
+      const timestamps = new Map(history.map((message, index) => [message.timestamp, index]));
+      scrollPosition.anchors = scrollPosition.anchors.map(anchor => {
+        const index = indexes.get(anchor.message) ?? timestamps.get(anchor.timestamp);
+        return { ...anchor, message: index === undefined ? null : history[index], index };
+      });
+      const surviving = scrollPosition.anchors.filter(anchor => anchor.index !== undefined);
+      if (surviving.length) {
+        startIndex = Math.min(...surviving.map(anchor => anchor.index));
+        if (preserveHistoryMode) endIndex = Math.min(history.length, Math.max(startIndex + renderWindow, ...surviving.map(anchor => anchor.index + 1)));
+      }
+    }
+    const initialMessages = history.slice(startIndex, endIndex);
 
 
 
@@ -410,6 +458,7 @@
       if (renderVersion !== chatRenderVersion || state.activeChatId !== chatId) return;
 
       if (messageEl) {
+        chatMessageReferences.set(messageEl, msg);
         fragment.appendChild(messageEl);
       }
     }
@@ -437,10 +486,27 @@
     });
 
 
+    let restoredScrollTop = null;
     const scrollToLatest = () => {
       if (renderVersion !== chatRenderVersion || state.activeChatId !== chatId) return;
       if (!document.getElementById('chat-interface-screen').classList.contains('active')) return;
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      // 图片迟到时不覆盖用户已经改变的阅读位置。
+      if (restoredScrollTop !== null && Math.abs(messagesContainer.scrollTop - restoredScrollTop) > 1) return;
+      let restoredAnchor = false;
+      if (scrollPosition && !scrollPosition.atBottom) {
+        const elements = new Map(Array.from(messagesContainer.querySelectorAll('.message-wrapper'), element => [chatMessageReferences.get(element), element]));
+        const anchors = scrollPosition.anchors.slice(scrollPosition.visibleIndex).concat(scrollPosition.anchors.slice(0, scrollPosition.visibleIndex).reverse());
+        for (const anchor of anchors) {
+          const element = anchor.message && elements.get(anchor.message);
+          if (!element) continue;
+          const top = messagesContainer.getBoundingClientRect().top + messagesContainer.clientTop;
+          messagesContainer.scrollTop += element.getBoundingClientRect().top - top - anchor.offset;
+          restoredAnchor = true;
+          break;
+        }
+      }
+      if (!restoredAnchor) messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      restoredScrollTop = messagesContainer.scrollTop;
     };
     Promise.all(imageLoadPromises).then(() => {
       requestAnimationFrame(scrollToLatest);
@@ -448,14 +514,21 @@
       console.error("等待图片加载时出错:", err);
       requestAnimationFrame(scrollToLatest);
     });
-    requestAnimationFrame(() => requestAnimationFrame(scrollToLatest));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      scrollToLatest();
+      if (chatScrollRestoreVersion === renderVersion) chatScrollRestoreVersion = null;
+    }));
+    } catch (error) {
+      if (chatScrollRestoreVersion === renderVersion) chatScrollRestoreVersion = null;
+      throw error;
+    }
   }
 
 
 
 
   async function loadMoreMessages() {
-    if (isLoadingMoreMessages) return;
+    if (isLoadingMoreMessages || chatScrollRestoreVersion === chatRenderVersion) return;
     isLoadingMoreMessages = true;
 
     const messagesContainer = document.getElementById('chat-messages');
@@ -475,11 +548,17 @@
 
     showLoader(messagesContainer, 'top');
     const oldScrollHeight = messagesContainer.scrollHeight;
+    const oldScrollTop = messagesContainer.scrollTop;
 
-
+    try {
     await new Promise(resolve => setTimeout(resolve, 100));
 
     if (renderVersion !== chatRenderVersion || state.activeChatId !== chatId) {
+      isLoadingMoreMessages = false;
+      return;
+    }
+    if (Math.abs(messagesContainer.scrollTop - oldScrollTop) > 1) {
+      hideLoader(messagesContainer);
       isLoadingMoreMessages = false;
       return;
     }
@@ -497,7 +576,6 @@
       isLoadingMoreMessages = false;
       return;
     }
-    currentRenderedCount += messagesToPrepend.length;
 
     const messageElements = [];
     for (const msg of messagesToPrepend) {
@@ -506,6 +584,7 @@
         isLoadingMoreMessages = false;
         return;
       }
+      if (el) chatMessageReferences.set(el, msg);
       messageElements.push(el);
     }
 
@@ -544,15 +623,24 @@
       isLoadingMoreMessages = false;
       return;
     }
+    if (Math.abs(messagesContainer.scrollTop - oldScrollTop) > 1) {
+      hideLoader(messagesContainer);
+      isLoadingMoreMessages = false;
+      return;
+    }
     hideLoader(messagesContainer);
     messagesContainer.prepend(fragment);
+    currentRenderedCount += messagesToPrepend.length;
 
 
     const newScrollHeight = messagesContainer.scrollHeight;
-    messagesContainer.scrollTop = newScrollHeight - oldScrollHeight;
+    messagesContainer.scrollTop = oldScrollTop + newScrollHeight - oldScrollHeight;
 
     isLoadingMoreMessages = false;
-
+    } finally {
+      isLoadingMoreMessages = false;
+      if (renderVersion === chatRenderVersion && state.activeChatId === chatId) hideLoader(messagesContainer);
+    }
   }
 
 

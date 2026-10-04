@@ -4,6 +4,7 @@
 
 
     if (!messageEl) return;
+    chatMessageReferences.set(messageEl, msg);
 
     const loadMoreBtn = document.getElementById('load-more-btn');
     if (loadMoreBtn) {
@@ -39,6 +40,7 @@
 
     const messageEl = await createMessageElement(msg, chat);
     if (!messageEl) return;
+    chatMessageReferences.set(messageEl, msg);
 
 
     if (msg.role === 'assistant' && !isInitialLoad) {
