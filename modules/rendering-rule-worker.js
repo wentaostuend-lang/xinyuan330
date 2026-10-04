@@ -1,5 +1,5 @@
 /* Regex execution is interruptible; this worker never accesses application storage. */
-importScripts('rendering-rule-engine.js');
+importScripts('rendering-rule-engine.js' + self.location.search);
 self.onmessage = event => {
   const { id, input, rules, chatId, meta, stage, preview } = event.data;
   try {

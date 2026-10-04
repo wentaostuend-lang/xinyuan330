@@ -92,7 +92,7 @@
     const customTimeInfo = window.getCustomTime ? window.getCustomTime(chat) : null;
     const customTimeEnabled = customTimeInfo && customTimeInfo.enabled;
     
-    const perceptionClock = window.TimeAwareness?.getClockInfo(chat, now.getTime());
+    const perceptionClock = window.TimeAwareness?.getClockInfo?.(chat, now.getTime());
     if (perceptionClock) {
       ({ currentTime, localizedDate } = perceptionClock);
     } else if (customTimeEnabled) {
@@ -543,7 +543,7 @@ ${backgroundTimeAwarenessContext || `- **时间**: 当前是${currentTime} (${ti
         })()}
         ${multiLayeredSummaryContext}   
         ${linkedMemoryContext}
-        ${chat.settings.enableTimePerception ? (window.TimeAwareness ? window.TimeAwareness.buildLocalContext(chat) : `-   **当前时间**:${currentTime} (${timeOfDayGreeting})`) : ''}
+        ${chat.settings.enableTimePerception ? (typeof window.TimeAwareness?.buildLocalContext === 'function' ? window.TimeAwareness.buildLocalContext(chat) : `-   **当前时间**:${currentTime} (${timeOfDayGreeting})`) : ''}
         ${chat.settings.enableTimePerception ? `-   **对话状态**: ${timeContextText}` : ''}
 # 可用表情包
 - 当你需要发送表情时，你【必须】从下面的列表中【精确地选择一个】含义（meaning）。

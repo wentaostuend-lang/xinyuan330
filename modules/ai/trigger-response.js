@@ -560,7 +560,7 @@
       const customTimeInfo = window.getCustomTime ? window.getCustomTime(chat) : null;
       const customTimeEnabled = customTimeInfo && customTimeInfo.enabled;
       
-      if (window.TimeAwareness) {
+      if (typeof window.TimeAwareness?.getClockInfo === 'function') {
         ({ currentTime, localizedDate, timeOfDayGreeting } = window.TimeAwareness.getClockInfo(chat, now.getTime()));
       } else if (customTimeEnabled) {
         const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -580,7 +580,7 @@
         }));
       }
       
-      if (!window.TimeAwareness) timeOfDayGreeting = getTimeOfDayGreeting(localizedDate);
+      if (typeof window.TimeAwareness?.getClockInfo !== 'function') timeOfDayGreeting = getTimeOfDayGreeting(localizedDate);
       let systemPrompt, messagesPayload;
       const lastHiddenMessage = chat.history.filter(m => m.isHidden).pop();
       if (lastHiddenMessage && (lastHiddenMessage.content.includes('视频通话刚刚结束') || lastHiddenMessage.content.includes('语音通话刚刚结束'))) {
@@ -2363,7 +2363,7 @@ ${getActiveThoughtsPrompt()}
             'userStatus': chat.settings.userStatus ? chat.settings.userStatus.text : '在线' + (chat.settings.userStatus && chat.settings.userStatus.isBusy ? '(忙碌中)' : ''),
             'userProfileContext': userProfileContext,
             'nameHistoryContext': nameHistoryContext,
-            'timePerceptionContext': chat.settings.enableTimePerception ? (window.TimeAwareness ? window.TimeAwareness.buildLocalContext(chat) : `- **当前时间**: ${currentTime} (${timeOfDayGreeting})`) : '',
+            'timePerceptionContext': chat.settings.enableTimePerception ? (typeof window.TimeAwareness?.buildLocalContext === 'function' ? window.TimeAwareness.buildLocalContext(chat) : `- **当前时间**: ${currentTime} (${timeOfDayGreeting})`) : '',
             'weatherContext': weatherContext,
             'timeContext': timeContext,
             'musicContextStr': musicContext ? '你们正在一起听歌，' + musicContext : '你们没有在听歌。',

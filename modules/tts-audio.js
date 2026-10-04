@@ -206,9 +206,10 @@
     const config = window.ttsProvider.resolve(chat, { voiceId, context: 'call' });
     // Preserve the original MiniMax silent skip for incomplete configuration.
     if (config.provider === 'minimax' && (!config.apiKey || !config.groupId || !config.voiceId)) return;
-    const cleanText = window.ttsProvider.cleanText(text, chat, 'call');
-    if (!cleanText) return;
-    ttsQueue.push({ text: cleanText, config, chatId, timestamp, chat: { ...chat, settings: { ...chat.settings,
+    // Keep translations until segments() selects the read mode, then clean once.
+    const rawText = String(text || '').trim();
+    if (!rawText) return;
+    ttsQueue.push({ text: rawText, config, chatId, timestamp, chat: { ...chat, settings: { ...chat.settings,
       languagePolicy: chat.settings.languagePolicy ? JSON.parse(JSON.stringify(chat.settings.languagePolicy)) : undefined },
       videoOptimization: { ...(chat.videoOptimization || {}) } } });
     if (!isTtsPlaying) processNextTts();

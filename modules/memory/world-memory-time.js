@@ -184,22 +184,32 @@
       const live = window.state?.chats?.[chat.id];
       if (live) observe(live);
     });
+    // 普通保存和追加只处理新增尾部；重建历史时保留原来的日期补录行为。
     database.chats.hook('updating', function (changes, id, previous) {
       if (!Array.isArray(changes.history)) return;
-      const keys = new Set((previous.history || []).map(message => `${message.id || ''}:${message.timestamp}:${message.role}:${message.type || ''}`));
+      const start = previous.history?.length || 0;
+      const history = changes.history;
+      if (!history.length) return;
+      const liveHistory = observed.has(history);
+      if (history.length <= start && liveHistory) return;
+      const key = message => `${message?.id || ''}:${message?.timestamp}:${message?.role}:${message?.type || ''}`;
+      const appended = history.length > start && (start === 0 || liveHistory || key(history[start - 1]) === key(previous.history[start - 1]));
       const next = { ...previous, ...changes };
+      // 删除后重说、采用候选或导入替换数组，不能只按长度判断新消息。
+      const previousKeys = appended ? null : new Set((previous.history || []).map(key));
       let changed = false;
-      for (const message of changes.history) {
-        const key = `${message.id || ''}:${message.timestamp}:${message.role}:${message.type || ''}`;
-        if (keys.has(key)) continue;
-        if (capture(message, next)) {
-          changed = true;
-          const live = window.state?.chats?.[id]?.history?.find(item => `${item.id || ''}:${item.timestamp}:${item.role}:${item.type || ''}` === key);
-          if (live && !live.memoryClock) live.memoryClock = copy(message.memoryClock);
-        }
+      for (let index = appended ? start : 0; index < history.length; index++) {
+        const message = history[index];
+        if (previousKeys?.has(key(message))) continue;
+        if (!capture(message, next)) continue;
+        changed = true;
+        const current = window.state?.chats?.[id]?.history;
+        const live = appended ? current?.[index] : current?.find(item => key(item) === key(message));
+        if (live && live.timestamp === message.timestamp && live.role === message.role && !live.memoryClock) live.memoryClock = copy(message.memoryClock);
       }
       if (changed) return { history: changes.history };
     });
+
   }
   async function saveConfig(chat, value) {
     flush(chat);

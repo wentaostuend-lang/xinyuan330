@@ -2,8 +2,13 @@
   'use strict';
   let worker = null, workerBlob = null, sequence = 0, queue = Promise.resolve();
   const results = new Map();
+  let resultBytes = 0;
+  const maxResultBytes = 2 * 1024 * 1024;
   const reported = new Set();
-  const workerUrl = new URL('rendering-rule-worker.js', document.currentScript?.src || location.href).href;
+  const runtimeUrl = new URL(document.currentScript?.src || location.href);
+  const workerSource = new URL('rendering-rule-worker.js', runtimeUrl);
+  workerSource.search = runtimeUrl.search;
+  const workerUrl = workerSource.href;
   const engine = window.RenderingRuleEngine;
 
   function stopWorker() {
@@ -89,14 +94,20 @@
 
   async function run(input, rules, chatId, meta = {}, stage = 'display', preview = false) {
     if (window.areRenderingRulesPaused?.() && !preview) return { content: input, isHtml: false, trace: [], warnings: [], excluded: false };
+    // 普通聊天恢复直接返回；不把无关规则、空规则送进 Worker 队列。
+    if (!preview) rules = rules.filter(rule => !engine.applicable(rule, chatId, meta, stage));
+    if (!rules.length) return { content: input, isHtml: false, inlineOnly: false, trace: [], warnings: [], excluded: false };
     const volatile = rules.some(rule => rule.options?.randomMode === 'reroll');
     const key = !preview && !volatile && input.length <= 50000 ? JSON.stringify([input, rules.map(rule => [engine.fingerprint(rule), rule.executionOrder, rule.isEnabled, rule.chatId, rule.doNotSend]), chatId, meta, stage]) : null;
-    if (key && results.has(key)) return results.get(key);
+    if (key && results.has(key)) return results.get(key).result;
     const execute = async () => {
       let active = rules;
       let result;
       const warnings = [];
-      if (typeof Worker === 'undefined') result = directFallback(input, active, chatId, meta, stage, preview);
+      const needsIsolation = rules.some(rule => rule.options && (rule.options.matchMode || 'regex') === 'regex' && !['map', 'format'].includes(rule.options.action));
+      // 旧版规则继续同步执行；新增正则规则仍隔离，普通文字规则无需异步往返。
+      if (!needsIsolation) result = engine.run(input, active, chatId, meta, stage, preview);
+      else if (typeof Worker === 'undefined') result = directFallback(input, active, chatId, meta, stage, preview);
       else {
         // Only retry after an identified timeout, omitting that offending rule.
         for (let attempts = 0; attempts <= rules.length; attempts++) {
@@ -120,15 +131,27 @@
         if (!reported.has(warning)) { reported.add(warning); console.warn('[渲染规则]', warning); }
         if (reported.size > 100) reported.delete(reported.values().next().value);
       }
-      if (key) { results.set(key, result); if (results.size > 300) results.delete(results.keys().next().value); }
+      if (key) {
+        const bytes = 2 * (key.length + result.content.length);
+        if (bytes <= maxResultBytes) {
+          if (results.has(key)) resultBytes -= results.get(key).bytes;
+          results.set(key, { result, bytes }); resultBytes += bytes;
+          while (results.size > 300 || resultBytes > maxResultBytes) {
+            const oldest = results.keys().next().value;
+            resultBytes -= results.get(oldest).bytes; results.delete(oldest);
+          }
+        }
+      }
       return result;
     };
+    // 同步路径不排在其他聊天的正则 Worker 后面。
+    if (!rules.some(rule => rule.options && (rule.options.matchMode || 'regex') === 'regex' && !['map', 'format'].includes(rule.options.action))) return execute();
     const pending = queue.then(execute, execute);
     queue = pending.then(() => {}, () => {});
     return pending;
   }
 
-  window.RenderingRuleRuntime = { run, sanitizeNewHtml, clear() { results.clear(); reported.clear(); } };
+  window.RenderingRuleRuntime = { run, sanitizeNewHtml, clear() { results.clear(); resultBytes = 0; reported.clear(); } };
   window.applyRenderingRulesForStage = async (content, chatId, meta = {}, stage = 'copy') => {
     const rules = await db.renderingRules.toArray();
     return run(content, rules, chatId, meta, stage);

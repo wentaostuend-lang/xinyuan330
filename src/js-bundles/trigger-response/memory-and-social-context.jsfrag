@@ -689,7 +689,7 @@ ${getActiveThoughtsPrompt()}
             'userStatus': chat.settings.userStatus ? chat.settings.userStatus.text : '在线' + (chat.settings.userStatus && chat.settings.userStatus.isBusy ? '(忙碌中)' : ''),
             'userProfileContext': userProfileContext,
             'nameHistoryContext': nameHistoryContext,
-            'timePerceptionContext': chat.settings.enableTimePerception ? (window.TimeAwareness ? window.TimeAwareness.buildLocalContext(chat) : `- **当前时间**: ${currentTime} (${timeOfDayGreeting})`) : '',
+            'timePerceptionContext': chat.settings.enableTimePerception ? (typeof window.TimeAwareness?.buildLocalContext === 'function' ? window.TimeAwareness.buildLocalContext(chat) : `- **当前时间**: ${currentTime} (${timeOfDayGreeting})`) : '',
             'weatherContext': weatherContext,
             'timeContext': timeContext,
             'musicContextStr': musicContext ? '你们正在一起听歌，' + musicContext : '你们没有在听歌。',

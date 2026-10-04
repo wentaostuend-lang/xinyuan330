@@ -582,7 +582,7 @@ function renderStructuredMemoryView() {
         currentContent = currentContent.replace(/"/g, '"').replace(/&#39;/g, "'");
       }
       
-      const newContent = await showCustomPrompt('编辑记忆条目', '修改内容：', currentContent);
+      const newContent = await showCustomPrompt('编辑记忆条目', '修改内容：', currentContent, 'textarea', '', { allowFullscreen: true });
       if (newContent !== null && newContent.trim() !== '') {
         window.structuredMemoryManager.editEntry(chat, category, index, newContent.trim());
         await db.chats.put(chat);

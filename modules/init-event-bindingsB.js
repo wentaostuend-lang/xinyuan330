@@ -2454,15 +2454,6 @@ window.initEventBindingsB = function(state, db) {
     });
 
 
-    const chatFontSizeSlider = document.getElementById('chat-font-size-slider');
-    chatFontSizeSlider.addEventListener('input', () => {
-
-      document.getElementById('chat-font-size-value').textContent = `${chatFontSizeSlider.value}px`;
-
-      updateSettingsPreview();
-    });
-
-
     const customCssInputForPreview = document.getElementById('custom-css-input');
     customCssInputForPreview.addEventListener('input', updateSettingsPreview);
 

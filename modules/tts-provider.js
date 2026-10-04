@@ -119,21 +119,23 @@
   }
   function cleanText(text, chat, context = 'chat') {
     let value = String(text || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
-    // Preserve the existing MiniMax call punctuation rule.
-    if (context === 'call' && provider(chat) === 'minimax') value = value.replace(/(\[.*?\]|\(.*?\)|（.*?）|【.*?】)/g, '').trim();
+    // Runs after bilingual selection; also strip translation markers in legacy calls.
+    if (context === 'call' && provider(chat) === 'minimax') value = value.replace(/(\[.*?\]|\(.*?\)|（.*?）|[〖【][^〗】]*[〗】])/g, '').trim();
     if (chat?.videoOptimization?.ttsDialogueOnly && typeof extractDialogueOnly === 'function') value = extractDialogueOnly(value);
     return value.trim();
   }
   function segments(text, chat, config) {
     let parts = [{ text, language: config.language }];
-    if (config.provider === 'elevenlabs' && chat?.settings?.enableBilingualMode && window.languagePolicy) {
+    // MiniMax chat bubbles already select their text; calls retain the full content.
+    if ((config.provider === 'elevenlabs' || config.context === 'call') && chat?.settings?.enableBilingualMode && window.languagePolicy) {
       const policy = window.languagePolicy.getPolicy(chat), split = window.languagePolicy.splitContent(text);
       const sourceLanguage = chat.settings.ttsLanguage || languageAliases[policy.outputLanguage] || policy.outputLanguage || '';
       const targetLanguage = languageAliases[translationLanguage(policy)] || translationLanguage(policy) || '';
       if (policy.ttsReadMode === 'both' && split.translationText) {
         parts = [{ text: split.sourceText, language: sourceLanguage }, { text: split.translationText, language: targetLanguage }];
       } else {
-        parts = [{ text: window.languagePolicy.getTtsText(text, chat),
+        parts = [{ text: config.context === 'call' && policy.ttsReadMode === 'source'
+          ? split.sourceText : window.languagePolicy.getTtsText(text, chat),
           language: policy.ttsReadMode === 'translation' && split.translationText ? targetLanguage : config.language }];
       }
     }

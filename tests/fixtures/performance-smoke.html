@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>性能修复浏览器验证</title>
+<link rel="stylesheet" href="../../css/chat-ui.css">
+<style>body{font:16px system-ui;margin:24px;line-height:1.6}button{font:inherit;margin:6px;padding:8px}pre{white-space:pre-wrap}#chat-input{width:100%}</style>
+<h1>性能修复浏览器验证</h1>
+<p>独立测试页，只写入 ephone-performance-smoke 测试数据库，不读取正式聊天数据。</p>
+<button id="run">运行渲染、字体、存储验证</button>
+<button id="copy">复制旧路径测试</button>
+<button id="pwa">安装并检查完整 PWA 资源</button>
+<textarea id="chat-input" placeholder="检查输入框保持 16px"></textarea>
+<div id="message-actions-modal"></div>
+<div id="font-preview"></div>
+<style id="test-font-style"></style>
+<pre id="results">等待测试</pre>
+<script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+<script>
+window.state={activeChatId:'test',globalSettings:{id:'main'},chats:{test:{history:[{timestamp:1,content:'复制回退测试：原文保持不变'}]}}};
+window.activeMessageTimestamp=1;
+window.dynamicFontStyle=document.getElementById('test-font-style');
+window.showCustomAlert=async(title,text)=>{document.getElementById('results').textContent+='\n'+title+': '+text;};
+</script>
+<script src="../../modules/rendering-rule-engine.js"></script>
+<script src="../../modules/rendering-rule-runtime.js"></script>
+<script src="../../modules/data/settings-storage.js"></script>
+<script src="../../modules/data/custom-fonts.js"></script>
+<script src="../../modules/message-actions.js"></script>
+<script src="performance-smoke.js"></script>
+</html>

@@ -267,7 +267,7 @@
 
   // 查找 function showCustomPrompt 并完全替换为以下内容：
 
-  function showCustomPrompt(title, message, initialValue = '', type = 'text', extraHtml = '') {
+  function showCustomPrompt(title, message, initialValue = '', type = 'text', extraHtml = '', options = {}) {
     return new Promise(resolve => {
       modalResolve = resolve;
       modalTitle.textContent = title;
@@ -276,12 +276,25 @@
       // 添加消息显示区域
       const messageHtml = message ? `<div style="margin-bottom: 15px; color: #333; line-height: 1.6;">${message}</div>` : '';
 
-      const inputHtml = type === 'textarea' ?
-        `<textarea id="${inputId}" placeholder="" rows="4" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; resize: vertical;">${initialValue}</textarea>` :
-        `<input type="${type}" id="${inputId}" placeholder="" value="${initialValue}">`;
+      const expandHtml = options.allowFullscreen && type === 'textarea' ? `
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 6px;">
+          <button type="button" class="custom-prompt-expand" title="放大编辑" aria-label="放大编辑" style="background: none; border: none; cursor: pointer; color: #888; padding: 4px; display: flex; align-items: center; justify-content: center;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+          </button>
+        </div>` : '';
 
-      modalBody.innerHTML = messageHtml + extraHtml + inputHtml;
+      const inputHtml = type === 'textarea' ?
+        `<textarea id="${inputId}" placeholder="" rows="4" style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; resize: vertical;"></textarea>` :
+        `<input type="${type}" id="${inputId}" placeholder="">`;
+
+      modalBody.innerHTML = messageHtml + extraHtml + expandHtml + inputHtml;
       const input = document.getElementById(inputId);
+      // 通过 value 保留长文本中的换行、引号和 HTML 字符，避免被解析为弹窗标记。
+      input.value = initialValue;
+      const expandBtn = modalBody.querySelector('.custom-prompt-expand');
+      if (expandBtn) {
+        expandBtn.addEventListener('click', () => openFullscreenEditor(inputId, title));
+      }
 
       // 绑定额外的格式化按钮事件（如果有）
       modalBody.querySelectorAll('.format-btn').forEach(btn => {

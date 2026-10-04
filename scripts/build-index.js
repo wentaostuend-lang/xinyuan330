@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const projectRoot = path.resolve(__dirname, '..');
 const fragmentDirectory = path.join(projectRoot, 'src', 'html');
@@ -8,9 +9,8 @@ const assetManifestPath = path.join(projectRoot, 'asset-manifest.json');
 const fragmentManifestPath = path.join(projectRoot, 'html-fragments.json');
 const scriptManifestPath = path.join(projectRoot, 'modules', 'bootstrap', 'html-fragment-manifest.js');
 const generatedFragmentDirectory = path.join(projectRoot, 'generated', 'html-fragments');
-const feedbackAssetRevision = 'feedback-20260930-workbench';
-const layoutAssetRevision = '20261002-role-time-zone';
-const fontAssetRevision = 'fonts-20261001';
+const pwaManifestPath = path.join(projectRoot, 'generated', 'pwa-assets.js');
+const digest = value => crypto.createHash('sha256').update(value).digest('hex');
 
 const fragments = [
   'document-head.html',
@@ -36,29 +36,27 @@ const fragments = [
   'games-and-document-tail.html'
 ];
 
-const generatedHtml = fragments
-  .map(fragment => fs.readFileSync(path.join(fragmentDirectory, fragment), 'utf8'))
-  .join('');
-
-const fragmentScripts = fragments.map(fragment => ({
-  outputName: fragment.replace(/\.html$/, '.js'),
-  source: fs.readFileSync(path.join(fragmentDirectory, fragment), 'utf8')
+const rawFragments = fragments.map(fragment => fs.readFileSync(path.join(fragmentDirectory, fragment), 'utf8').replace(/\r\n/g, '\n'));
+const embeddedAssets = ['update-log.html', 'modules/rendering-rule-worker.js', 'modules/rendering-rule-engine.js', 'archive/330--main/index.html', 'tutorial.html'];
+const localAssets = Array.from(rawFragments.join('').matchAll(/<(?:script|link)\b[^>]*(?:src|href)="([^"]+)"/gi), match => match[1])
+  .filter(asset => !/^(?:https?:)?\/\//i.test(asset))
+  .map(asset => asset.replace(/^\.\//, '').split(/[?#]/, 1)[0]).filter(Boolean);
+const resourcePaths = Array.from(new Set(['manifest.json', 'icons/icon-192.png', 'icons/icon-512.png',
+  'modules/bootstrap/register-service-worker.js', 'modules/bootstrap/document-loader.js', ...embeddedAssets, ...localAssets]));
+const resourceData = new Map(resourcePaths.map(asset => {
+  const bytes = fs.readFileSync(path.join(projectRoot, asset));
+  return [asset, /\.(?:js|css|html|json)$/.test(asset) ? Buffer.from(bytes.toString('utf8').replace(/\r\n/g, '\n')) : bytes];
 }));
-
-const fragmentScriptPaths = fragmentScripts.map(fragment => {
-  const path = `generated/html-fragments/${fragment.outputName}`;
-  if (fragment.outputName === 'document-head.js') return `${path}?v=${layoutAssetRevision}`;
-  if (fragment.outputName === 'api-settings-data.js') return `${path}?v=${feedbackAssetRevision}`;
-  if (fragment.outputName === 'appearance-and-thoughts.js') return `${path}?v=${fontAssetRevision}`;
-  return path;
-});
-
-const embeddedAssets = [
-  'update-log.html',
-  'modules/rendering-rule-worker.js',
-  'archive/330--main/index.html',
-  'tutorial.html'
-];
+// 所有入口和资源属于同一次构建，避免 PWA 更新后拼接新旧脚本。
+const releaseVersion = digest(Buffer.concat([Buffer.from(rawFragments.join('')), Buffer.from(fs.readFileSync(path.join(projectRoot, 'sw.js'), 'utf8').replace(/\r\n/g, '\n')),
+  ...resourcePaths.map(asset => Buffer.concat([Buffer.from(asset), resourceData.get(asset)]))])).slice(0, 20);
+const versioned = asset => `${asset.split(/[?#]/, 1)[0]}?v=${releaseVersion}`;
+function versionSource(source) {
+  return source.replace(/<(?:script|link)\b[^>]*(?:src|href)="([^"]+)"[^>]*>/gi, (tag, asset) =>
+    /^(?:https?:)?\/\//i.test(asset) ? tag : tag.replace(`"${asset}"`, `"${versioned(asset)}"`));
+}
+const fragmentScripts = fragments.map((fragment, index) => ({ outputName: fragment.replace(/\.html$/, '.js'), source: versionSource(rawFragments[index]) }));
+const fragmentScriptPaths = fragmentScripts.map(fragment => versioned(`generated/html-fragments/${fragment.outputName}`));
 
 const generatedFragmentScripts = fragmentScripts.map((fragment, index) => ({
   ...fragment,
@@ -84,45 +82,32 @@ const generatedShell = `<!DOCTYPE html>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="EPhone">
   <title>EPhone</title>
-  <link rel="manifest" href="manifest.json?v=0.0.36-pwa2">
+  <link rel="manifest" href="${versioned('manifest.json')}">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <script src="modules/bootstrap/register-service-worker.js"></script>
+  <script src="${versioned('modules/bootstrap/register-service-worker.js')}"></script>
 </head>
 <body>
   <noscript>此应用需要启用 JavaScript。</noscript>
-  <script src="modules/bootstrap/html-fragment-manifest.js?v=${layoutAssetRevision}"></script>
-  <script src="modules/bootstrap/document-loader.js"></script>
+  <script src="${versioned('modules/bootstrap/html-fragment-manifest.js')}"></script>
+  <script src="${versioned('modules/bootstrap/document-loader.js')}"></script>
 </body>
 </html>
 `;
 
 const generatedFragmentManifest = `${JSON.stringify(fragments, null, 2)}\n`;
 
-const localAssets = Array.from(
-  generatedHtml.matchAll(/<(?:script|link)\b[^>]*(?:src|href)="([^"]+)"/gi),
-  match => match[1]
-)
-  .filter(asset => !/^(?:https?:)?\/\//i.test(asset))
-  .map(asset => asset.replace(/^\.\//, '').split(/[?#]/, 1)[0])
-  .filter(Boolean);
-
-const generatedAssetManifest = `${JSON.stringify(
-  Array.from(new Set([
-    'index.html',
-    'manifest.json',
-    'sw.js',
-    'html-fragments.json',
-    'modules/bootstrap/register-service-worker.js',
-    'modules/bootstrap/html-fragment-manifest.js',
-    'modules/bootstrap/document-loader.js',
-    ...fragmentScriptPaths,
-    ...embeddedAssets,
-    ...localAssets
-  ])),
-  null,
-  2
-)}\n`;
+const generatedData = new Map([
+  ['index.html', generatedShell], ['html-fragments.json', generatedFragmentManifest],
+  ['modules/bootstrap/html-fragment-manifest.js', generatedScriptManifest],
+  ...generatedFragmentScripts.map(fragment => [`generated/html-fragments/${fragment.outputName}`, fragment.contents])
+]);
+const releaseAssets = Array.from(new Set([...generatedData.keys(), ...resourcePaths])).map(asset => ({
+  path: asset, url: versioned(asset), sha256: digest(generatedData.has(asset) ? generatedData.get(asset) : resourceData.get(asset))
+}));
+const generatedPwaManifest = `self.__EPHONE_RELEASE = ${JSON.stringify({ version: releaseVersion, assets: releaseAssets }, null, 2)};\n`;
+const generatedAssetManifest = `${JSON.stringify(Array.from(new Set(['index.html', 'sw.js', 'generated/pwa-assets.js',
+  ...releaseAssets.map(asset => asset.url)])), null, 2)}\n`;
 
 if (process.argv.includes('--check')) {
   const currentHtml = fs.readFileSync(outputPath, 'utf8');
@@ -150,6 +135,9 @@ if (process.argv.includes('--check')) {
     console.error('asset-manifest.json is out of sync with index.html.');
     process.exit(1);
   }
+  if (!fs.existsSync(pwaManifestPath) || fs.readFileSync(pwaManifestPath, 'utf8') !== generatedPwaManifest) {
+    console.error('PWA release assets are out of sync.'); process.exit(1);
+  }
   console.log(`Document shell and ${fragments.length} HTML fragments verified.`);
 } else {
   fs.mkdirSync(generatedFragmentDirectory, { recursive: true });
@@ -163,5 +151,6 @@ if (process.argv.includes('--check')) {
     );
   }
   fs.writeFileSync(assetManifestPath, generatedAssetManifest);
+  fs.writeFileSync(pwaManifestPath, generatedPwaManifest);
   console.log(`Document shell and local scripts generated for ${fragments.length} HTML fragments.`);
 }

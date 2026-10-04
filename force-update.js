@@ -1,20 +1,44 @@
 // 强制更新管理器 (force-update.js)
-// 一键从远程仓库拉取最新版本，清除 SW 缓存，不影响用户数据
+// 下载并校验完整新版本，保留旧版本，空闲时由用户刷新切换。
 
 const ForceUpdater = (() => {
 
   // 直接从当前文档收集入口资源，避免模块拆分后维护一份易遗漏的硬编码清单。
-  function getFilesToUpdate() {
-    const documentAssets = Array.from(
-      document.querySelectorAll('script[src], link[rel="stylesheet"][href], link[rel="manifest"][href]')
-    ).map(element => element.getAttribute('src') || element.getAttribute('href'));
-
-    const localAssets = documentAssets
-      .filter(Boolean)
-      .filter(path => !/^(?:https?:)?\/\//i.test(path))
-      .map(path => path.replace(/^\.\//, '').split(/[?#]/, 1)[0]);
-
-    return Array.from(new Set(['index.html', 'sw.js', 'manifest.json', 'asset-manifest.json', ...localAssets]));
+  let updating = false;
+  function isBusy() {
+    return (typeof currentApiController !== 'undefined' && currentApiController) || window.activeSettingsWrites > 0
+      || document.querySelector('[data-saving="true"], .is-saving')
+      || (window.GenerationAdjustments && Object.keys(window.state?.chats || {}).some(id => window.GenerationAdjustments.isBusy(id)))
+      || document.getElementById('chat-input')?.value.trim()
+      || (typeof fontBusy !== 'undefined' && (fontBusy || fontReading));
+  }
+  async function refreshUpdatedPage() {
+    if (isBusy()) throw new Error('请先等待回复和保存完成，并发送或保留输入内容，再刷新更新。');
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (registration?.waiting) {
+      const worker = registration.waiting;
+      await new Promise((resolve, reject) => {
+        const channel = new MessageChannel();
+        const timer = setTimeout(() => { channel.port1.close(); reject(new Error('更新切换超时，请重试。')); }, 10000);
+        channel.port1.onmessage = event => {
+          clearTimeout(timer); channel.port1.close();
+          if (event.data.ok) resolve(); else reject(new Error(event.data.message));
+        };
+        worker.postMessage({ type: 'ACTIVATE_UPDATE' }, [channel.port2]);
+      });
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { worker.removeEventListener('statechange', changed); reject(new Error('新版本尚未激活，请重试。')); }, 10000);
+        const changed = () => {
+          if (worker.state === 'activated' || worker.state === 'redundant') {
+            clearTimeout(timer); worker.removeEventListener('statechange', changed);
+            if (worker.state === 'activated') resolve();
+            else reject(new Error('新版本未能激活，旧版本已保留。'));
+          }
+        };
+        worker.addEventListener('statechange', changed); changed();
+      });
+    }
+    location.reload();
   }
 
   // 创建备份提醒弹窗
@@ -103,11 +127,10 @@ const ForceUpdater = (() => {
     document.body.appendChild(overlay);
     requestAnimationFrame(() => overlay.classList.add('show'));
 
-    document.getElementById('fu-result-ok').onclick = () => {
-      _closeOverlay(overlay);
-      if (success) {
-        location.reload(true);
-      }
+    document.getElementById('fu-result-ok').onclick = async () => {
+      if (!success) { _closeOverlay(overlay); return; }
+      try { await refreshUpdatedPage(); }
+      catch (error) { _closeOverlay(overlay); await showCustomAlert('暂不能刷新', error.message); }
     };
   }
 
@@ -121,66 +144,32 @@ const ForceUpdater = (() => {
 
   // 核心：执行强制更新
   async function _doUpdate() {
-    const progress = _showProgress();
-    let completed = 0;
-    const filesToUpdate = getFilesToUpdate();
-    const total = filesToUpdate.length + 2; // +2 for SW unregister + cache clear
-
-    try {
-      // Step 1: 注销 Service Worker
-      progress.setProgress(5, '正在注销 Service Worker...');
-      if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (const reg of registrations) {
-          await reg.unregister();
-        }
-      }
-      completed++;
-      progress.setProgress(Math.round(completed / total * 100), 'Service Worker 已注销');
-
-      // Step 2: 清除所有缓存
-      progress.setProgress(Math.round(completed / total * 100), '正在清除缓存...');
-      const cacheNames = await caches.keys();
-      for (const name of cacheNames) {
-        await caches.delete(name);
-      }
-      completed++;
-      progress.setProgress(Math.round(completed / total * 100), '缓存已清除');
-
-      // Step 3: 强制重新拉取每个文件（带 cache-busting）
-      const timestamp = Date.now();
-      let failedFiles = [];
-
-      for (const file of filesToUpdate) {
-        const url = `./${file}?_force=${timestamp}`;
-        progress.setProgress(
-          Math.round(completed / total * 100),
-          `正在更新: ${file}`
-        );
-        try {
-          await fetch(url, { cache: 'no-store', mode: 'no-cors' });
-        } catch (e) {
-          failedFiles.push(file);
-          console.warn(`[ForceUpdate] 拉取失败: ${file}`, e);
-        }
-        completed++;
-      }
-
-      progress.close();
-
-      if (failedFiles.length > 0 && failedFiles.length < filesToUpdate.length) {
-        _showResult(true, `大部分文件已更新成功。<br>以下文件拉取失败（可能是网络问题）：<br><span style="font-size:11px;color:#999;">${failedFiles.join(', ')}</span><br><br>点击刷新页面加载最新版本。`);
-      } else if (failedFiles.length === filesToUpdate.length) {
-        _showResult(false, '所有文件拉取失败，请检查网络连接后重试。');
-      } else {
-        _showResult(true, '所有文件已更新成功！<br>点击下方按钮刷新页面加载最新版本。');
-      }
-
-    } catch (err) {
-      console.error('[ForceUpdate] 更新出错:', err);
-      progress.close();
-      _showResult(false, `更新过程中出错：<br>${err.message}<br><br>请检查网络后重试。`);
+    if (updating) return;
+    if (!('serviceWorker' in navigator) || !window.isSecureContext) {
+      await showCustomAlert('无法自动更新', '请使用 HTTPS 网页或已安装的桌面入口。'); return;
     }
+    updating = true;
+    const progress = _showProgress();
+    try {
+      progress.setProgress(10, '正在检查完整版本…');
+      const registration = await navigator.serviceWorker.getRegistration() || await navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' });
+      await registration.update();
+      if (registration.installing) await new Promise((resolve, reject) => {
+        const worker = registration.installing;
+        const timer = setTimeout(() => { worker.removeEventListener('statechange', changed); reject(new Error('资源仍在下载，旧版本可继续使用；稍后重试。')); }, 120000);
+        const changed = () => {
+          if (worker.state === 'installed' || worker.state === 'activated') { clearTimeout(timer); worker.removeEventListener('statechange', changed); resolve(); }
+          else if (worker.state === 'redundant') { clearTimeout(timer); worker.removeEventListener('statechange', changed); reject(new Error('新版本下载或校验失败，旧版本已保留。')); }
+        };
+        worker.addEventListener('statechange', changed); changed();
+        progress.setProgress(40, '正在下载并校验完整资源，旧版本仍可使用…');
+      });
+      progress.close();
+      _showResult(true, registration.waiting ? '完整新版本已准备好。回复和保存完成后，点击刷新切换。' : '版本检查完成，点击刷新重新打开。');
+    } catch (error) {
+      progress.close();
+      await showCustomAlert('更新未完成', error.message || '旧版本和本地数据已保留，请稍后重试。');
+    } finally { updating = false; }
   }
 
   // 公开方法：检查更新（入口）

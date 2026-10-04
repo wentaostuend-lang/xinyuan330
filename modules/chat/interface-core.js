@@ -266,9 +266,7 @@
       }
     }
     
-    const fontSize = chat.settings.fontSize || 13;
-    messagesContainer.style.setProperty('--chat-font-size', chat.settings.fontSize
-      ? `${fontSize}px` : `calc(${fontSize}px * var(--user-font-scale, 1))`);
+    messagesContainer.style.setProperty('--chat-font-size', '13px');
     applyScopedCss(chat.settings.customCss || '', '#chat-messages', 'custom-bubble-style');
 
     document.getElementById('chat-header-title').textContent = chat.name;

@@ -17,7 +17,7 @@
     const previewArea = document.getElementById('settings-preview-area');
     if (!previewArea) return;
     const selectedTheme = document.querySelector('input[name="theme-select"]:checked')?.value || 'default';
-    const fontSize = document.getElementById('chat-font-size-slider').value;
+    const fontSize = 13;
     const customCss = document.getElementById('custom-css-input').value;
     const background = chat.settings.background;
     previewArea.dataset.theme = selectedTheme;

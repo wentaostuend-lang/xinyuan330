@@ -187,6 +187,47 @@ test('数据库补充新后台消息，编辑已有消息和读取导入数据�
   f.hooks.reading(imported); f.e.flush(imported); assert.equal(imported.history[0].memoryClock, undefined);
 });
 
+test('保存长聊天只检查尾部边界和新增消息，不扫描历史或建立全历史标识集合', () => {
+  const f = fixture(); f.world();
+  const boundary = { timestamp: 1, role: 'user', content: '历史尾部' };
+  const previous = { ...f.chat, history: new Proxy({ length: 100000 }, { get(target, key) {
+    if (key === '99999') return boundary;
+    if (key !== 'length') throw new Error('不得遍历旧历史');
+    return target[key];
+  } }) };
+  const incoming = { role: 'assistant', content: '新消息', timestamp: f.now() };
+  const history = new Proxy(new Array(100001), { get(target, key) {
+    if (key === 'length') return target.length;
+    if (key === '100000') return incoming;
+    if (key === '99999') return boundary;
+    throw new Error('不得扫描历史前缀');
+  } });
+  const result = f.hooks.updating({ history }, f.chat.id, previous);
+  assert.equal(result.history[100000].memoryClock.timeSource, 'world');
+});
+
+test('删除后重说或采用候选缩短历史，仍给新消息记录正确的世界时间', () => {
+  for (const shorter of [false, true]) {
+    const f = fixture(); f.world();
+    const old = f.push('原回复');
+    const previous = json(f.chat);
+    const incoming = { timestamp: f.now() + 1, role: 'assistant', content: '新的回复' };
+    const history = shorter ? [incoming] : [previous.history[0], incoming];
+    assert.ok(history.length <= previous.history.length);
+    const result = f.hooks.updating({ history }, f.chat.id, previous);
+    assert.equal(result.history.at(-1).memoryClock.timeSource, 'world');
+    assert.equal(old.memoryClock.worldTime, f.e.clock(f.chat).time);
+  }
+});
+
+test('已观察的聊天直接保存时不遍历已有消息', () => {
+  const f = fixture(); f.world();
+  const previous = json(f.chat);
+  f.chat.history.map = () => { throw new Error('普通保存不得遍历'); };
+  previous.history.map = () => { throw new Error('普通保存不得扫描数据库旧历史'); };
+  assert.equal(f.hooks.updating({ history: f.chat.history }, f.chat.id, previous), undefined);
+});
+
 test('语音、线下剧情、表情、群聊和隐藏背景消息都保存世界时间', () => {
   const f = fixture(); f.world(); f.chat.isGroup = true;
   for (const extra of [{ type: 'voice_message' }, { type: 'offline_text', dialogue: '一起喝茶' }, { type: 'sticker', meaning: '开心' },

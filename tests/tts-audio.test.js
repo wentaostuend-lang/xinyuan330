@@ -9,13 +9,18 @@ function fixture() {
   const requests = [], toasts = [], alerts = [];
   const player = { dataset: {}, paused: true, src: '', async play() { this.paused = false; }, pause() { this.paused = true; }, removeAttribute() {}, load() {} };
   const c = { state: { activeChatId: 'a', chats: { a: { id: 'a', settings: { ttsProvider: 'elevenlabs', elevenlabsVoiceId: 'a-voice' } } },
-    apiConfig: { elevenlabsApiKey: 'key' }, ttsCache: new Map() },
+    apiConfig: { elevenlabsApiKey: 'key', minimaxApiKey: 'mini-key', minimaxGroupId: 'group' }, ttsCache: new Map() },
     localStorage: { getItem: () => null }, document: { getElementById: () => player, querySelectorAll: () => [] },
     Map, Set, URL, Blob, DOMException, AbortController, Uint8Array, console: { error() {} }, setTimeout, clearTimeout,
-    fetch: async (url, options) => { requests.push(JSON.parse(options.body)); return new Response(Uint8Array.of(1, 2), { headers: { 'Content-Type': 'audio/mpeg' } }); },
+    fetch: async (url, options) => {
+      requests.push(JSON.parse(options.body));
+      if (url.includes('/t2a_v2')) return new Response(JSON.stringify({ base_resp: { status_code: 0 }, data: { audio: '49443301' } }));
+      return new Response(Uint8Array.of(1, 2), { headers: { 'Content-Type': 'audio/mpeg' } });
+    },
     showCustomAlert: (title, text) => alerts.push({ title, text }),
     showToast: text => { const toast = { text, addEventListener: (_event, fn) => { toast.click = fn; } }; toasts.push(toast); return toast; }, addEventListener() {} };
   c.window = c; vm.createContext(c);
+  vm.runInContext(source('modules/chat/language-policy.js'), c);
   vm.runInContext(source('modules/tts-provider.js'), c); vm.runInContext(source('modules/tts-audio.js'), c);
   return { c, player, requests, toasts, alerts };
 }
@@ -44,4 +49,106 @@ test('保存设置模板时保留旧角色语速和默认语言，以及各服�
   let preset = f.c.getCurrentChatSettings(); assert.equal(preset.minimaxTtsSpeed, 1.6); assert.equal(preset.ttsLanguage, 'zh-CN');
   f.c.state.chats.a.settings = { ttsProvider: 'elevenlabs', elevenlabsVoiceId: 'voice', ttsSpeed: 0.8, minimaxTtsSpeed: 1.7 };
   preset = f.c.getCurrentChatSettings(); assert.equal(preset.elevenlabsTtsSpeed, 0.8); assert.equal(preset.minimaxTtsSpeed, 1.7);
+});
+
+for (const provider of ['minimax', 'elevenlabs']) {
+  for (const mode of ['source', 'translation', 'both']) {
+    for (const input of ['Hello〖你好〗', 'Hello【你好】', 'Hello\n〖你\n好〗']) {
+      test(`${provider} 通话按 ${mode} 朗读，保留完整内容：${JSON.stringify(input)}`, async () => {
+        const f = fixture(), chat = f.c.state.chats.a;
+        chat.settings = { ttsProvider: provider, minimaxVoiceId: 'mini-voice', elevenlabsVoiceId: 'a-voice',
+          enableBilingualMode: true, languagePolicy: { ttsReadMode: mode, outputLanguage: 'en-US' } };
+        chat.history = [{ role: 'assistant', content: input, timestamp: 1 }];
+        f.c.playVideoCallPureTTS(input, '', 'a', 1);
+        await turn();
+        if (mode === 'both') { f.player.onended(); await turn(); }
+        const translation = input.includes('\n好') ? '你\n好' : '你好';
+        const expected = mode === 'both' ? ['Hello', translation] : [mode === 'source' ? 'Hello' : translation];
+        assert.deepEqual(f.requests.map(r => r.text), expected);
+        assert.equal(chat.history[0].content, input);
+        f.c.stopTtsQueue();
+      });
+    }
+  }
+}
+
+test('MiniMax 通话多段译文按设置提取，动作清理发生在译文选取之后', async () => {
+  const f = fixture(), chat = f.c.state.chats.a;
+  chat.settings = { minimaxVoiceId: 'mini-voice', enableBilingualMode: true, languagePolicy: { ttsReadMode: 'translation' } };
+  f.c.playVideoCallPureTTS('(laughs) Hello【（笑）你好】 Goodbye〖再见〗', '', 'a', 1);
+  await turn();
+  assert.deepEqual(f.requests.map(r => r.text), ['你好 再见']);
+  f.c.stopTtsQueue();
+});
+
+test('MiniMax 未开启双语的旧通话也过滤标准和跨行翻译括号，保留原动作过滤', async () => {
+  const f = fixture();
+  f.c.state.chats.a.settings = { minimaxVoiceId: 'mini-voice' };
+  f.c.playVideoCallPureTTS('[laughs](quietly)（笑）Hello〖你\n好〗 Goodbye【再\n见】', '', 'a', 1);
+  await turn();
+  assert.deepEqual(f.requests.map(r => r.text), ['Hello Goodbye']);
+  f.c.stopTtsQueue();
+});
+
+test('通话只读原文时纯译文不请求；只读译文但缺译文时回退原文', async () => {
+  for (const provider of ['minimax', 'elevenlabs']) {
+    const f = fixture(), chat = f.c.state.chats.a;
+    chat.settings = { ttsProvider: provider, minimaxVoiceId: 'mini-voice', elevenlabsVoiceId: 'a-voice',
+      enableBilingualMode: true, languagePolicy: { ttsReadMode: 'source' } };
+    f.c.playVideoCallPureTTS('〖你好〗', '', 'a', 1);
+    await turn(); assert.equal(f.requests.length, 0);
+    chat.settings.languagePolicy.ttsReadMode = 'translation';
+    f.c.playVideoCallPureTTS('Hello', '', 'a', 2);
+    await turn(); assert.deepEqual(f.requests.map(r => r.text), ['Hello']);
+    f.c.stopTtsQueue();
+  }
+});
+
+test('MiniMax 通话朗读方式随入队设置保存；切换聊天或修改设置不改变待播文本', async () => {
+  const f = fixture(), chat = f.c.state.chats.a;
+  chat.settings = { minimaxVoiceId: 'mini-voice', enableBilingualMode: true, languagePolicy: { ttsReadMode: 'source' } };
+  f.c.playVideoCallPureTTS('First〖第一句〗', '', 'a', 1);
+  f.c.playVideoCallPureTTS('Second【第二句】', '', 'a', 2);
+  await turn();
+  chat.settings.languagePolicy.ttsReadMode = 'translation';
+  f.c.state.activeChatId = 'b';
+  f.player.onended(); await turn();
+  assert.deepEqual(f.requests.map(r => r.text), ['First', 'Second']);
+  f.c.stopTtsQueue();
+});
+
+test('MiniMax 聊天语音保留已选取的朗读文本，不重复解析双语', () => {
+  const f = fixture(), chat = f.c.state.chats.a;
+  chat.settings = { minimaxVoiceId: 'mini-voice', enableBilingualMode: true, languagePolicy: { ttsReadMode: 'both' } };
+  const body = { dataset: { text: encodeURIComponent('Hello。你好'), originalContent: encodeURIComponent('Hello〖你好〗') } };
+  const request = f.c.messageTtsRequest(body, chat);
+  assert.deepEqual(Array.from(request.parts, p => p.text), ['Hello。你好']);
+});
+
+test('通话仅读取对话在原文和译文分离后执行，不提前吞掉另一种语言', async () => {
+  for (const provider of ['minimax', 'elevenlabs']) {
+    const f = fixture(), chat = f.c.state.chats.a;
+    f.c.document.addEventListener = () => {};
+    f.c.console.log = () => {};
+    vm.runInContext(source('modules/video-optimization.js'), f.c);
+    chat.settings = { ttsProvider: provider, minimaxVoiceId: 'mini-voice', elevenlabsVoiceId: 'a-voice',
+      enableBilingualMode: true, languagePolicy: { ttsReadMode: 'both' } };
+    chat.videoOptimization = { ttsDialogueOnly: true };
+    f.c.playVideoCallPureTTS('He smiles. "Hello"〖他笑了。“你好”〗', '', 'a', 1);
+    await turn(); f.player.onended(); await turn();
+    assert.deepEqual(f.requests.map(r => r.text), ['Hello', '你好']);
+    f.c.stopTtsQueue();
+  }
+});
+
+test('MiniMax 通话默认只读原文；语言组件缺失时仍过滤译文', async () => {
+  for (const available of [true, false]) {
+    const f = fixture();
+    f.c.state.chats.a.settings = { minimaxVoiceId: 'mini-voice', enableBilingualMode: true };
+    if (!available) delete f.c.languagePolicy;
+    f.c.playVideoCallPureTTS('Hello〖你好〗', '', 'a', 1);
+    await turn();
+    assert.deepEqual(f.requests.map(r => r.text), ['Hello']);
+    f.c.stopTtsQueue();
+  }
 });

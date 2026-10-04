@@ -197,7 +197,7 @@
             state.globalSettings.lockScreenWallpaper = lockPreview.dataset.tempUrl;
         }
       }
-      await db.globalSettings.put(state.globalSettings);
+      await (window.saveSettingsRecord ? window.saveSettingsRecord(db.globalSettings, state.globalSettings) : db.globalSettings.put(state.globalSettings));
 
 
       applyGlobalWallpaper();
@@ -394,7 +394,7 @@
       saveLegacySetting('github-auto-backup', githubAutoBackup);
       saveLegacySetting('github-backup-interval', backupInterval);
 
-      await db.apiConfig.put(nextApiConfig);
+      await (window.saveSettingsRecord ? window.saveSettingsRecord(db.apiConfig, nextApiConfig) : db.apiConfig.put(nextApiConfig));
       Object.assign(state.apiConfig, nextApiConfig);
       apiConfigSaved = true;
       flushLegacySettings();
@@ -485,7 +485,7 @@
         nextGlobalSettings.enableApiStream = apiStreamSwitch.checked;
       }
       
-      await db.globalSettings.put(nextGlobalSettings);
+      await (window.saveSettingsRecord ? window.saveSettingsRecord(db.globalSettings, nextGlobalSettings) : db.globalSettings.put(nextGlobalSettings));
       Object.assign(state.globalSettings, nextGlobalSettings);
       if (floatingBallSwitch && oldFloatingBallEnabled !== nextGlobalSettings.floatingBallEnabled && typeof toggleFloatingBall === 'function') {
         applySavedSetting('悬浮球设置', () => toggleFloatingBall(nextGlobalSettings.floatingBallEnabled));

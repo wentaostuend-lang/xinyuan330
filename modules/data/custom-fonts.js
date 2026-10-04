@@ -27,11 +27,8 @@ let fontPreviewFamily = '';
 let fontFaceSerial = 0;
 let fontDraftGeneration = 0;
 let fontLeavingAllowed = false;
-let fontTypographyObserver;
 const fontLoadCache = new Map();
-const fontKnownFaces = new Set();
-const fontTypographyStyles = new Map();
-const fontInlineOriginals = new Map();
+const fontKnownEntries = new Set();
 
 function normalizeFontSettings(settings = {}) {
   const scope = settings.fontScope || { all: true };
@@ -41,7 +38,6 @@ function normalizeFontSettings(settings = {}) {
     // 旧的部分范围只启用明确选中的区域，不扩大原有应用范围。
     fontScope[key] = all || scope[key] === true;
   });
-  const size = Number(settings.globalFontSize);
   return {
     fontUrl: String(settings.fontUrl || '').trim(),
     fontLocalData: String(settings.fontLocalData || ''),
@@ -49,7 +45,7 @@ function normalizeFontSettings(settings = {}) {
     fontLocalSize: Number(settings.fontLocalSize) || 0,
     fontSourceMode: ['default', 'url', 'local'].includes(settings.fontSourceMode)
       ? settings.fontSourceMode : settings.fontLocalData ? 'local' : settings.fontUrl ? 'url' : 'default',
-    globalFontSize: Number.isFinite(size) && size > 0 ? Math.max(10, Math.min(28, Math.round(size))) : 16,
+    globalFontSize: 16, // 兼容旧备份字段，字号调整已取消。
     fontScope
   };
 }
@@ -86,7 +82,6 @@ function clearFontPreview() {
   if (preview) {
     preview.style.fontFamily = FONT_DEFAULT_FAMILY;
     preview.style.removeProperty('--user-font-family');
-    preview.style.setProperty('--user-font-scale', '1');
   }
   pruneFontLoads();
 }
@@ -94,69 +89,48 @@ function clearFontPreview() {
 function pruneFontLoads() {
   for (const [source, entry] of fontLoadCache) {
     if (fontLoadCache.size <= 3) break;
-    if (!entry.face || entry.family === fontActiveFamily || entry.family === fontPreviewFamily) continue;
-    document.fonts?.delete(entry.face);
+    if (entry.family === fontActiveFamily || entry.family === fontPreviewFamily) continue;
+    entry.style.remove();
     fontLoadCache.delete(source);
   }
-  for (const face of fontKnownFaces) {
-    if (face.family === fontActiveFamily || face.family === fontPreviewFamily) continue;
-    if (Array.from(fontLoadCache.values()).some(entry => entry.face === face)) continue;
-    document.fonts?.delete(face);
-    fontKnownFaces.delete(face);
+  for (const entry of fontKnownEntries) {
+    if (entry.family === fontActiveFamily || entry.family === fontPreviewFamily) continue;
+    if (Array.from(fontLoadCache.values()).includes(entry)) continue;
+    entry.style.remove();
+    fontKnownEntries.delete(entry);
   }
 }
 
-async function loadUserFont(settings, reload = false) {
+function fontReloadSource(source) {
+  // 只在主动重试时绕过浏览器和 Service Worker 缓存；保存的原链接不变。
+  try {
+    const url = new URL(source, document.baseURI);
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      url.searchParams.set('_ephone_font_reload', `${Date.now()}-${fontFaceSerial}`);
+      return url.href;
+    }
+  } catch (_) { /* 普通加载仍交由浏览器处理原链接。 */ }
+  return source;
+}
+
+function prepareUserFont(settings, reload = false) {
   const source = fontSource(settings);
   if (!source) {
     if (settings.fontSourceMode !== 'default') throw new Error(settings.fontSourceMode === 'local' ? '请先选择本地字体文件。' : '请先填写字体文件链接。');
     return null;
   }
-  if (typeof FontFace !== 'function' || !document.fonts) throw new Error('当前浏览器无法验证字体，请更新浏览器后重试。');
-  if (settings.fontSourceMode === 'url') {
-    let url;
-    try { url = new URL(source); } catch (_) { throw new Error('字体链接无效，请填写完整的 http 或 https 链接。'); }
-    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('网络字体只支持 http 或 https 链接。');
-  }
-  if (!reload && fontLoadCache.has(source)) return fontLoadCache.get(source).promise;
-  const entry = { family: `ephone-user-font-${++fontFaceSerial}`, face: null, promise: null };
-  const controller = new AbortController();
-  let timer;
-  const loading = (async () => {
-    let response;
-    try { response = await fetch(source, { signal: controller.signal, cache: reload ? 'reload' : 'default' }); }
-    catch (error) {
-      if (controller.signal.aborted) throw new Error('字体加载超时，请检查网络后重试。');
-      throw new Error('字体下载失败，可能是网络或跨域限制；可下载文件后上传本地字体。');
-    }
-    if (!response.ok) throw new Error(`字体下载失败（HTTP ${response.status}），请检查链接。`);
-    const type = response.headers.get('content-type') || '';
-    if (/text\/html|application\/json/i.test(type)) throw new Error('链接返回的是网页或数据，请使用字体文件的直接链接。');
-    const bytes = await response.arrayBuffer();
-    if (!bytes.byteLength) throw new Error('字体文件为空，请重新选择。');
-    let face;
-    try { face = await new FontFace(entry.family, bytes).load(); }
-    catch (_) { throw new Error('文件无法解析为字体，可能已损坏或格式不受当前浏览器支持。'); }
-    return face;
-  })();
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => { controller.abort(); reject(new Error('字体加载超时，请检查网络后重试。')); }, 15000);
-  });
-  entry.promise = Promise.race([loading, timeout]).then(face => {
-    if (fontLoadCache.get(source) !== entry) throw new Error('字体加载已取消，请重试。');
-    entry.face = face;
-    document.fonts.add(face);
-    fontKnownFaces.add(face);
-    pruneFontLoads();
-    return entry;
-  }).catch(error => {
-    if (fontLoadCache.get(source) === entry) fontLoadCache.delete(source);
-    throw error;
-  }).finally(() => clearTimeout(timer));
-  const old = fontLoadCache.get(source);
-  if (old?.face && old.family !== fontActiveFamily && old.family !== fontPreviewFamily) document.fonts.delete(old.face);
+  if (!reload && fontLoadCache.has(source)) return fontLoadCache.get(source);
+  const entry = { family: `ephone-user-font-${++fontFaceSerial}`, style: document.createElement('style') };
+  const url = reload && settings.fontSourceMode === 'url' ? fontReloadSource(source) : source;
+  // 使用旧版 @font-face URL 加载方式，不下载或验证字体，也不阻塞保存。
+  // URL 放进 CSS 字符串前转义，避免引号或控制字符破坏样式规则。
+  const escaped = url.replace(/[\\"\u0000-\u001f\u007f]/g, char => `\\${char.charCodeAt(0).toString(16)} `);
+  entry.style.id = `user-font-source-${fontFaceSerial}`;
+  entry.style.textContent = `@font-face{font-family:'${entry.family}';src:url("${escaped}");font-display:swap;}`;
+  document.head.appendChild(entry.style);
+  fontKnownEntries.add(entry);
   fontLoadCache.set(source, entry);
-  return entry.promise;
+  return entry;
 }
 
 async function updateFontPreview(reload = false) {
@@ -164,15 +138,13 @@ async function updateFontPreview(reload = false) {
   if (!preview) return;
   const draft = normalizeFontSettings(getFontDraft());
   preview.style.fontSize = `${draft.globalFontSize}px`;
-  preview.style.setProperty('--user-font-scale', '1');
   const generation = ++fontPreviewGeneration;
   if (!document.getElementById('font-preview-toggle')?.checked) return;
   preview.style.fontFamily = FONT_DEFAULT_FAMILY;
   preview.style.removeProperty('--user-font-family');
   fontPreviewFamily = '';
-  setFontStatus(fontSource(draft) ? '正在加载字体…' : '默认字体预览；保存后应用。');
   try {
-    const entry = await loadUserFont(draft, reload);
+    const entry = prepareUserFont(draft, reload);
     if (generation !== fontPreviewGeneration) return;
     if (entry) {
       fontPreviewFamily = entry.family;
@@ -180,7 +152,8 @@ async function updateFontPreview(reload = false) {
       preview.style.fontFamily = family;
       preview.style.setProperty('--user-font-family', family);
     }
-    setFontStatus(entry ? '字体已加载，可预览中文、英文和数字；保存后应用。' : '默认字体预览；保存后应用。', 'success');
+    pruneFontLoads();
+    setFontStatus(entry ? '预览由浏览器加载字体；保存后应用。' : '默认字体预览；保存后应用。');
   } catch (error) {
     if (generation === fontPreviewGeneration) setFontStatus(`${error.message} 预览暂用默认字体。`, 'error');
   }
@@ -198,8 +171,6 @@ function syncFontDraftUI() {
   if (clear) clear.style.display = draft.fontLocalData ? 'inline-block' : 'none';
   const warning = document.getElementById('font-local-warning');
   if (warning) warning.style.display = draft.fontLocalSize > 5 * 1024 * 1024 ? 'block' : 'none';
-  set('font-size-slider', 'value', draft.globalFontSize);
-  set('font-size-value', 'textContent', String(draft.globalFontSize));
   set('font-scope-all', 'checked', draft.fontScope.all);
   const list = document.getElementById('font-scope-list');
   if (list) list.style.display = draft.fontScope.all ? 'none' : 'flex';
@@ -224,120 +195,30 @@ function openFontSettings() {
   loadFontPresetsDropdown().catch(() => setFontStatus('字体预设读取失败，请重新打开页面。', 'error'));
 }
 
-// 只派生项目原生排版规则；原规则、用户 CSS 和独立聊天字号均保留。
-function fontTypographyDeclarations(style) {
-  const size = style.getPropertyValue('font-size');
-  const family = style.getPropertyValue('font-family');
-  const protectedFamily = /monospace|courier|menlo|consolas|sf mono|material|fontawesome|icon/i.test(family);
-  let result = '';
-  if (!protectedFamily && /^\d+(?:\.\d+)?px$/.test(size)) result += `font-size:calc(${size} * var(--user-font-scale, 1))${style.getPropertyPriority('font-size') ? ' !important' : ''};`;
-  if (family && !protectedFamily && family !== 'inherit') result += `font-family:var(--user-font-family, ${family})${style.getPropertyPriority('font-family') ? ' !important' : ''};`;
-  return result;
-}
-
-function fontTypographyRules(rules) {
-  let css = '';
-  for (const rule of rules || []) {
-    if (rule.selectorText && rule.style) {
-      // 图标/装饰与字体预览由原样式负责，不改变它们的尺寸。
-      if (/::before|::after|#main-time|\.icon-bg|font-preview|\.slider-sym/.test(rule.selectorText)) continue;
-      const declarations = fontTypographyDeclarations(rule.style);
-      if (declarations) css += `${rule.selectorText}{${declarations}}\n`;
-    } else if (rule.styleSheet) {
-      try {
-        const imported = fontTypographyRules(rule.styleSheet.cssRules);
-        css += rule.media?.mediaText ? `@media ${rule.media.mediaText}{${imported}}` : imported;
-      } catch (_) { /* 保留无法读取的跨域导入样式。 */ }
-    } else if (rule.cssRules && /^@(media|supports|layer|container)\b/.test(rule.cssText)) {
-      css += `${rule.cssText.slice(0, rule.cssText.indexOf('{'))}{${fontTypographyRules(rule.cssRules)}}\n`;
-    }
-  }
-  return css;
-}
-
-function updateFontInlineTypography(root) {
-  if (!root?.querySelectorAll) return;
-  const nodes = [root, ...root.querySelectorAll('[style]')];
-  for (const node of nodes) {
-    if (!node.style || node.closest?.('#font-preview, pre, code, svg, .icon-bg, #chat-messages .message-bubble, #settings-preview-area')) continue;
-    for (const property of ['font-size', 'font-family']) {
-      const value = node.style.getPropertyValue(property);
-      if (!value || value.includes('--user-font-')) continue;
-      if (property === 'font-size' && !/^\d+(?:\.\d+)?px$/.test(value)) continue;
-      if (property === 'font-family' && /inherit|monospace|courier|menlo|consolas|material|fontawesome|icon/i.test(value)) continue;
-      if (!fontInlineOriginals.has(node)) fontInlineOriginals.set(node, {});
-      const priority = node.style.getPropertyPriority(property);
-      const replacement = property === 'font-size' ? `calc(${value} * var(--user-font-scale, 1))` : `var(--user-font-family, ${value})`;
-      node.style.setProperty(property, replacement, priority);
-      fontInlineOriginals.get(node)[property] = { value, priority, replacement: node.style.getPropertyValue(property) };
-    }
-  }
-  for (const node of fontInlineOriginals.keys()) if (!node.isConnected) fontInlineOriginals.delete(node);
-}
-
-function installFontTypography() {
-  for (const sheet of Array.from(document.styleSheets || [])) {
-    const owner = sheet.ownerNode;
-    if (!owner || owner.closest?.('#chat-messages, #settings-preview-area') || fontTypographyStyles.has(owner) || (owner.tagName !== 'LINK' && (owner.tagName !== 'STYLE' || owner.id))) continue;
-    try {
-      const derived = document.createElement('style');
-      derived.dataset.fontTypography = 'true';
-      derived.id = `font-typography-${fontTypographyStyles.size}`;
-      derived.textContent = fontTypographyRules(sheet.cssRules);
-      owner.after(derived);
-      fontTypographyStyles.set(owner, derived);
-    } catch (_) { /* 跨域样式表无法读取；保留其原排版。 */ }
-  }
-  updateFontInlineTypography(document.body || document.getElementById('phone-screen'));
-  if (!fontTypographyObserver && typeof MutationObserver === 'function') {
-    fontTypographyObserver = new MutationObserver(records => {
-      for (const record of records) {
-        if (record.type === 'childList') record.addedNodes.forEach(node => updateFontInlineTypography(node));
-        else if (record.attributeName === 'style') updateFontInlineTypography(record.target);
-      }
-    });
-    const root = document.body || document.getElementById('phone-screen');
-    if (root) fontTypographyObserver.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
-  }
-}
-
-function clearFontTypography() {
-  fontTypographyObserver?.disconnect();
-  fontTypographyObserver = null;
-  for (const style of fontTypographyStyles.values()) style.remove();
-  fontTypographyStyles.clear();
-  for (const [node, properties] of fontInlineOriginals) {
-    for (const [property, saved] of Object.entries(properties)) {
-      if (node.style.getPropertyValue(property) === saved.replacement) node.style.setProperty(property, saved.value, saved.priority);
-    }
-  }
-  fontInlineOriginals.clear();
-}
-
 function applyFontSettings(settings, entry = null) {
   const normalized = normalizeFontSettings(settings);
   const scope = normalized.fontScope;
+  // 数据库写入期间可能继续编辑预览，确保已保存字体的样式仍在页面中。
+  if (entry) {
+    if (!entry.style.isConnected) document.head.appendChild(entry.style);
+    fontKnownEntries.add(entry);
+    fontLoadCache.set(fontSource(normalized), entry);
+  }
   const family = entry ? `'${entry.family}', ${FONT_DEFAULT_FAMILY}` : null;
   fontActiveFamily = entry?.family || '';
-  const variables = `--user-font-scale:${normalized.globalFontSize / 16};${family ? `--user-font-family:${family};` : ''}`;
-  const fallback = '--user-font-scale:1;--user-font-family:initial;';
+  // 回到旧版的字体继承方式，不扫描 CSS、不改写节点、不监听整个页面。
   let css = '';
-  if (scope.all) css = `body{${variables}${normalized.globalFontSize !== 16 ? `font-size:${normalized.globalFontSize}px;` : ''}${family ? `font-family:${family};` : ''}}`;
-  else {
-    if (scope.other) css += `body{${variables}${normalized.globalFontSize !== 16 ? `font-size:${normalized.globalFontSize}px;` : ''}${family ? `font-family:${family};` : ''}}`;
-    for (const [key, selector] of Object.entries(FONT_SCOPE_SELECTORS)) {
-      css += `${selector}{${scope[key] ? variables : fallback}font-size:${scope[key] ? normalized.globalFontSize : 16}px;${family ? `font-family:${scope[key] ? family : FONT_DEFAULT_FAMILY};` : ''}}`;
+  if (family) {
+    if (scope.all || scope.other) css = `body{--user-font-family:${family};font-family:${family};}`;
+    if (!scope.all) {
+      for (const [key, selector] of Object.entries(FONT_SCOPE_SELECTORS)) {
+        const selectedFamily = scope[key] ? family : FONT_DEFAULT_FAMILY;
+        css += `${selector}{--user-font-family:${selectedFamily};font-family:${selectedFamily};}`;
+      }
     }
-    // 弹窗与所在页面使用相同的设置，嵌套子页面也继承所属应用。
-    for (const [key, selectors] of Object.entries(FONT_SCOPE_SELECTORS)) {
-      const active = selectors.split(',').map(selector => `${selector.trim()}.active`).join(',');
-      css += `body:has(${active}) .modal,body:has(${active}) #custom-modal-overlay{${scope[key] ? variables : fallback}font-size:${scope[key] ? normalized.globalFontSize : 16}px;${family ? `font-family:${scope[key] ? family : FONT_DEFAULT_FAMILY};` : ''}}`;
-    }
+    css += ':where(button,input,select,textarea){font-family:var(--user-font-family,inherit);}';
   }
-  if (family) css += ':where(button,input,select,textarea){font-family:var(--user-font-family,inherit);}';
   dynamicFontStyle.textContent = css;
-  if (family || normalized.globalFontSize !== 16) installFontTypography();
-  else clearFontTypography();
   pruneFontLoads();
 }
 
@@ -352,7 +233,7 @@ async function applyCustomFont(fontUrl, isPreviewOnly = false) {
   const generation = ++fontApplyGeneration;
   const settings = normalizeFontSettings({ ...state.globalSettings, fontUrl: fontUrl || '' });
   try {
-    const entry = await loadUserFont(settings);
+    const entry = prepareUserFont(settings);
     if (generation !== fontApplyGeneration) return;
     applyFontSettings(settings, entry);
   } catch (error) {
@@ -365,10 +246,10 @@ async function applyCustomFont(fontUrl, isPreviewOnly = false) {
 
 async function commitFontSettings(settings, reload = false) {
   const snapshot = normalizeFontSettings(settings);
-  const entry = await loadUserFont(snapshot, reload);
+  const entry = prepareUserFont(snapshot, reload);
   // 加载期间其他设置仍可操作；写入时合并最新状态，避免覆盖无关配置。
   const next = { ...state.globalSettings, ...snapshot };
-  await db.globalSettings.put(next);
+  await (window.saveSettingsRecord ? window.saveSettingsRecord(db.globalSettings, next) : db.globalSettings.put(next));
   fontApplyGeneration++;
   Object.assign(state.globalSettings, snapshot);
   applyFontSettings(snapshot, entry);
@@ -381,12 +262,12 @@ async function saveFontSettings() {
   const save = document.getElementById('save-font-btn');
   if (save) save.disabled = true;
   const snapshot = normalizeFontSettings(getFontDraft());
-  setFontStatus('正在验证并保存字体…');
+  setFontStatus('正在保存字体设置…');
   try {
     await commitFontSettings(snapshot);
     fontSavedDraftKey = JSON.stringify(snapshot);
     fontNotice(snapshot.fontScope.all || Object.keys(FONT_SCOPE_LABELS).some(key => snapshot.fontScope[key])
-      ? '字体设置已保存并应用。' : '字体设置已保存；当前未选择应用区域。', 'success');
+      ? '字体设置已保存；字体由浏览器加载并应用。' : '字体设置已保存；当前未选择应用区域。', 'success');
     return true;
   } catch (error) {
     fontNotice(`${error.message || '设置保存失败，请重试。'} 原设置已保留。`, 'error');
@@ -416,9 +297,9 @@ async function resetFontByScope() {
   if (fontBusy || fontReading) { setFontStatus('请等待当前字体操作完成。'); return; }
   const current = normalizeFontSettings(state.globalSettings);
   const active = Object.keys(FONT_SCOPE_LABELS).filter(key => current.fontScope[key]);
-  if ((!fontSource(current) && current.globalFontSize === 16) || !active.length) { fontNotice('当前区域已使用默认字体和字号。'); return; }
+  if ((!fontSource(current) && current.globalFontSize === 16) || !active.length) { fontNotice('当前区域已使用默认字体。'); return; }
   // 复用现有自定义弹窗，不重建或替换共享弹窗按钮。
-  const pending = showCustomConfirm('选择恢复默认的区域', '<span>选中区域恢复默认字体与字号，其他区域保持不变。</span>', { confirmText: '恢复选中区域', confirmButtonClass: 'btn-danger' });
+  const pending = showCustomConfirm('选择恢复默认的区域', '<span>选中区域恢复默认字体，其他区域保持不变。</span>', { confirmText: '恢复选中区域', confirmButtonClass: 'btn-danger' });
   const body = document.getElementById('custom-modal-body');
   const choices = document.createElement('div');
   choices.className = 'font-reset-scope-choices';
@@ -447,7 +328,7 @@ async function resetFontByScope() {
   const next = normalizeFontSettings(current);
   next.fontScope.all = false;
   selected.forEach(key => { next.fontScope[key] = false; });
-  await resetFontSettings(next, '所选区域已恢复默认字体与字号。');
+  await resetFontSettings(next, '所选区域已恢复默认字体。');
 }
 
 async function resetFontSettings(settings, message) {
@@ -456,11 +337,11 @@ async function resetFontSettings(settings, message) {
   try {
     // 重置范围不要求重新下载仍被其他区域使用的字体。
     const next = normalizeFontSettings(settings);
-    await db.globalSettings.put({ ...state.globalSettings, ...next });
+    await (window.saveSettingsRecord ? window.saveSettingsRecord(db.globalSettings, { ...state.globalSettings, ...next }) : db.globalSettings.put({ ...state.globalSettings, ...next }));
     fontApplyGeneration++;
     Object.assign(state.globalSettings, next);
     const entry = fontLoadCache.get(fontSource(next));
-    applyFontSettings(next, entry?.face ? entry : null);
+    applyFontSettings(next, entry || null);
     clearFontPreview();
     fontFileGeneration++;
     fontDraftGeneration++;
@@ -478,16 +359,16 @@ async function resetFontSettings(settings, message) {
 }
 
 async function resetToDefaultFont() {
-  if (await resetFontSettings(normalizeFontSettings(), '已恢复默认字体和字号。')) {
-    for (const face of fontKnownFaces) document.fonts?.delete(face);
-    fontKnownFaces.clear();
+  if (await resetFontSettings(normalizeFontSettings(), '已恢复默认字体。')) {
+    for (const entry of fontKnownEntries) entry.style.remove();
+    fontKnownEntries.clear();
     fontLoadCache.clear();
   }
 }
 
 function bindFontSettingsEvents() {
   if (fontBound) return;
-  const required = ['font-url-input', 'font-preview-toggle', 'font-size-slider', 'reset-font-size-btn', 'save-font-btn'];
+  const required = ['font-url-input', 'font-preview-toggle', 'save-font-btn'];
   if (required.some(id => !document.getElementById(id))) { console.warn('[FontSettings] 字体控件未就绪'); return; }
   const bind = (id, event, handler) => document.getElementById(id)?.addEventListener(event, handler);
   const changed = () => { fontDraftGeneration++; fontPreviewGeneration++; clearTimeout(fontPreviewTimer); syncFontDraftUI(); void updateFontPreview(); };
@@ -505,15 +386,6 @@ function bindFontSettingsEvents() {
     setFontStatus('链接已修改，保存后应用。');
     fontPreviewTimer = setTimeout(() => void updateFontPreview(), 450);
   });
-  bind('font-size-slider', 'input', event => {
-    const draft = getFontDraft(); draft.globalFontSize = normalizeFontSettings({ globalFontSize: event.target.value }).globalFontSize;
-    fontDraftGeneration++;
-    document.getElementById('font-size-value').textContent = String(draft.globalFontSize);
-    document.getElementById('font-preview').style.fontSize = `${draft.globalFontSize}px`;
-  });
-  bind('reset-font-size-btn', 'click', () => {
-    fontDraftGeneration++; getFontDraft().globalFontSize = 16; syncFontDraftUI(); setFontStatus('字号已重置为 16；保存后应用。');
-  });
   bind('font-scope-all', 'change', event => {
     const scope = getFontDraft().fontScope; scope.all = event.target.checked;
     fontDraftGeneration++;
@@ -527,16 +399,13 @@ function bindFontSettingsEvents() {
     if (!file || fontBusy) return;
     if (file.size > 10 * 1024 * 1024) { fontNotice('字体文件超过 10MB，请选择更小的字体。', 'error'); return; }
     const generation = ++fontFileGeneration;
-    fontReading = true; setFontStatus('正在读取并检查字体文件…');
+    fontReading = true; setFontStatus('正在读取字体文件…');
     try {
       const data = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error('文件读取失败，请重新选择。'));
         reader.onabort = () => reject(new Error('文件读取已取消。')); reader.readAsDataURL(file);
       });
-      if (generation !== fontFileGeneration) return;
-      const candidate = normalizeFontSettings({ ...getFontDraft(), fontSourceMode: 'local', fontLocalData: data, fontLocalName: file.name, fontLocalSize: file.size });
-      await loadUserFont(candidate);
       if (generation !== fontFileGeneration) return;
       Object.assign(getFontDraft(), { fontSourceMode: 'local', fontLocalData: data, fontLocalName: file.name, fontLocalSize: file.size });
       changed(); setFontStatus('本地字体已读取；保存后应用。', 'success');

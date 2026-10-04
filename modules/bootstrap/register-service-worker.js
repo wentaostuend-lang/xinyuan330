@@ -1,25 +1,25 @@
 (function registerEPhoneServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
 
-  // 检测是否处于本地开发/预览环境（localhost, 127.0.0.1, 局域网IP, 或本地端口）
+  // 本地开发/预览不启用离线缓存；公开站点的自定义端口仍支持 PWA。
   const isLocal = ['localhost', '127.0.0.1', '::1'].includes(location.hostname) ||
                   location.hostname.startsWith('192.168.') ||
                   location.hostname.startsWith('10.') ||
-                  location.hostname.startsWith('172.') ||
-                  location.protocol === 'file:' ||
-                  location.port !== '';
+                  /^172\.(1[6-9]|2\d|3[01])\./.test(location.hostname) ||
+                  location.protocol === 'file:';
 
   if (isLocal) {
-    // 本地开发模式：彻底注销 Service Worker 并清空缓存，确保每次改动刷新立即可见
+    // 只清理本应用的预览缓存与作用域，不碰同源其他应用。
+    const scope = new URL('./', document.baseURI).href;
     navigator.serviceWorker.getRegistrations().then(registrations => {
       for (const reg of registrations) {
-        reg.unregister();
+        if (reg.scope === scope) reg.unregister();
       }
     });
     if ('caches' in window) {
       caches.keys().then(names => {
         for (const name of names) {
-          caches.delete(name);
+          if (name.startsWith('ephone-')) caches.delete(name);
         }
       });
     }
@@ -27,7 +27,7 @@
     return;
   }
 
-  navigator.serviceWorker.register('./sw.js', { scope: './' })
+  navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' })
     .then(registration => {
       console.log('ServiceWorker 注册成功，作用域为:', registration.scope);
     })

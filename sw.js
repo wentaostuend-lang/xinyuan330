@@ -1,221 +1,118 @@
-// Service Worker 文件 (sw.js)
-// 【智能缓存策略】- 根据资源类型使用不同的缓存策略，优化加载速度
+// 一次安装对应一套完整、校验过的发布资源。活动页面不自动切换版本。
+importScripts('./generated/pwa-assets.js');
+const RELEASE = self.__EPHONE_RELEASE;
+const CACHE_NAME = `ephone-cache-${RELEASE.version}`;
+const MEDIA_CACHE_NAME = 'ephone-media-cache';
+const byPath = new Map(RELEASE.assets.map(asset => [new URL(asset.path, self.registration.scope).pathname, asset]));
+const assetUrl = asset => new URL(asset.url, self.registration.scope).href;
 
-// 缓存版本号（智能缓存策略）
-const CACHE_VERSION = 'v0.0.60-release-10.2-role-time-preview';
-const CACHE_NAME = `ephone-cache-${CACHE_VERSION}`;
-const DESKTOP_FEATURE_CACHE_TO_REMOVE = 'ephone-cache-v0.0.36-pwa-install-2';
+async function fetchAsset(asset) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    const response = await fetch(assetUrl(asset), { cache: 'no-store', signal: controller.signal });
+    if (!response.ok || response.type === 'opaque') throw new Error(`资源加载失败: ${asset.path}`);
+    let bytes = await response.clone().arrayBuffer();
+    // 与构建端一致保留 UTF-8 BOM，仅统一换行。
+    if (/\.(?:js|css|html|json)$/.test(asset.path)) bytes = new TextEncoder().encode(new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes).replace(/\r\n/g, '\n'));
+    const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
+    if (hash !== asset.sha256) throw new Error(`发布文件尚未一致: ${asset.path}`);
+    return response;
+  } finally { clearTimeout(timer); }
+}
 
-// 安装阶段只缓存最小启动外壳。其余资源由 fetch 事件按需缓存，
-// 避免移动端因为某一个资源请求挂起而一直无法完成 PWA 安装。
-const CORE_URLS_TO_CACHE = [
-  './index.html',
-  './tutorial.html',
-  './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './modules/bootstrap/register-service-worker.js',
-  './modules/bootstrap/html-fragment-manifest.js?v=20261002-release',
-  './modules/bootstrap/document-loader.js',
-  './generated/html-fragments/document-head.js?v=20261002-release',
-  './generated/html-fragments/intro-and-home.js',
-  './generated/html-fragments/health-and-couple.js',
-  './generated/html-fragments/cphone.js',
-  './generated/html-fragments/myphone.js',
-  './generated/html-fragments/worldbook-and-presets.js',
-  './generated/html-fragments/api-settings-core.js',
-  './generated/html-fragments/api-settings-providers.js',
-  './generated/html-fragments/api-settings-data.js?v=feedback-20260930-workbench',
-  './generated/html-fragments/data-and-social-list.js',
-  './generated/html-fragments/chat-interface.js',
-  './generated/html-fragments/appearance-and-thoughts.js?v=fonts-20261001',
-  './generated/html-fragments/calls-and-social.js',
-  './generated/html-fragments/chat-settings-main.js',
-  './generated/html-fragments/chat-settings-extra.js',
-  './generated/html-fragments/feature-screens.js',
-  './generated/html-fragments/modals-general.js',
-  './generated/html-fragments/modals-feature.js',
-  './generated/html-fragments/modals-phone-and-finance.js',
-  './generated/html-fragments/online-and-myphone-modals.js',
-  './generated/html-fragments/games-and-document-tail.js'
-];
-
-// 1. 安装事件：当 Service Worker 首次被注册时触发
 self.addEventListener('install', event => {
-  console.log('[SW] 正在安装 Service Worker (智能缓存策略)...');
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(async cache => {
-        console.log('[SW] 缓存已打开，正在缓存最小启动外壳...');
-        await cache.addAll(CORE_URLS_TO_CACHE);
-      })
-      .then(() => {
-        console.log('[SW] Service Worker 安装阶段已完成。');
-        return self.skipWaiting();
-      })
-  );
-});
-
-// 2. 激活事件：当 Service Worker 被激活时触发
-self.addEventListener('activate', event => {
-  console.log('[SW] 正在激活 Service Worker...');
-  event.waitUntil(
-    caches.keys().then(async cacheNames => {
-      const needsDesktopCleanupReload = cacheNames.includes(DESKTOP_FEATURE_CACHE_TO_REMOVE);
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('[SW] 正在删除旧的缓存:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      ).then(async () => {
-        console.log('[SW] Service Worker 已激活！使用智能缓存策略。');
-        await self.clients.claim();
-        if (!needsDesktopCleanupReload) return;
-        const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-        await Promise.all(clients.map(client => client.navigate(client.url).catch(error => {
-          console.warn('[SW] 桌面残留清理后自动刷新失败:', error);
-        })));
-      });
-    })
-  );
-});
-
-// 3. 拦截网络请求事件：使用【智能缓存策略】
-self.addEventListener('fetch', event => {
-  // 只对 GET 请求进行处理
-  if (event.request.method !== 'GET') {
-    return;
-  }
-
-  const url = event.request.url;
-
-  // 排除 API 请求，让它们不受 Service Worker 干扰
-  const isApiRequest = event.request.headers.has('xi-api-key') ||
-                       url.includes('api.elevenlabs.io') ||
-                       event.request.headers.get('X-EPhone-Feedback') === '1' ||
-                       url.includes('generativelanguage.googleapis.com') ||
-                       url.includes('/v1/models') || 
-                       url.includes('/v1/chat/completions') ||
-                       url.includes('gemini.beijixingxing.com') ||
-                       url.includes('api.imgbb.com') ||
-                       url.includes('api.kfjie.me') ||
-                       url.includes('meting.mikus.ink') ||
-                       url.includes('api.vkeys.cn') ||
-                       url.includes('ncm-api.vercel.app') ||
-                       event.request.destination === 'audio' ||
-                       url.includes(':generateContent');
-  
-  if (isApiRequest) {
-    // API 请求直接透传，不做任何处理
-    return;
-  }
-
-  // 页面导航统一回退到应用外壳，兼容 /、/index.html 和带查询参数的入口。
-  if (event.request.mode === 'navigate') {
-    const appShellUrl = new URL('./index.html', self.registration.scope).href;
-    event.respondWith((async () => {
-      try {
-        const response = await fetch(event.request, { cache: 'no-cache' });
-        if (response && response.status === 200) {
-          const cache = await caches.open(CACHE_NAME);
-          await cache.put(event.request, response.clone());
+  event.waitUntil((async () => {
+    const existed = (await caches.keys()).includes(CACHE_NAME);
+    const cache = await caches.open(CACHE_NAME);
+    let next = 0, failure;
+    try {
+      // 限流，避免移动端同时下载数百个文件；安装不阻塞当前页面使用。
+      await Promise.all(Array.from({ length: 4 }, async () => {
+        while (!failure && next < RELEASE.assets.length) {
+          const asset = RELEASE.assets[next++];
+          try {
+            if (!await cache.match(assetUrl(asset))) await cache.put(assetUrl(asset), await fetchAsset(asset));
+          } catch (error) { failure = error; }
         }
-        return response;
-      } catch (error) {
-        return (await caches.match(event.request)) || caches.match(appShellUrl);
+      }));
+      if (failure) throw failure;
+    } catch (error) {
+      if (!existed) await caches.delete(CACHE_NAME);
+      // 让更新入口能收到安装失败原因，旧页面仍由旧 Worker 服务。
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      windows.forEach(client => client.postMessage?.({ type: 'EPHONE_UPDATE_FAILED', message: error.message }));
+      throw error;
+    }
+    // 不 skipWaiting：旧网页和桌面窗口继续使用完整旧版本。
+  })());
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const versions = (await caches.keys()).filter(name => name.startsWith('ephone-cache-') && name !== CACHE_NAME);
+    // 留下一版完整资源用于恢复；不删除其他应用缓存、媒体或 IndexedDB。
+    await Promise.all(versions.slice(0, -1).map(name => caches.delete(name)));
+  })());
+});
+
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  if (event.request.headers.has('xi-api-key') || event.request.headers.get('X-EPhone-Feedback') === '1') return;
+  const url = new URL(event.request.url);
+  const own = url.origin === new URL(self.registration.scope).origin;
+  const asset = own ? byPath.get(url.pathname) : null;
+  if (asset) {
+    event.respondWith((async () => {
+      const requestedVersion = url.searchParams.get('v');
+      if (requestedVersion && requestedVersion !== RELEASE.version) {
+        // 从旧页面来的资源只能使用精确旧缓存，不能悄悄返回当前代码。
+        return (await caches.match(event.request)) || Response.error();
       }
+      const cache = await caches.open(CACHE_NAME);
+      return (await cache.match(assetUrl(asset))) || Response.error();
     })());
     return;
   }
-
-  // 识别资源类型
-  const isImage = /\.(png|jpg|jpeg|gif|webp|svg|ico)(\?|$)/i.test(url) ||
-                  url.includes('postimg.cc') ||
-                  url.includes('catbox.moe') ||
-                  url.includes('sharkpan.xyz') ||
-                  url.includes('meituan.net');
-  
-  const isFont = /\.(woff|woff2|ttf|otf|eot)(\?|$)/i.test(url);
-  
-  const isCDNResource = url.includes('unpkg.com') ||
-                        url.includes('cdnjs.cloudflare.com') ||
-                        url.includes('cdn.jsdelivr.net') ||
-                        url.includes('phoebeboo.github.io');
-
-  const isHTMLPage = url.includes('.html') || 
-                     (!url.includes('.') && !url.includes('?')) ||
-                     url.endsWith('/');
-
-  // 策略 1：图片、字体、CDN 资源 → 缓存优先（加载快，减少流量）
-  if (isImage || isFont || isCDNResource) {
-    event.respondWith(
-      caches.match(event.request).then(cachedResponse => {
-        // 字体设置的显式重新加载使用 fetch(cache: 'reload')，不能仍返回旧缓存。
-        if (cachedResponse && !(event.request.cache === 'reload' && event.request.destination === '')) {
-          console.log('[SW] 从缓存加载:', url);
-          return cachedResponse;
-        }
-        // 缓存未命中，从网络获取并缓存
-        return fetch(event.request).then(async response => {
-          if (response && response.status === 200) {
-            const cache = await caches.open(CACHE_NAME);
-            await cache.put(event.request, response.clone());
-            console.log('[SW] 已缓存资源:', url);
-          }
-          return response;
-        }).catch(() => {
-          // 网络失败，尝试返回缓存
-          return caches.match(event.request);
-        });
-      })
-    );
+  if (own && event.request.mode === 'navigate' && url.pathname.startsWith(new URL(self.registration.scope).pathname) && !/\.[a-z0-9]+$/i.test(url.pathname)) {
+    event.respondWith(caches.open(CACHE_NAME).then(cache => cache.match(assetUrl(byPath.get(new URL('index.html', self.registration.scope).pathname)))));
+    return;
   }
-  // 策略 2：HTML 页面 → 网络优先（保证内容最新）
-  else if (isHTMLPage) {
-    event.respondWith(
-      fetch(event.request, {
-        cache: 'no-cache' // 允许验证缓存，不是完全禁用
-      })
-      .then(async response => {
-        // 更新缓存
-        if (response && response.status === 200) {
-          const cache = await caches.open(CACHE_NAME);
-          await cache.put(event.request, response.clone());
+  // API 请求继续由页面直连；这里只缓存浏览器实际加载的图片和字体。
+  if (event.request.destination === 'image' || event.request.destination === 'font' || (!own && ['script', 'style'].includes(event.request.destination))) {
+    event.respondWith((async () => {
+      const dependency = !own && ['script', 'style'].includes(event.request.destination);
+      const cache = await caches.open(dependency ? 'ephone-dependency-cache' : MEDIA_CACHE_NAME);
+      const cached = await cache.match(event.request);
+      if (cached && event.request.cache !== 'reload') return cached;
+      try {
+        const response = await fetch(event.request);
+        if (response.ok || response.type === 'opaque') {
+          event.waitUntil((async () => {
+            try {
+              await cache.put(event.request, response.clone());
+              const keys = await cache.keys();
+              await Promise.all(keys.slice(0, Math.max(0, keys.length - (dependency ? 32 : 128))).map(key => cache.delete(key)));
+            } catch (_) { /* 媒体缓存不足不阻塞页面。 */ }
+          })());
         }
         return response;
-      })
-      .catch(() => {
-        // 网络失败，使用缓存
-        console.log('[SW] 网络失败，使用缓存的 HTML:', url);
-        return caches.match(event.request);
-      })
-    );
+      } catch (error) { return cached || (await caches.match(event.request)) || Response.error(); }
+    })());
   }
-  // 策略 3：CSS/JS → 缓存优先，但允许后台更新
-  else {
-    event.respondWith(
-      caches.match(event.request).then(cachedResponse => {
-        const fetchPromise = fetch(event.request).then(async response => {
-          // 后台更新缓存
-          if (response && response.status === 200) {
-            const cache = await caches.open(CACHE_NAME);
-            await cache.put(event.request, response.clone());
-          }
-          return response;
-        }).catch(() => null);
+});
 
-        // 如果有缓存，立即返回缓存，同时后台更新
-        if (cachedResponse && !(event.request.cache === 'reload' && event.request.destination === '')) {
-          console.log('[SW] 从缓存加载（后台更新）:', url);
-          return cachedResponse;
-        }
-        // 没有缓存，等待网络请求
-        return fetchPromise;
-      })
-    );
-  }
+self.addEventListener('message', event => {
+  if (event.data?.type !== 'ACTIVATE_UPDATE' || !event.ports?.[0]) return;
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (windows.length > 1) {
+      event.ports[0].postMessage({ ok: false, message: '请先关闭其他网页或桌面窗口，再刷新更新。' });
+      return;
+    }
+    event.ports[0].postMessage({ ok: true });
+    await self.skipWaiting();
+  })());
 });
 
 // 4. 推送通知事件：接收服务器推送的通知

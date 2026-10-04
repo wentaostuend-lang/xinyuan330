@@ -533,10 +533,6 @@
     }
 
     try {
-      if (window.applyRenderingRulesForStage) {
-        const result = await window.applyRenderingRulesForStage(textToCopy, chat.id, { messageId: message.id ?? message.timestamp, timestamp: message.timestamp, role: message.role, type: message.type, field: 'content', isGroup: !!chat.isGroup }, 'copy');
-        textToCopy = result.content;
-      }
       await navigator.clipboard.writeText(textToCopy);
       await showCustomAlert('复制成功', '消息内容已复制到剪贴板。');
     } catch (err) {
