@@ -7,7 +7,7 @@
     if (!previewArea) return;
 
     const selectedTheme = document.querySelector('input[name="theme-select"]:checked')?.value || 'default';
-    const fontSize = 13;
+    const fontSize = document.getElementById('chat-font-size-slider').value;
     const customCss = document.getElementById('custom-css-input').value;
     const background = chat.settings.background;
 

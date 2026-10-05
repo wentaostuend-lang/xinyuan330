@@ -8,7 +8,9 @@ const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 function fixture() {
   class Element {
     constructor(id = '', height = 0) {
-      this.id = id; this.height = height; this.children = []; this.dataset = {}; this.style = { setProperty() {} };
+      this.id = id; this.height = height; this.children = []; this.dataset = {};
+      const properties = new Map();
+      this.style = { setProperty: (key, value) => properties.set(key, value), getPropertyValue: key => properties.get(key) || '' };
       this.classes = new Set(); this.classList = {
         add: name => this.classes.add(name), remove: name => this.classes.delete(name),
         contains: name => this.classes.has(name), toggle() {}
@@ -91,6 +93,22 @@ function fixture() {
   const offset = message => container.querySelectorAll('.message-wrapper').find(el => el.querySelector('.message-bubble[data-timestamp]')?.dataset.timestamp === String(message.timestamp))?.getBoundingClientRect().top;
   return { c, chat, container, elements, framesDone, render, finishLoad, offset, writes };
 }
+
+test('独立聊天字号读取旧保存值，切换聊天不继承前一聊天字号', async () => {
+  const f = fixture();
+  f.chat.settings.fontSize = 20;
+  await f.render();
+  assert.equal(f.container.style.getPropertyValue('--chat-font-size'), '20px');
+  const other = { ...f.chat, id: 'b', settings: {}, history: [] };
+  f.c.state.chats.b = other; f.c.state.activeChatId = 'b';
+  await f.c.renderChatInterface('b'); await f.framesDone();
+  assert.equal(f.container.style.getPropertyValue('--chat-font-size'), '13px');
+  f.c.state.activeChatId = 'a'; await f.render();
+  assert.equal(f.container.style.getPropertyValue('--chat-font-size'), '20px');
+  assert.equal(f.chat.settings.fontSize, 20);
+  assert.equal(other.settings.fontSize, undefined);
+  assert.equal(f.writes.length, 0);
+});
 
 test('整页重画期间不误加载历史，默认及底部编辑仍定位最新', async () => {
   const f = fixture(); await f.c.renderChatInterface('a');

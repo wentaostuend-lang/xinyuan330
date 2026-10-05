@@ -62,15 +62,64 @@ function fixture(settings = {}) {
     run: code => vm.runInContext(code, c), async flush() { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); } };
 }
 
-test('旧备份字号不影响排版；预览开关和事件绑定保持正常', async () => {
+test('旧备份字号恢复到控件和预览；预览开关和事件绑定保持正常', async () => {
   const f = fixture({ globalFontSize: 12 });
   f.get('font-preview-toggle').checked = true; await f.get('font-preview-toggle').emit('change');
   assert.equal(f.get('font-preview-container').style.display, 'block');
-  assert.equal(f.get('font-preview').style.fontSize, '16px');
+  assert.equal(f.get('font-preview').style.fontSize, '12px');
+  assert.equal(f.get('font-size-slider').value, 12);
+  assert.equal(f.get('font-size-value').textContent, '12');
   assert.equal(f.c.state.globalSettings.globalFontSize, 12);
   f.get('font-preview-toggle').checked = false; await f.get('font-preview-toggle').emit('change');
   assert.equal(f.get('font-preview-container').style.display, 'none');
   f.c.bindFontSettingsEvents(); assert.equal(f.get('save-font-btn').listeners.click.length, 1);
+});
+
+test('字号编辑只更新草稿和预览，保存失败保留旧值，重启恢复已保存字号', async () => {
+  const f = fixture({ globalFontSize: 20 });
+  await f.c.applyCustomFont('');
+  const previousCss = f.c.dynamicFontStyle.textContent;
+  f.get('font-size-slider').value = '24'; await f.get('font-size-slider').emit('input');
+  assert.equal(f.get('font-size-value').textContent, '24');
+  assert.equal(f.get('font-preview').style.fontSize, '24px');
+  assert.equal(f.c.state.globalSettings.globalFontSize, 20);
+  assert.equal(f.c.dynamicFontStyle.textContent, previousCss);
+  const put = f.c.db.globalSettings.put;
+  f.c.db.globalSettings.put = async () => { throw Error('quota'); };
+  assert.equal(await f.c.saveFontSettings(), false);
+  assert.equal(f.c.state.globalSettings.globalFontSize, 20);
+  assert.equal(f.c.dynamicFontStyle.textContent, previousCss);
+  assert.equal(f.run('getFontDraft().globalFontSize'), 24);
+  f.c.db.globalSettings.put = put;
+  assert.equal(await f.c.saveFontSettings(), true);
+  const restarted = fixture(JSON.parse(JSON.stringify(f.writes.at(-1))));
+  await restarted.c.applyCustomFont('');
+  assert.equal(restarted.get('font-size-slider').value, 24);
+  assert.match(restarted.c.dynamicFontStyle.textContent, /body\{font-size:24px;\}/);
+  await restarted.get('reset-font-size-btn').emit('click');
+  assert.equal(restarted.run('getFontDraft().globalFontSize'), 16);
+  assert.equal(restarted.c.state.globalSettings.globalFontSize, 24);
+  assert.equal(await restarted.c.saveFontSettings(), true);
+  assert.equal(restarted.c.dynamicFontStyle.textContent, '');
+});
+
+test('部分字号范围只设置选中页面，范围恢复保留其他字号和来源', async () => {
+  const f = fixture({ globalFontSize: 22, fontScope: { all: false, qq: true } });
+  await f.c.applyCustomFont('');
+  assert.match(f.c.dynamicFontStyle.textContent, /#chat-list-screen[^{}]+\{font-size:22px;\}/);
+  assert.doesNotMatch(f.c.dynamicFontStyle.textContent, /body\{|#home-screen\{|#chat-input/);
+  f.get('font-size-slider').value = '26'; await f.get('font-size-slider').emit('input');
+  await f.c.saveFontPreset();
+  assert.equal([...f.presets.values()].at(-1).value.globalFontSize, 26);
+  assert.equal(f.c.state.globalSettings.globalFontSize, 22);
+  const all = fixture({ globalFontSize: 20 });
+  await all.c.applyCustomFont('');
+  const next = all.c.normalizeFontSettings(all.c.state.globalSettings);
+  next.fontScope.all = false; next.fontScope.qq = false;
+  await all.c.resetFontSettings(next, 'restored');
+  assert.equal(all.c.state.globalSettings.globalFontSize, 20);
+  assert.match(all.c.dynamicFontStyle.textContent, /#chat-list-screen[^{}]+\{font-size:16px;\}/);
+  assert.match(all.c.dynamicFontStyle.textContent, /#home-screen\{font-size:20px;\}/);
 });
 
 test('本地字体默认字号 16 在启动恢复，范围设置及旧字段均可读取', async () => {
@@ -123,7 +172,8 @@ test('保存失败保留正式状态和草稿；成功保存合并最新无关�
   f.c.db.globalSettings.put = async value => f.writes.push(value);
   assert.equal(await f.c.saveFontSettings(), true);
   assert.equal(f.writes[0].otherChanged, 'latest'); assert.deepEqual(f.writes[0].unrelated, { keep: true });
-  assert.equal(f.c.state.globalSettings.globalFontSize, 16); assert.doesNotMatch(f.c.dynamicFontStyle.textContent, /font-size|--user-font-scale/);
+  assert.equal(f.c.state.globalSettings.globalFontSize, 20); assert.match(f.c.dynamicFontStyle.textContent, /body\{font-size:20px;\}/);
+  assert.doesNotMatch(f.c.dynamicFontStyle.textContent, /--user-font-scale/);
   assert.equal(await f.c.saveFontSettings(), true); assert.equal(f.requests.length, 0);
   assert.equal(f.fontStyles().length, 1);
 });
@@ -234,11 +284,12 @@ test('真实范围恢复入口支持本地字体，必须选择区域，取消�
   assert.equal(f.c.state.globalSettings.fontScope.homeScreen, true);
 });
 
-test('离线启动保留链接并忽略旧字号，重新加载绕过缓存且保留原链接，全部重置清理样式', async () => {
+test('离线启动恢复链接和旧字号，重新加载绕过缓存且保留原链接，全部重置清理样式', async () => {
   const url = 'https://fonts.example/offline?token=abc#font';
   const f = fixture({ fontUrl: url, globalFontSize: 20 });
   await f.c.applyCustomFont(url);
-  assert.equal(f.c.state.globalSettings.fontUrl, url); assert.doesNotMatch(f.c.dynamicFontStyle.textContent, /font-size|--user-font-scale/);
+  assert.equal(f.c.state.globalSettings.fontUrl, url); assert.match(f.c.dynamicFontStyle.textContent, /body\{font-size:20px;\}/);
+  assert.doesNotMatch(f.c.dynamicFontStyle.textContent, /--user-font-scale/);
   const active = f.fontStyles()[0];
   await f.get('font-reload-btn').emit('click');
   assert.equal(f.get('font-preview-toggle').checked, true);
@@ -259,18 +310,18 @@ test('旧链接预设只替换来源；完整预设支持本地数据和范围�
   const f = fixture({ fontLocalData: 'data:font/ttf;base64,AQ==', globalFontSize: 22 });
   f.presets.set(1, { id: 1, name: '旧字体', type: 'font', value: 'https://fonts.example/legacy' });
   f.get('font-preset-select').value = '1'; await f.c.handleFontPresetSelectionChange();
-  assert.equal(f.run('getFontDraft().fontSourceMode'), 'url'); assert.equal(f.run('getFontDraft().globalFontSize'), 16);
+  assert.equal(f.run('getFontDraft().fontSourceMode'), 'url'); assert.equal(f.run('getFontDraft().globalFontSize'), 22);
   assert.equal(f.run('getFontDraft().fontLocalData'), 'data:font/ttf;base64,AQ==');
   f.presets.set(2, { id: 2, name: '本地', type: 'font', value: { fontLocalData: 'data:font/ttf;base64,Ag==', fontLocalName: 'saved.ttf', globalFontSize: 18, fontScope: { all: false, qq: false } } });
   f.get('font-preset-select').value = '2'; await f.c.handleFontPresetSelectionChange();
   assert.equal(f.run('getFontDraft().fontSourceMode'), 'local'); assert.equal(f.run('getFontDraft().fontScope.qq'), false);
   await f.c.saveFontPreset();
   const saved = [...f.presets.values()].at(-1).value;
-  assert.equal(saved.fontLocalName, 'saved.ttf'); assert.equal(saved.globalFontSize, 16);
+  assert.equal(saved.fontLocalName, 'saved.ttf'); assert.equal(saved.globalFontSize, 18);
   assert.equal(f.writes.length, 0); assert.equal(f.c.state.globalSettings.globalFontSize, 22);
 });
 
-test('过期的预设读取不覆盖新编辑；旧字号字段忽略，范围兼容旧配置', async () => {
+test('过期的预设读取不覆盖新编辑；有效字号保留，无效字号使用旧默认值', async () => {
   const f = fixture(); let release;
   f.c.db.appearancePresets.get = async () => { await new Promise(resolve => { release = resolve; }); return { value: 'https://fonts.example/stale' }; };
   f.get('font-preset-select').value = '1'; const pending = f.c.handleFontPresetSelectionChange();
@@ -291,20 +342,22 @@ test('退出可继续编辑、放弃或保存；保存失败留在页面，原�
   assert.equal(f.c.screen, 'wallpaper-screen'); assert.equal(f.c.state.globalSettings.globalFontSize, undefined);
 });
 
-test('恢复字体继承，修改字体不扫描页面、不改字号、不创建监听器', async () => {
+test('恢复字体与字号继承，不扫描页面、不改写节点、不创建监听器', async () => {
   const f = fixture({ fontUrl: 'https://fonts.example/font', globalFontSize: 10 });
   f.c.document.styleSheets = new Proxy([], { get() { throw Error('不得扫描样式表'); } });
   f.c.MutationObserver = class { constructor() { throw Error('不得监听页面'); } };
   await f.c.applyCustomFont('https://fonts.example/font');
   assert.match(f.c.dynamicFontStyle.textContent, /font-family/);
-  assert.doesNotMatch(f.c.dynamicFontStyle.textContent, /font-size|--user-font-scale/);
-  assert.match(source('modules/chat/interface-core.js'), /setProperty\('--chat-font-size', '13px'\)/);
-  assert.doesNotMatch(source('src/html/chat-settings-extra.html'), /chat-font-size-slider/);
+  assert.match(f.c.dynamicFontStyle.textContent, /body\{font-size:10px;\}/);
+  assert.doesNotMatch(f.c.dynamicFontStyle.textContent, /--user-font-scale|#chat-input/);
+  assert.equal(f.c.document.body.derived, undefined);
+  assert.match(source('modules/chat/interface-core.js'), /const fontSize = chat.settings.fontSize \|\| 13/);
+  assert.match(source('src/html/chat-settings-extra.html'), /id="chat-font-size-slider" min="12" max="20"/);
 });
 
 test('原有字体入口和全部控件保留；没有浏览器原生 alert；源码与加载资源关联', () => {
   const html = source('src/html/appearance-and-thoughts.html');
-  for (const id of ['font-preview', 'font-preview-toggle', 'font-preset-select', 'save-font-preset-btn', 'delete-font-preset-btn', 'font-url-input', 'font-local-upload-btn', 'font-local-clear-btn', 'font-local-file-input', 'font-scope-all', 'reset-font-scope-btn', 'reset-font-btn']) assert.ok(html.includes(`id="${id}"`), id);
+  for (const id of ['font-preview', 'font-preview-toggle', 'font-preset-select', 'save-font-preset-btn', 'delete-font-preset-btn', 'font-url-input', 'font-local-upload-btn', 'font-local-clear-btn', 'font-local-file-input', 'font-scope-all', 'reset-font-scope-btn', 'reset-font-btn', 'font-size-slider', 'font-size-value', 'reset-font-size-btn']) assert.ok(html.includes(`id="${id}"`), id);
   assert.ok(html.includes('data-scope="other"'));
   assert.doesNotMatch(source('modules/data/custom-fonts.js') + source('modules/settings/font-presets.js'), /\balert\(/);
   assert.match(source('src/js-bundles/event-bindings-b/chat-settings.jsfrag'), /bindFontSettingsEvents\(\)/);

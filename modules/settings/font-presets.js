@@ -30,7 +30,7 @@
       if (preset.value && typeof preset.value === 'object') {
         Object.assign(draft, normalizeFontSettings(preset.value));
       } else {
-        // 旧链接预设只替换来源，保留当前范围。
+        // 旧链接预设只替换来源，保留当前字号和范围。
         draft.fontUrl = String(preset.value || '');
         draft.fontSourceMode = draft.fontUrl ? 'url' : 'default';
       }
@@ -44,7 +44,7 @@
   async function saveFontPreset() {
     if (fontBusy || fontReading) { fontNotice('请等待当前字体操作完成。'); return; }
     const value = normalizeFontSettings(getFontDraft());
-    const name = await showCustomPrompt('保存字体预设', '请输入预设名称（保存来源和范围）');
+    const name = await showCustomPrompt('保存字体预设', '请输入预设名称（保存来源、字号和范围）');
     if (!name || !name.trim()) return;
 
     try {

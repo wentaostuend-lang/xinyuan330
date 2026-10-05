@@ -21,7 +21,8 @@ document.getElementById('run').onclick = async () => {
     const recovered = await RenderingRuleRuntime.run(badInput, [bad], 'test');
     check(recovered.content === badInput && recovered.warnings.length > 0, '失控正则终止并保留原文');
     applyFontSettings({ fontSourceMode: 'default', globalFontSize: 10 });
-    check(!dynamicFontStyle.textContent.includes('font-size') && getComputedStyle(document.getElementById('chat-input')).fontSize === '16px', '旧字号数据不缩小页面，聊天输入框 16px');
+    check(getComputedStyle(document.body).fontSize === '10px' && getComputedStyle(document.getElementById('chat-input')).fontSize === '16px', '旧全局字号恢复为 10px，聊天输入框仍为 16px');
+    applyFontSettings({ fontSourceMode: 'default', globalFontSize: 16 });
     const database = window.db = new Dexie('ephone-performance-smoke');
     database.version(1).stores({ settings: 'id' });
     await database.open();

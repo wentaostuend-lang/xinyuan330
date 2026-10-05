@@ -38,6 +38,7 @@ function normalizeFontSettings(settings = {}) {
     // 旧的部分范围只启用明确选中的区域，不扩大原有应用范围。
     fontScope[key] = all || scope[key] === true;
   });
+  const size = Number(settings.globalFontSize);
   return {
     fontUrl: String(settings.fontUrl || '').trim(),
     fontLocalData: String(settings.fontLocalData || ''),
@@ -45,7 +46,7 @@ function normalizeFontSettings(settings = {}) {
     fontLocalSize: Number(settings.fontLocalSize) || 0,
     fontSourceMode: ['default', 'url', 'local'].includes(settings.fontSourceMode)
       ? settings.fontSourceMode : settings.fontLocalData ? 'local' : settings.fontUrl ? 'url' : 'default',
-    globalFontSize: 16, // 兼容旧备份字段，字号调整已取消。
+    globalFontSize: Number.isInteger(size) && size >= 10 && size <= 28 ? size : 16,
     fontScope
   };
 }
@@ -163,6 +164,8 @@ function syncFontDraftUI() {
   const draft = getFontDraft();
   const set = (id, property, value) => { const node = document.getElementById(id); if (node) node[property] = value; };
   set('font-source-select', 'value', draft.fontSourceMode);
+  set('font-size-slider', 'value', draft.globalFontSize);
+  set('font-size-value', 'textContent', String(draft.globalFontSize));
   set('font-url-input', 'value', draft.fontUrl);
   set('font-url-input', 'disabled', draft.fontSourceMode === 'local');
   set('font-url-input', 'placeholder', draft.fontSourceMode === 'local' ? '已选本地字体，可切换来源使用链接' : 'https://..../font.ttf');
@@ -217,6 +220,17 @@ function applyFontSettings(settings, entry = null) {
       }
     }
     css += ':where(button,input,select,textarea){font-family:var(--user-font-family,inherit);}';
+  }
+  // 恢复旧版的继承字号；固定字号（尤其 16px 输入框）不参与全局缩放。
+  if (normalized.globalFontSize !== 16) {
+    const size = normalized.globalFontSize;
+    if (scope.all) css += `body{font-size:${size}px;}`;
+    else {
+      if (scope.other) css += `body{font-size:${size}px;}`;
+      for (const [key, selector] of Object.entries(FONT_SCOPE_SELECTORS)) {
+        if (scope[key] || scope.other) css += `${selector}{font-size:${scope[key] ? size : 16}px;}`;
+      }
+    }
   }
   dynamicFontStyle.textContent = css;
   pruneFontLoads();
@@ -385,6 +399,19 @@ function bindFontSettingsEvents() {
     const select = document.getElementById('font-source-select'); if (select) select.value = draft.fontSourceMode;
     setFontStatus('链接已修改，保存后应用。');
     fontPreviewTimer = setTimeout(() => void updateFontPreview(), 450);
+  });
+  bind('font-size-slider', 'input', event => {
+    const draft = getFontDraft();
+    draft.globalFontSize = normalizeFontSettings({ globalFontSize: event.target.value }).globalFontSize;
+    fontDraftGeneration++;
+    document.getElementById('font-size-value').textContent = String(draft.globalFontSize);
+    document.getElementById('font-preview').style.fontSize = `${draft.globalFontSize}px`;
+  });
+  bind('reset-font-size-btn', 'click', () => {
+    getFontDraft().globalFontSize = 16;
+    fontDraftGeneration++;
+    syncFontDraftUI();
+    setFontStatus('字号已重置为 16；保存后应用。');
   });
   bind('font-scope-all', 'change', event => {
     const scope = getFontDraft().fontScope; scope.all = event.target.checked;
