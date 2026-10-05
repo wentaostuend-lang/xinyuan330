@@ -209,7 +209,8 @@
     // Keep translations until segments() selects the read mode, then clean once.
     const rawText = String(text || '').trim();
     if (!rawText) return;
-    ttsQueue.push({ text: rawText, config, chatId, timestamp, chat: { ...chat, settings: { ...chat.settings,
+    // 朗读只需要语言与动作过滤设置，不能把整份历史和记忆留在播放队列中。
+    ttsQueue.push({ text: rawText, config, chatId, timestamp, chat: { settings: { ...chat.settings,
       languagePolicy: chat.settings.languagePolicy ? JSON.parse(JSON.stringify(chat.settings.languagePolicy)) : undefined },
       videoOptimization: { ...(chat.videoOptimization || {}) } } });
     if (!isTtsPlaying) processNextTts();

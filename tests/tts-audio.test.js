@@ -81,6 +81,34 @@ test('MiniMax 通话多段译文按设置提取，动作清理发生在译文选
   f.c.stopTtsQueue();
 });
 
+test('通话队列只保留朗读配置，不保留整份聊天历史和记忆', async () => {
+  for (const provider of ['minimax', 'elevenlabs']) {
+    const f = fixture();
+    const chat = f.c.state.chats.a;
+    chat.history = [{ content: '图片和长聊天历史' }];
+    chat.longTermMemory = [{ content: '长期记忆' }];
+    chat.settings = { ttsProvider: provider, minimaxVoiceId: 'mini-voice', elevenlabsVoiceId: 'a-voice', enableBilingualMode: true, languagePolicy: { ttsReadMode: 'translation' } };
+    const contexts = [];
+    const segments = f.c.ttsProvider.segments;
+    f.c.ttsProvider.segments = (text, snapshot, config) => {
+      contexts.push(snapshot);
+      return segments(text, snapshot, config);
+    };
+    f.c.playVideoCallPureTTS('Hello〖你好〗', '', 'a', 1);
+    f.c.playVideoCallPureTTS('Goodbye〖再见〗', '', 'a', 2);
+    chat.settings.languagePolicy.ttsReadMode = 'source';
+    await turn(); f.player.onended(); await turn();
+    assert.deepEqual(f.requests.map(request => request.text), ['你好', '再见']);
+    assert.equal(contexts.length, 2);
+    for (const snapshot of contexts) {
+      assert.equal(Object.hasOwn(snapshot, 'history'), false);
+      assert.equal(Object.hasOwn(snapshot, 'longTermMemory'), false);
+    }
+    assert.equal(chat.history.length, 1); assert.equal(chat.longTermMemory.length, 1);
+    f.c.stopTtsQueue();
+  }
+});
+
 test('MiniMax 未开启双语的旧通话也过滤标准和跨行翻译括号，保留原动作过滤', async () => {
   const f = fixture();
   f.c.state.chats.a.settings = { minimaxVoiceId: 'mini-voice' };
