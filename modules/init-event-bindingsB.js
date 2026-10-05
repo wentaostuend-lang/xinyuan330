@@ -2455,6 +2455,11 @@ window.initEventBindingsB = function(state, db) {
 
 
     const customCssInputForPreview = document.getElementById('custom-css-input');
+    const chatFontSizeSlider = document.getElementById('chat-font-size-slider');
+    chatFontSizeSlider.addEventListener('input', () => {
+      document.getElementById('chat-font-size-value').textContent = `${chatFontSizeSlider.value}px`;
+      updateSettingsPreview();
+    });
     customCssInputForPreview.addEventListener('input', updateSettingsPreview);
 
 

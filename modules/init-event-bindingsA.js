@@ -3884,6 +3884,9 @@ window.initEventBindingsA = async function(state, db) {
       linkedChatsContainer.addEventListener('change', updateLinkedMemorySelectionDisplay);
       const themeRadio = document.querySelector(`input[name="theme-select"][value="${chat.settings.theme || 'default'}"]`);
       if (themeRadio) themeRadio.checked = true;
+      const chatFontSizeSlider = document.getElementById('chat-font-size-slider');
+      chatFontSizeSlider.value = chat.settings.fontSize || 13;
+      document.getElementById('chat-font-size-value').textContent = `${chatFontSizeSlider.value}px`;
       const customCssInput = document.getElementById('custom-css-input');
       customCssInput.value = chat.settings.customCss || '';
       updateSettingsPreview();
@@ -4371,6 +4374,7 @@ window.initEventBindingsA = async function(state, db) {
 
       const selectedThemeRadio = document.querySelector('input[name="theme-select"]:checked');
       chat.settings.theme = selectedThemeRadio ? selectedThemeRadio.value : 'default';
+      chat.settings.fontSize = parseInt(document.getElementById('chat-font-size-slider').value);
       chat.settings.customCss = document.getElementById('custom-css-input').value.trim();
       chat.settings.myPersona = document.getElementById('my-persona').value;
       chat.settings.myAvatar = document.getElementById('my-avatar-preview').src;
