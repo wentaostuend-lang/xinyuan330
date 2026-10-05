@@ -52,6 +52,18 @@ test('随机规则保持逐次执行，大文本缓存按容量淘汰', async ()
   assert.equal(posts.length, 43);
 });
 
+test('规则编译缓存按容量淘汰大型配置，重新编译不改变结果', () => {
+  const first = { isEnabled: true, chatId: ['global'], regex: '编译缓存0', template: '替换结果', options: { matchMode: 'text', samples: [{ input: 'x'.repeat(40000) }] } };
+  const initial = engine.compileRule(first);
+  assert.equal(engine.compileRule(first), initial);
+  for (let index = 1; index <= 40; index++) engine.compileRule({ ...first, regex: `编译缓存${index}` });
+  assert.notEqual(engine.compileRule(first), initial);
+  assert.equal(engine.run('编译缓存0', [first], 'chat').content, '替换结果');
+  const oversized = { ...first, options: { ...first.options, samples: [{ input: 'x'.repeat(1100000) }] } };
+  assert.notEqual(engine.compileRule(oversized), engine.compileRule(oversized));
+  assert.equal(engine.run('编译缓存0', [oversized], 'chat').content, '替换结果');
+});
+
 test('正文复制在点击任务中直接写剪贴板，不等待规则或数据库', async () => {
   const source = read('modules/message-actions.js');
   const fn = source.slice(source.indexOf('  async function copyMessageContent()'), source.indexOf('  async function copyMessageTimestamp()'));
