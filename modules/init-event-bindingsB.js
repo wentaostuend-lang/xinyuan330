@@ -997,6 +997,27 @@ window.initEventBindingsB = function(state, db) {
     };
     setupFileUpload('ai-avatar-input', (base64) => document.getElementById('ai-avatar-preview').src = base64);
     setupFileUpload('my-avatar-input', (base64) => document.getElementById('my-avatar-preview').src = base64);
+
+    // 从 Liya 移植：直接用URL设置头像（不经过图库，省内存，简单快捷）
+    // 注意：不能用浏览器自带的 prompt()——安装到主屏幕的全屏模式下它会被系统屏蔽，点了没反应。
+    // 这里和锁屏壁纸等其它 URL 按钮一样，使用应用内的输入弹窗。
+    const bindAvatarUrlBtn = (btnId, previewId) => {
+      const btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.addEventListener('click', async () => {
+        const url = await showCustomPrompt('网络图片', '请输入头像的图片URL', '', 'url');
+        if (url && url.trim()) {
+          const preview = document.getElementById(previewId);
+          preview.src = url.trim();
+          // 链接打不开就马上提醒，别等保存了才发现头像没出来
+          preview.decode().catch(() => {
+            if (typeof showToast === 'function') showToast('这个图片链接加载失败，可能已失效或被图床拦截，换个链接试试', 'error');
+          });
+        }
+      });
+    };
+    bindAvatarUrlBtn('ai-avatar-url-btn', 'ai-avatar-preview');
+    bindAvatarUrlBtn('my-avatar-url-btn', 'my-avatar-preview');
     setupFileUpload('group-avatar-input', (base64) => document.getElementById('group-avatar-preview').src = base64);
     setupFileUpload('member-avatar-input', (base64) => document.getElementById('member-avatar-preview').src = base64);
     setupFileUpload('bg-input', async (base64) => {
@@ -2454,12 +2475,16 @@ window.initEventBindingsB = function(state, db) {
     });
 
 
-    const customCssInputForPreview = document.getElementById('custom-css-input');
     const chatFontSizeSlider = document.getElementById('chat-font-size-slider');
     chatFontSizeSlider.addEventListener('input', () => {
+
       document.getElementById('chat-font-size-value').textContent = `${chatFontSizeSlider.value}px`;
+
       updateSettingsPreview();
     });
+
+
+    const customCssInputForPreview = document.getElementById('custom-css-input');
     customCssInputForPreview.addEventListener('input', updateSettingsPreview);
 
 
@@ -3708,6 +3733,12 @@ window.initEventBindingsB = function(state, db) {
         }
         return;
       }
+      // 从 Liya 移植：点击聊天里转发的论坛帖子卡片，打开帖子详情
+      const forumShareCard = e.target.closest('.forum-share-card[data-forum-post-id]');
+      if (forumShareCard && typeof openForumPostDetail === 'function') {
+        openForumPostDetail(Number(forumShareCard.dataset.forumPostId));
+        return;
+      }
       const placeholder = e.target.closest('.recalled-message-placeholder');
       if (placeholder) {
         const chat = state.chats[state.activeChatId];
@@ -4299,6 +4330,7 @@ window.initEventBindingsB = function(state, db) {
     document.getElementById('regenerate-call-btn').addEventListener('click', handleRegenerateCallResponse);
 
 
+    document.getElementById('force-reply-latest-btn')?.addEventListener('click', handleForceReplyLatest);
     document.getElementById('propel-btn').addEventListener('click', handlePropelAction);
 
 
@@ -4383,10 +4415,10 @@ window.initEventBindingsB = function(state, db) {
               .join('\n');
 
             characterContext += `## 发件人: ${chat.name}\n`;
-            characterContext += `- **核心人设**: ${chat.settings.aiPersona.substring(0, 200)}...\n`;
+            characterContext += `- **核心人设（完整，包含说话方式/口头禅/惯用格式等细节，务必读完，不要只看开头）**:\n${chat.settings.aiPersona}\n`;
             characterContext += `- **长期记忆**: ${memory}\n`;
             characterContext += `- **最近对话状态**: \n${recentHistory || '(无最近对话)'}\n`;
-            characterContext += `> 指导: 请根据该角色的性格和你们最近的对话状态（例如是否刚吵过架、是否有未完成的约定）来撰写邮件。\n\n`;
+            characterContext += `> 指导: 请根据该角色的性格和你们最近的对话状态（例如是否刚吵过架、是否有未完成的约定）来撰写邮件，语气、用词、惯用的格式习惯都要贴合这个角色本来的样子，不要写成通用的客套模板。\n\n`;
           });
         }
       }
@@ -4410,9 +4442,10 @@ ${allowRandom ? "- 允许生成随机路人/系统通知/垃圾邮件 (如: 银�
 # 核心要求
 1. **连贯性**: 如果发件人是上述"指定发件人"中的角色，邮件内容**必须**与你们的"最近对话状态"和"长期记忆"相符。
    - *例子*: 如果最近对话在吵架，邮件可能是道歉信或冷淡的通知；如果最近在热恋，邮件可能是情书。
-2. **沉浸感**: 邮件内容必须符合收件人身份和世界观。
-3. **多样性**: 包含不同类型的邮件（正式、非正式、垃圾邮件、紧急通知）。
-4. **格式**: 返回一个JSON数组。
+2. **人物声音（重要）**: 指定发件人写的每一封邮件，语气、措辞、句子长短、惯用的格式或小习惯，都必须贴合"核心人设"里描述的那个角色本来的说话方式——不同角色之间的写信风格应该有明显差异，不能套用同一种通用的书信腔调。如果人设里能看出这个角色平时说话有什么特别的节奏、口头禅、爱用的意象或者写东西的习惯格式，邮件里也要体现出来，不要写成一板一眼的官方通知语气。
+3. **沉浸感**: 邮件内容必须符合收件人身份和世界观。
+4. **多样性**: 包含不同类型的邮件（正式、非正式、垃圾邮件、紧急通知）；但"指定发件人"的邮件优先服从第2条，不因为追求多样性而牺牲角色声音。
+5. **格式**: 返回一个JSON数组。
 
 # 输出格式 (JSON Only)
 \`\`\`json

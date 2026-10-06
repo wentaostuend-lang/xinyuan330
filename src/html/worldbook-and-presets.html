@@ -127,6 +127,53 @@
         </button>
       </div>
     </div>
+
+    <div id="banned-words-screen" class="screen">
+      <div class="header">
+        <span class="back-btn" id="banned-words-back-btn">‹</span>
+        <span id="banned-words-title">屏蔽词管理</span>
+        <span style="width: 30px;"></span>
+      </div>
+      <div class="form-container" style="flex-grow: 0;">
+        <div style="font-size:12px; color:var(--text-secondary,#888); margin-bottom:10px; line-height:1.6;" id="banned-words-scope-hint"></div>
+        <div class="settings-item" style="padding:10px 0; border-bottom:1px solid var(--border-color,#eee); margin-bottom:10px;">
+          <label>启用屏蔽词功能</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="banned-words-enabled-toggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label>屏蔽词 / 正则表达式(不勾选正则的话,可以用逗号一次填多个词)</label>
+          <input type="text" id="banned-word-input" placeholder="例如：某个词,另一个词 或 /某\d+词/gi">
+        </div>
+        <div class="form-group">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="banned-word-is-regex" style="width:auto;">
+            当作正则表达式解析
+          </label>
+        </div>
+        <div class="form-group">
+          <label>命中后替换为(留空=直接删除，让AI自己找近义词表达)</label>
+          <input type="text" id="banned-word-replacement" placeholder="留空即可">
+        </div>
+        <button class="form-button" id="add-banned-word-btn">+ 添加</button>
+        <div style="height:1px; background:var(--border-color,#eee); margin:16px 0;"></div>
+        <div class="form-group">
+          <label>批量导入(粘贴一整段禁词说明文档，AI会自动提取真正要禁止的词句，忽略掉解释性文字)</label>
+          <textarea id="banned-words-bulk-import-text" rows="6" class="settings-textarea" placeholder="把类似禁词库文档粘贴进来..."></textarea>
+        </div>
+        <button class="form-button form-button-secondary" id="extract-banned-words-ai-btn">🤖 AI智能提取并添加</button>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 15px; border-bottom:1px solid var(--border-color,#eee); flex-shrink:0;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px;">
+          <input type="checkbox" id="banned-words-select-all" style="width:auto;">
+          全选
+        </label>
+        <button class="action-btn" id="batch-generate-synonyms-btn">🤖 为选中的词批量生成近义词</button>
+      </div>
+      <div id="banned-words-list" class="list-container" style="flex-grow: 1; overflow-y: auto;"></div>
+    </div>
     <div id="preset-screen" class="screen">
       <div class="header">
         <span class="back-btn" onclick="showScreen('home-screen')" title="返回">

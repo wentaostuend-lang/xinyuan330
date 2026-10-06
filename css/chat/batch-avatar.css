@@ -1,0 +1,53 @@
+/* 批量设置头像（网址）—— modules/chat/batch-avatar.js */
+#batch-avatar-modal {
+  position: fixed; inset: 0; z-index: 10100;
+  display: none; flex-direction: column;
+  background: var(--secondary-bg, #f5f5f7); color: var(--text-primary, #222);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+#batch-avatar-modal.visible { display: flex; }
+#batch-avatar-modal .ba-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; background: var(--primary-bg, #fff);
+  border-bottom: 1px solid rgba(128,128,128,.2); font-size: 16px; font-weight: 600;
+}
+#batch-avatar-modal .ba-header .ba-btn { font-size: 15px; font-weight: 500; cursor: pointer; padding: 4px 6px; color: var(--accent-color, #007aff); }
+#batch-avatar-modal .ba-header .ba-btn.disabled { opacity: .4; pointer-events: none; }
+#batch-avatar-modal .ba-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 12px 14px 24px; }
+#batch-avatar-modal textarea#ba-input {
+  width: 100%; box-sizing: border-box; min-height: 86px; resize: vertical;
+  border: 1px solid rgba(128,128,128,.35); border-radius: 10px; padding: 10px;
+  font-size: 13px; line-height: 1.5; background: var(--primary-bg, #fff); color: inherit;
+}
+#batch-avatar-modal .ba-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; align-items: center; }
+#batch-avatar-modal .ba-tool {
+  border: 1px solid rgba(128,128,128,.35); background: var(--primary-bg, #fff); color: inherit;
+  border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer;
+}
+#batch-avatar-modal .ba-summary { font-size: 12px; opacity: .65; margin: 6px 2px 10px; }
+#batch-avatar-modal .ba-row {
+  display: flex; gap: 10px; padding: 10px; margin-bottom: 10px; border-radius: 12px;
+  background: var(--primary-bg, #fff); border: 1px solid rgba(128,128,128,.18);
+}
+#batch-avatar-modal .ba-row.assigned { border-color: var(--accent-color, #007aff); }
+#batch-avatar-modal .ba-row.failed { opacity: .75; }
+#batch-avatar-modal .ba-preview {
+  width: 64px; height: 64px; flex: 0 0 64px; border-radius: 12px; overflow: hidden;
+  background: rgba(128,128,128,.15); display: flex; align-items: center; justify-content: center;
+  font-size: 11px; text-align: center; color: rgba(128,128,128,.9);
+}
+#batch-avatar-modal .ba-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#batch-avatar-modal .ba-main { flex: 1; min-width: 0; }
+#batch-avatar-modal .ba-url { font-size: 11px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#batch-avatar-modal .ba-status { font-size: 12px; margin: 2px 0 6px; }
+#batch-avatar-modal .ba-status.ok { color: #2e9e5b; }
+#batch-avatar-modal .ba-status.bad { color: #d64545; }
+#batch-avatar-modal .ba-assign { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#batch-avatar-modal .ba-assign select {
+  flex: 1 1 120px; min-width: 0; max-width: 100%; padding: 6px 8px; font-size: 13px;
+  border-radius: 8px; border: 1px solid rgba(128,128,128,.35); background: var(--primary-bg, #fff); color: inherit;
+}
+#batch-avatar-modal .ba-assign select.ba-target { flex: 0 0 auto; }
+#batch-avatar-modal .ba-current { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: 0 0 26px; background: rgba(128,128,128,.2); }
+#batch-avatar-modal .ba-empty { text-align: center; opacity: .55; font-size: 13px; padding: 30px 10px; }

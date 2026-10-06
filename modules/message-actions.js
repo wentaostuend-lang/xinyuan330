@@ -286,7 +286,7 @@
     });
     await db.chats.put(chat);
     closeBatchExcludeManager();
-    renderChatInterface(state.activeChatId, { preserveScroll: true });
+    renderChatInterface(state.activeChatId);
     updateTokenCountDisplay();
     console.log(`[批量管理] ${exclude ? '排除' : '恢复'}了 ${count} 条消息`);
   }
@@ -533,6 +533,10 @@
     }
 
     try {
+      if (window.applyRenderingRulesForStage) {
+        const result = await window.applyRenderingRulesForStage(textToCopy, chat.id, { messageId: message.id ?? message.timestamp, timestamp: message.timestamp, role: message.role, type: message.type, field: 'content', isGroup: !!chat.isGroup }, 'copy');
+        textToCopy = result.content;
+      }
       await navigator.clipboard.writeText(textToCopy);
       await showCustomAlert('复制成功', '消息内容已复制到剪贴板。');
     } catch (err) {
@@ -1126,7 +1130,7 @@
 
     await db.chats.put(chat);
     document.getElementById('message-editor-modal').classList.remove('visible');
-    renderChatInterface(state.activeChatId, { preserveScroll: true });
+    renderChatInterface(state.activeChatId);
     await showCustomAlert('成功', '消息已更新！');
   }
 
@@ -1335,7 +1339,7 @@
 
     if (editedRawBlocks.length === 0) {
       await db.chats.put(chat);
-      renderChatInterface(state.activeChatId, { preserveScroll: true });
+      renderChatInterface(state.activeChatId);
       renderChatList();
       document.getElementById('ai-response-editor-modal').classList.remove('visible');
       lastRawAiResponse = '';
@@ -1958,7 +1962,7 @@
       await db.chats.bulkPut(Array.from(privateChatsToSave.values()));
     }
 
-    renderChatInterface(state.activeChatId, { preserveScroll: true });
+    renderChatInterface(state.activeChatId);
     renderChatList();
     document.getElementById('ai-response-editor-modal').classList.remove('visible');
 
@@ -2040,7 +2044,7 @@
 
 
     await db.chats.put(chat);
-    renderChatInterface(state.activeChatId, { preserveScroll: true });
+    renderChatInterface(state.activeChatId);
 
     if (isUserRecall) {
       renderChatList();

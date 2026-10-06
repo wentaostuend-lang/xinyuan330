@@ -2168,7 +2168,7 @@ window.initEventBindingsA = async function(state, db) {
             state.globalSettings.lockScreenWallpaper = lockPreview.dataset.tempUrl;
         }
       }
-      await (window.saveSettingsRecord ? window.saveSettingsRecord(db.globalSettings, state.globalSettings) : db.globalSettings.put(state.globalSettings));
+      await db.globalSettings.put(state.globalSettings);
 
 
       applyGlobalWallpaper();
@@ -2365,7 +2365,7 @@ window.initEventBindingsA = async function(state, db) {
       saveLegacySetting('github-auto-backup', githubAutoBackup);
       saveLegacySetting('github-backup-interval', backupInterval);
 
-      await (window.saveSettingsRecord ? window.saveSettingsRecord(db.apiConfig, nextApiConfig) : db.apiConfig.put(nextApiConfig));
+      await db.apiConfig.put(nextApiConfig);
       Object.assign(state.apiConfig, nextApiConfig);
       apiConfigSaved = true;
       flushLegacySettings();
@@ -2374,10 +2374,17 @@ window.initEventBindingsA = async function(state, db) {
       const nextGlobalSettings = { ...state.globalSettings };
       const backgroundSwitch = document.getElementById('background-activity-switch');
       const intervalInput = document.getElementById('background-interval-input');
+      const intervalModeSelect = document.getElementById('background-interval-mode-select');
+      const intervalMinInput = document.getElementById('background-interval-min-input');
+      const intervalMaxInput = document.getElementById('background-interval-max-input');
       const cooldownInput = document.getElementById('block-cooldown-input');
 
       nextGlobalSettings.enableBackgroundActivity = backgroundSwitch.checked;
+      // 从 Liya 移植：后台活动间隔模式（固定秒数 / 随机分钟区间）
+      nextGlobalSettings.backgroundActivityMode = intervalModeSelect ? intervalModeSelect.value : 'random';
       nextGlobalSettings.backgroundActivityInterval = parseInt(intervalInput.value) || 60;
+      if (intervalMinInput) nextGlobalSettings.backgroundActivityIntervalMin = parseInt(intervalMinInput.value) || 10;
+      if (intervalMaxInput) nextGlobalSettings.backgroundActivityIntervalMax = parseInt(intervalMaxInput.value) || 25;
       nextGlobalSettings.blockCooldownHours = parseFloat(cooldownInput.value) || 1;
       nextGlobalSettings.enableAiDrawing = document.getElementById('enable-ai-drawing-switch').checked;
 
@@ -2410,6 +2417,9 @@ window.initEventBindingsA = async function(state, db) {
         nextGlobalSettings.customPromptCollections = window.PromptEntryManager.exportState();
       }
       nextGlobalSettings.enableQzoneActions = document.getElementById('global-enable-qzone-actions-switch').checked;
+      // 从 Liya 移植：论坛自主发帖全局开关
+      const globalForumPostSwitch = document.getElementById('global-enable-forum-post-switch');
+      if (globalForumPostSwitch) nextGlobalSettings.enableForumPost = globalForumPostSwitch.checked;
       nextGlobalSettings.enableViewMyPhone = document.getElementById('global-enable-view-myphone-switch').checked;
       nextGlobalSettings.enableCrossChat = document.getElementById('global-enable-cross-chat-switch').checked;
       nextGlobalSettings.promptClearMemoryOnChatClear = document.getElementById('global-prompt-clear-memory-switch').checked;
@@ -2456,7 +2466,7 @@ window.initEventBindingsA = async function(state, db) {
         nextGlobalSettings.enableApiStream = apiStreamSwitch.checked;
       }
       
-      await (window.saveSettingsRecord ? window.saveSettingsRecord(db.globalSettings, nextGlobalSettings) : db.globalSettings.put(nextGlobalSettings));
+      await db.globalSettings.put(nextGlobalSettings);
       Object.assign(state.globalSettings, nextGlobalSettings);
       if (floatingBallSwitch && oldFloatingBallEnabled !== nextGlobalSettings.floatingBallEnabled && typeof toggleFloatingBall === 'function') {
         applySavedSetting('悬浮球设置', () => toggleFloatingBall(nextGlobalSettings.floatingBallEnabled));
@@ -2482,7 +2492,9 @@ window.initEventBindingsA = async function(state, db) {
         stopBackgroundSimulation();
         if (nextGlobalSettings.enableBackgroundActivity) {
           startBackgroundSimulation();
-          console.log(`后台活动模拟已启动，间隔: ${nextGlobalSettings.backgroundActivityInterval}秒`);
+          console.log(nextGlobalSettings.backgroundActivityMode === 'fixed'
+            ? `后台活动模拟已启动，固定间隔: ${nextGlobalSettings.backgroundActivityInterval} 秒`
+            : `后台活动模拟已启动，随机间隔: ${nextGlobalSettings.backgroundActivityIntervalMin}~${nextGlobalSettings.backgroundActivityIntervalMax} 分钟`);
         } else {
           console.log('后台活动模拟已停止。');
         }
@@ -2930,6 +2942,17 @@ window.initEventBindingsA = async function(state, db) {
     });
 
     document.getElementById('chat-messages').addEventListener('click', async (e) => {
+      // 【发送语言翻译】点击自己发的气泡，切换显示/隐藏原文
+      let sendTranslateBubble = e.target.closest('.message-bubble');
+      if (sendTranslateBubble && sendTranslateBubble.dataset.sendTranslateOriginal) {
+        if (!e.target.closest('img, button, a')) {
+          if (typeof toggleSendTranslateOriginal === 'function') {
+            toggleSendTranslateOriginal(sendTranslateBubble);
+          }
+          return;
+        }
+      }
+
       // 【双语模式】点击消息气泡切换翻译
       let bubble = e.target.closest('.message-bubble');
       if (bubble && bubble.dataset.originalContent && state.activeChatId) {
@@ -4639,6 +4662,36 @@ window.initEventBindingsA = async function(state, db) {
         chat.settings.mcp = window.mcpManager.readPermissionEditor(
           document.getElementById('chat-mcp-permission-editor')
         );
+      }
+
+      // ===== 从 Liya 移植：随机间隔 / 勿扰 / 发送翻译 / 主动回复 / 论坛发帖 =====
+      {
+        const rMinId = chat.isGroup ? 'group-random-interval-min-input' : 'ai-random-interval-min-input';
+        const rMaxId = chat.isGroup ? 'group-random-interval-max-input' : 'ai-random-interval-max-input';
+        chat.settings.randomIntervalMin = Math.max(1, parseInt(document.getElementById(rMinId).value) || 10);
+        chat.settings.randomIntervalMax = Math.max(1, parseInt(document.getElementById(rMaxId).value) || 25);
+        // 间隔变了就作废旧的排期，下一次心跳重新随机
+        chat.nextCheckTimestamp = 0;
+
+        const dndSwitch = document.getElementById('chat-dnd-enabled-switch');
+        if (dndSwitch) chat.settings.dndEnabled = dndSwitch.checked;
+        const dndStartInput = document.getElementById('chat-dnd-start-input');
+        if (dndStartInput) chat.settings.dndStart = dndStartInput.value || '23:00';
+        const dndEndInput = document.getElementById('chat-dnd-end-input');
+        if (dndEndInput) chat.settings.dndEnd = dndEndInput.value || '07:00';
+
+        const sendTranslateSelect = document.getElementById('send-translate-language-select');
+        if (sendTranslateSelect) chat.settings.sendTranslateLanguage = sendTranslateSelect.value || '';
+
+        const proactiveReplyInput = document.getElementById('proactive-reply-hours-input');
+        if (proactiveReplyInput) chat.settings.proactiveReplyHours = Math.max(0, parseInt(proactiveReplyInput.value) || 0);
+        const proactiveDaySummaryToggle = document.getElementById('proactive-day-summary-toggle');
+        if (proactiveDaySummaryToggle) chat.settings.enableDaySummaryCompression = proactiveDaySummaryToggle.checked;
+
+        const forumPostSelect = document.getElementById('chat-enable-forum-post-select');
+        if (forumPostSelect && !chat.isGroup) {
+          chat.settings.enableForumPost = forumPostSelect.value === 'null' ? null : forumPostSelect.value === 'true';
+        }
       }
 
       await db.chats.put(chat);

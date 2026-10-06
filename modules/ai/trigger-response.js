@@ -560,7 +560,7 @@
       const customTimeInfo = window.getCustomTime ? window.getCustomTime(chat) : null;
       const customTimeEnabled = customTimeInfo && customTimeInfo.enabled;
       
-      if (typeof window.TimeAwareness?.getClockInfo === 'function') {
+      if (window.TimeAwareness) {
         ({ currentTime, localizedDate, timeOfDayGreeting } = window.TimeAwareness.getClockInfo(chat, now.getTime()));
       } else if (customTimeEnabled) {
         const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -580,7 +580,7 @@
         }));
       }
       
-      if (typeof window.TimeAwareness?.getClockInfo !== 'function') timeOfDayGreeting = getTimeOfDayGreeting(localizedDate);
+      if (!window.TimeAwareness) timeOfDayGreeting = getTimeOfDayGreeting(localizedDate);
       let systemPrompt, messagesPayload;
       const lastHiddenMessage = chat.history.filter(m => m.isHidden).pop();
       if (lastHiddenMessage && (lastHiddenMessage.content.includes('视频通话刚刚结束') || lastHiddenMessage.content.includes('语音通话刚刚结束'))) {
@@ -648,6 +648,12 @@ ${linkedContents}
 # --- 世界书设定结束 ---
 `;
         }
+      }
+      if (typeof buildBannedWordsPromptBlock === 'function') {
+        worldBookContent += buildBannedWordsPromptBlock(chat);
+      }
+      if (typeof buildGroupThoughtChainBlock === 'function') {
+        worldBookContent += buildGroupThoughtChainBlock(chat);
       }
 
 
@@ -2363,7 +2369,7 @@ ${getActiveThoughtsPrompt()}
             'userStatus': chat.settings.userStatus ? chat.settings.userStatus.text : '在线' + (chat.settings.userStatus && chat.settings.userStatus.isBusy ? '(忙碌中)' : ''),
             'userProfileContext': userProfileContext,
             'nameHistoryContext': nameHistoryContext,
-            'timePerceptionContext': chat.settings.enableTimePerception ? (typeof window.TimeAwareness?.buildLocalContext === 'function' ? window.TimeAwareness.buildLocalContext(chat) : `- **当前时间**: ${currentTime} (${timeOfDayGreeting})`) : '',
+            'timePerceptionContext': chat.settings.enableTimePerception ? (window.TimeAwareness ? window.TimeAwareness.buildLocalContext(chat) : `- **当前时间**: ${currentTime} (${timeOfDayGreeting})`) : '',
             'weatherContext': weatherContext,
             'timeContext': timeContext,
             'musicContextStr': musicContext ? '你们正在一起听歌，' + musicContext : '你们没有在听歌。',
@@ -2401,6 +2407,50 @@ ${getActiveThoughtsPrompt()}
           const lastVisibleUserMessage = [...filteredHistory].reverse().find(message => message.role === 'user' && !message.isHidden);
           const characterBondContext = window.CharacterBond ? window.CharacterBond.getPromptContext(chat, lastVisibleUserMessage) : '';
           if (characterBondContext) systemPrompt += `\n\n${characterBondContext}`;
+
+          // 从 Liya 移植：正常聊天时也有极小概率去论坛发帖（受"论坛自主发帖"开关控制，聊天单独设置优先于全局）
+          try {
+            const forumAllowedInChat = (chat.settings.enableForumPost !== null && chat.settings.enableForumPost !== undefined)
+              ? chat.settings.enableForumPost
+              : (state.globalSettings.enableForumPost !== false);
+            if (forumAllowedInChat && !chat.isGroup && db.forumBoards) {
+              const forumBoardsForChat = await db.forumBoards.orderBy('order').toArray();
+              if (forumBoardsForChat.length > 0) {
+                const forumAltsForChat = await db.forumAlts.where({ ownerType: 'char', ownerId: chat.id }).toArray();
+                systemPrompt += `
+### D. 论坛(极小概率触发！！不是每次回复都要考虑，正常聊天该怎么聊还怎么聊，绝大多数时候完全不要提及这个)
+-   **去论坛发帖**: \`{"type": "forum_post", "boardName": "板块名，从这些里选一个：${forumBoardsForChat.map(b => b.name).join('/')}", "content": "帖子内容"${forumAltsForChat.length > 0 ? `, "asAlt": "小号名字(可选，从这些里选：${forumAltsForChat.map(a => a.altName).join('/')})"` : ''}}\`
+    只有聊到一半突然有感而发/手痒想发个牢骚/想分享点什么的时候才偶尔用一次，概率大概几十分之一，不要频繁触发，也不要为了用而用。
+`;
+              }
+            }
+          } catch (e) {
+            console.warn('[论坛] 正常聊天读取板块列表失败，跳过论坛发帖指令', e);
+          }
+
+          // 从 Liya 移植：状态栏（全局开关 + 该角色绑定了预设才生效），随 update_thoughts 一起输出 status_bar 字段
+          if (state.globalSettings.statusBarEnabled && chat.settings.enableStatusBar && chat.settings.statusBarPresetId && window.__statusBarDB) {
+            try {
+              const sbPreset = await window.__statusBarDB.presets.get(chat.settings.statusBarPresetId);
+              if (sbPreset && sbPreset.promptSuffix) {
+                systemPrompt += `\n\n## 状态栏更新（必须执行）\n状态栏内容【禁止】写进聊天正文/回复里，它不是说给对方听的话，对方也看不到。请把它作为 \`update_thoughts\` 指令里的一个额外字段，跟心声/散记一起放进【同一个】JSON对象里输出：\n\`{"type": "update_thoughts", "heartfelt_voice": "...", "random_jottings": "...", "status_bar": "..."}\`\n（如果心声功能没开、本轮没有别的理由输出update_thoughts，也请单独补一条这个指令，heartfelt_voice/random_jottings可以留空，但status_bar必须给。）\n- **status_bar** 字段的内容格式为：\n${sbPreset.promptSuffix}\n（这是对当前场景状态的真实总结，不是台词。只填这一轮里确实明确发生/体现出来的信息，没有明确信息的字段就填"未知"，不要为了填满格式而编造内容，也不要写成"角色1"、"xxx2"这类占位编号。）\n- 【重要-防止重复】status_bar要基于这一轮最新剧情重新判断，某个字段确实没变可以保留原值，但不要整条原样照抄上一轮，要体现出随剧情推进的变化。`;
+              }
+            } catch (e) { console.warn('[状态栏] 读取预设失败，跳过本次注入', e); }
+          }
+
+          // 强制聚焦最新一批消息：一次性指令，读取后立即清空，只影响这一轮生成
+          if (state.forceReplyLatestOnly && state.forceReplyLatestOnly.chatId === chat.id) {
+            const sinceTs = state.forceReplyLatestOnly.sinceTimestamp;
+            const focusMsgs = chat.history.filter(m => m.role === 'user' && !m.isHidden && m.timestamp > sinceTs);
+            state.forceReplyLatestOnly = null;
+            if (focusMsgs.length > 0) {
+              const focusList = focusMsgs.map(m => {
+                const preview = typeof m.content === 'string' ? m.content.slice(0, 80) : '[图片/多媒体消息]';
+                return `"(Timestamp: ${m.timestamp}) ${preview}"`;
+              }).join('\n');
+              systemPrompt += `\n\n## 强制聚焦指令（本轮必须严格遵守）\n用户点了"强制只回复最新消息"。本轮你【只】需要针对下面这${focusMsgs.length}条用户消息（这是用户在你上一次回复之后新发的，可能不止一条，都算在本轮要回应的范围内）做出回应：\n${focusList}\n对话历史里更早的用户消息你之前已经回复过了，本轮【绝对不要】再重新回应、总结或重复处理它们，也不要把它们当成本轮还没处理的新消息。`;
+            }
+          }
 
           systemPrompt = processPromptWithSettings(systemPrompt, 'single');
 
@@ -5046,6 +5096,62 @@ ${getActiveThoughtsPrompt()}
               content: msgData.content
             };
             break;
+          case 'fictional_chat_card': {
+            const rawList = Array.isArray(msgData.shared_messages) ? msgData.shared_messages : [];
+            if (!msgData.card_title || rawList.length === 0) {
+              console.warn('AI 尝试发送一个格式不正确的虚构聊天记录卡片:', msgData);
+              continue;
+            }
+            const userDisplayName = chat.settings.myNickname || '我';
+            let fakeTimestamp = currentMessageTimestamp - rawList.length * 1000;
+            const sharedHistory = rawList.map(item => {
+              const senderLabel = (item && item.sender) ? String(item.sender) : chat.name;
+              const isUserLine = senderLabel === '我' || senderLabel === userDisplayName;
+              return {
+                role: isUserLine ? 'user' : 'assistant',
+                senderName: isUserLine ? userDisplayName : senderLabel,
+                content: (item && item.text) ? String(item.text) : '',
+                timestamp: fakeTimestamp++
+              };
+            });
+            aiMessage = {
+              ...baseMessage,
+              type: 'fictional_chat_card',
+              payload: {
+                title: msgData.card_title,
+                sourceChatName: msgData.source_chat_name || null,
+                sharedHistory
+              }
+            };
+            break;
+          }
+          case 'forward_chat_record': {
+            const timestampList = Array.isArray(msgData.timestamps) ? msgData.timestamps.map(Number) : [];
+            if (timestampList.length === 0) {
+              console.warn('AI 尝试转发聊天记录，但没有提供有效的 timestamps:', msgData);
+              continue;
+            }
+            const sortedTimestamps = [...new Set(timestampList)].sort((a, b) => a - b);
+            const sharedHistory = [];
+            for (const ts of sortedTimestamps) {
+              const realMsg = chat.history.find(m => m.timestamp === ts && !m.isHidden);
+              if (realMsg) sharedHistory.push(realMsg);
+            }
+            if (sharedHistory.length === 0) {
+              console.warn('AI 尝试转发聊天记录，但 timestamps 没有匹配到本聊天里的真实消息:', msgData);
+              continue;
+            }
+            aiMessage = {
+              ...baseMessage,
+              type: 'share_card',
+              payload: {
+                sourceChatName: chat.name,
+                title: msgData.card_title || `来自"${chat.name}"的聊天记录`,
+                sharedHistory
+              }
+            };
+            break;
+          }
           case 'quote_reply': {
             let originalMessage = null;
 
@@ -5638,6 +5744,9 @@ ${getActiveThoughtsPrompt()}
         }
 
         if (aiMessage) {
+          if (typeof aiMessage.content === 'string' && typeof applyBannedWordsFilter === 'function') {
+            aiMessage.content = await applyBannedWordsFilter(aiMessage.content, chat);
+          }
           if (chat.settings.enableBilingualMode && window.languagePolicy && (aiMessage.type === 'text' || aiMessage.type === 'voice_message' || !aiMessage.type)) {
             const languageParts = window.languagePolicy.splitContent(aiMessage.content);
             const languageSettings = window.languagePolicy.resolvePolicyForSender(chat, aiMessage.senderName || msgData.name);
@@ -5654,6 +5763,10 @@ ${getActiveThoughtsPrompt()}
             };
           }
           chat.history.push(aiMessage);
+          if (chat.isGroup && typeof awardGroupActivity === 'function') {
+            const speakerMember = chat.members.find(m => m.originalName === aiMessage.senderName || m.groupNickname === aiMessage.senderName);
+            if (speakerMember) awardGroupActivity(chat, speakerMember.id);
+          }
           if (window.CharacterBond) window.CharacterBond.onMessageSaved(chat, aiMessage);
           if (!isViewingThisChat) {
             chat.unreadCount = (chat.unreadCount || 0) + 1;

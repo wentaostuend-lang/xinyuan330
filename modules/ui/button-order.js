@@ -2,6 +2,25 @@
 // 按钮排序编辑器 (原 script.js 第 48160~48348 行)
 // ============================================================
 
+  // 用户保存过自定义顺序后，后续新增的按钮不在他的列表里就永远不会显示。
+  // 这里把默认列表里有、但用户保存的顺序里没有的按钮，插到默认顺序里它前一个按钮的后面（找不到就放最后）。
+  function getEffectiveButtonOrder() {
+    const saved = state.globalSettings.chatActionButtonsOrder;
+    if (!Array.isArray(saved) || saved.length === 0) return DEFAULT_BUTTON_ORDER;
+
+    const merged = [...saved];
+    DEFAULT_BUTTON_ORDER.forEach((id, idx) => {
+      if (merged.includes(id)) return;
+      let insertAt = merged.length;
+      for (let i = idx - 1; i >= 0; i--) {
+        const prevPos = merged.indexOf(DEFAULT_BUTTON_ORDER[i]);
+        if (prevPos !== -1) { insertAt = prevPos + 1; break; }
+      }
+      merged.splice(insertAt, 0, id);
+    });
+    return merged;
+  }
+
   function renderButtonOrderEditor() {
     const editor = document.getElementById('button-order-editor');
     if (!editor) return;
@@ -10,8 +29,7 @@
 
 
 
-    let buttonOrder = state.globalSettings.chatActionButtonsOrder || DEFAULT_BUTTON_ORDER;
-    buttonOrder = [...buttonOrder, ...['generation-adjustments-btn', 'model-communication-btn'].filter(id => !buttonOrder.includes(id))];
+    let buttonOrder = getEffectiveButtonOrder();
 
     buttonOrder.forEach(buttonId => {
       const originalButton = document.getElementById(buttonId);
@@ -130,10 +148,11 @@
 
 
   function applyButtonOrder() {
-    const buttonOrder = state.globalSettings.chatActionButtonsOrder;
-    if (!buttonOrder || !Array.isArray(buttonOrder) || buttonOrder.length === 0) {
+    const saved = state.globalSettings.chatActionButtonsOrder;
+    if (!saved || !Array.isArray(saved) || saved.length === 0) {
       return;
     }
+    const buttonOrder = getEffectiveButtonOrder();
 
     const container = document.getElementById('chat-input-actions-top');
     if (!container) return;
@@ -155,7 +174,7 @@
     'video-call-btn', 'group-video-call-btn', 'voice-call-btn', 'group-voice-call-btn', 'send-poll-btn',
     'share-link-btn', 'share-location-btn', 'gomoku-btn',
     'open-shopping-btn', 'pat-btn', 'edit-last-response-btn',
-    'regenerate-btn', 'generation-adjustments-btn', 'model-communication-btn', 'propel-btn', 'show-announcement-board-btn',
+    'regenerate-btn', 'force-reply-latest-btn', 'generation-adjustments-btn', 'model-communication-btn', 'propel-btn', 'show-announcement-board-btn',
     'werewolf-game-btn',
 
     'read-together-btn',

@@ -6,6 +6,14 @@
     directRegenerationPending.add(chat.id);
     try {
 
+    // 从 Liya 移植：如果最后一条消息是"主动回复"生成的，走专门的 reroll 逻辑，
+    // 按当时真实的离开时长重新生成一整批，而不是当成普通对话回复来重开
+    const lastVisibleMsg = chat.history.filter(msg => !msg.isHidden).slice(-1)[0];
+    if (lastVisibleMsg?.proactiveBatchId && typeof rerollProactiveReply === 'function') {
+      await rerollProactiveReply(chat.id, lastVisibleMsg.proactiveBatchId);
+      return;
+    }
+
     const lastUserMsgIndex = chat.history.findLastIndex(msg => msg.role === 'user' && !msg.isHidden);
 
     if (lastUserMsgIndex === -1) {
@@ -70,6 +78,28 @@
     triggerAiInCallAction(null);
   }
 
+  // 强制本轮只回复"上一条AI回复之后、直到现在"这一整段新消息（可能是好几条），
+  // 忽略/不重复处理更早已经回复过的消息。一次性指令：用完即清。
+  async function handleForceReplyLatest() {
+    const chat = state.chats[state.activeChatId];
+    if (!chat) return;
+
+    const hasUserMsg = chat.history.some(m => m.role === 'user' && !m.isHidden);
+    if (!hasUserMsg) {
+      await showCustomAlert('无法执行', '当前聊天里还没有你发送的消息。');
+      return;
+    }
+
+    const lastAiMsg = [...chat.history].reverse().find(m => m.role === 'assistant' && !m.isHidden);
+
+    state.forceReplyLatestOnly = {
+      chatId: chat.id,
+      sinceTimestamp: lastAiMsg ? lastAiMsg.timestamp : 0
+    };
+
+    await triggerAiResponse({ chatId: chat.id });
+  }
+
   async function handlePropelAction() {
     const chat = state.chats[state.activeChatId];
     if (!chat) return;
@@ -110,7 +140,7 @@
 
       const now = new Date();
       const chinaTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60000) + (3600000 * 8));
-      const perceptionClock = window.TimeAwareness?.getClockInfo?.(chat, now.getTime());
+      const perceptionClock = window.TimeAwareness?.getClockInfo(chat, now.getTime());
       const currentTime = perceptionClock?.currentTime || chinaTime.toLocaleString('zh-CN', {
         timeZone: 'Asia/Shanghai',
         dateStyle: 'full',
@@ -150,6 +180,12 @@ ${linkedContents}
 # --- 世界书设定结束 ---
 `;
         }
+      }
+      if (typeof buildBannedWordsPromptBlock === 'function') {
+        worldBookContent += buildBannedWordsPromptBlock(chat);
+      }
+      if (typeof buildGroupThoughtChainBlock === 'function') {
+        worldBookContent += buildGroupThoughtChainBlock(chat);
       }
       let musicContext = '';
       if (window.isMusicAwareChat ? window.isMusicAwareChat(chat.id) : (musicState.isActive && musicState.activeChatId === chat.id)) {
@@ -238,7 +274,7 @@ ${linkedContents}
         'userStatus': chat.settings.userStatus ? chat.settings.userStatus.text : '在线' + (chat.settings.userStatus && chat.settings.userStatus.isBusy ? '(忙碌中)' : ''),
         'userProfileContext': userProfileContext,
         'nameHistoryContext': nameHistoryContext,
-        'timePerceptionContext': chat.settings.enableTimePerception ? (typeof window.TimeAwareness?.buildLocalContext === 'function' ? window.TimeAwareness.buildLocalContext(chat) : `- **当前时间**: ${currentTime} (${timeOfDayGreeting})`) : '',
+        'timePerceptionContext': chat.settings.enableTimePerception ? (window.TimeAwareness ? window.TimeAwareness.buildLocalContext(chat) : `- **当前时间**: ${currentTime} (${timeOfDayGreeting})`) : '',
         'weatherContext': '', // 推进时省略天气
         'timeContext': '',
         'musicContextStr': musicContext ? '你们正在一起听歌，' + musicContext : '你们没有在听歌。',
@@ -368,6 +404,9 @@ ${linkedContents}
             }
           }
           continue;
+        }
+        if (typeof aiMessage.content === 'string' && typeof applyBannedWordsFilter === 'function') {
+          aiMessage.content = await applyBannedWordsFilter(aiMessage.content, chat);
         }
         chat.history.push(aiMessage);
         appendMessage(aiMessage, chat);

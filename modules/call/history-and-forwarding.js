@@ -222,7 +222,7 @@
       await db.chats.put(chat);
 
 
-      renderChatInterface(state.activeChatId, { preserveScroll: true });
+      renderChatInterface(state.activeChatId);
       renderChatList();
 
 

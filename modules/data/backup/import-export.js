@@ -61,7 +61,19 @@
         watchTogetherPlaylist,
         mcpConnections,
         mcpActivities,
-        mcpSettings
+        mcpSettings,
+        forumBoards,
+        forumPosts,
+        forumComments,
+        forumNpcs,
+        forumAlts,
+        forumDMs,
+        forumDMThreads,
+        forumHotTopics,
+        forumAvatarPool,
+        forumAskBoxQuestions,
+        forumFollows,
+        forumBlocks
       ] = await Promise.all([
         db.chats.toArray(),
         db.worldBooks.toArray(),
@@ -116,7 +128,19 @@
         db.watchTogetherPlaylist.toArray(),
         db.mcpConnections.toArray(),
         db.mcpActivities.toArray(),
-        db.mcpSettings.get('main')
+        db.mcpSettings.get('main'),
+        db.forumBoards.toArray(),
+        db.forumPosts.toArray(),
+        db.forumComments.toArray(),
+        db.forumNpcs.toArray(),
+        db.forumAlts.toArray(),
+        db.forumDMs.toArray(),
+        db.forumDMThreads.toArray(),
+        db.forumHotTopics.toArray(),
+        db.forumAvatarPool.toArray(),
+        db.forumAskBoxQuestions.toArray(),
+        db.forumFollows.toArray(),
+        db.forumBlocks.toArray()
       ]);
 
       // 方案3：导出时移除API历史记录
@@ -124,6 +148,16 @@
 
       // 导出情侣空间相关的 localStorage 数据
       const coupleSpaceLocalStorage = exportCoupleSpaceLocalStorage();
+
+      // 状态栏预设存放在独立的 LiyaStatusBarDB，不属于主 db，需单独读取
+      let statusBarPresets = [];
+      if (window.__statusBarDB) {
+        try {
+          statusBarPresets = await window.__statusBarDB.presets.toArray();
+        } catch (error) {
+          console.error('读取状态栏预设失败:', error);
+        }
+      }
 
       Object.assign(backupData, {
         chats: cleanedChats,
@@ -151,6 +185,7 @@
         stickerCategories,
 
         appearancePresets, customWidgetPackages, customWidgetInstances,
+        statusBarPresets,
 
         presets,
         presetCategories,
@@ -179,6 +214,7 @@
         mcpConnections: sanitizeMcpConnectionsForBackup(mcpConnections),
         mcpActivities,
         mcpSettings,
+        forumBoards, forumPosts, forumComments, forumNpcs, forumAlts, forumDMs, forumDMThreads, forumHotTopics, forumAvatarPool, forumAskBoxQuestions, forumFollows, forumBlocks,
         
         // 情侣空间 localStorage 数据
         localStorage: coupleSpaceLocalStorage
@@ -281,6 +317,7 @@
         appearancePresets: '外观预设',
         customWidgetPackages: '自制小组件',
         customWidgetInstances: '小组件个人内容',
+        statusBarPresets: '状态栏预设',
         presets: '预设',
         presetCategories: '预设分类',
         npcs: 'NPC',
@@ -310,7 +347,19 @@
         mcpConnections: 'MCP连接',
         mcpActivities: 'MCP活动记录',
         mcpSettings: 'MCP设置',
-        mcpSecrets: 'MCP本机凭证'
+        mcpSecrets: 'MCP本机凭证',
+        forumBoards: '论坛板块',
+        forumPosts: '论坛帖子',
+        forumComments: '论坛评论',
+        forumNpcs: '论坛网友',
+        forumAlts: '论坛小号',
+        forumDMs: '论坛私信',
+        forumDMThreads: '论坛私信会话',
+        forumHotTopics: '论坛热点',
+        forumAvatarPool: '论坛头像池',
+        forumAskBoxQuestions: '论坛提问箱',
+        forumFollows: '论坛关注',
+        forumBlocks: '论坛屏蔽'
       };
 
       // 统计各表数据
@@ -601,6 +650,7 @@
       'appearancePresets': '外观预设',
       'customWidgetPackages': '自制小组件',
       'customWidgetInstances': '小组件个人内容',
+      'statusBarPresets': '状态栏预设',
       'npcs': 'NPCs',
       'npcGroups': 'NPC分组',
       'doubanPosts': '豆瓣动态',
@@ -621,6 +671,18 @@
       'mcpConnections': 'MCP连接',
       'mcpActivities': 'MCP活动记录',
       'mcpSettings': 'MCP设置',
+      'forumBoards': '论坛板块',
+      'forumPosts': '论坛帖子',
+      'forumComments': '论坛评论',
+      'forumNpcs': '论坛网友',
+      'forumAlts': '论坛小号',
+      'forumDMs': '论坛私信',
+      'forumDMThreads': '论坛私信会话',
+      'forumHotTopics': '论坛热点',
+      'forumAvatarPool': '论坛头像池',
+      'forumAskBoxQuestions': '论坛提问箱',
+      'forumFollows': '论坛关注',
+      'forumBlocks': '论坛屏蔽',
       'localStorage': '情侣空间数据'
     };
 
@@ -767,6 +829,7 @@
       'appearancePresets': '外观预设',
       'customWidgetPackages': '自制小组件',
       'customWidgetInstances': '小组件个人内容',
+      'statusBarPresets': '状态栏预设',
       'npcs': 'NPCs',
       'npcGroups': 'NPC分组',
       'doubanPosts': '豆瓣动态',
@@ -787,6 +850,18 @@
       'mcpConnections': 'MCP连接',
       'mcpActivities': 'MCP活动记录',
       'mcpSettings': 'MCP设置',
+      'forumBoards': '论坛板块',
+      'forumPosts': '论坛帖子',
+      'forumComments': '论坛评论',
+      'forumNpcs': '论坛网友',
+      'forumAlts': '论坛小号',
+      'forumDMs': '论坛私信',
+      'forumDMThreads': '论坛私信会话',
+      'forumHotTopics': '论坛热点',
+      'forumAvatarPool': '论坛头像池',
+      'forumAskBoxQuestions': '论坛提问箱',
+      'forumFollows': '论坛关注',
+      'forumBlocks': '论坛屏蔽',
       'localStorage': '情侣空间数据'
     };
 
@@ -887,11 +962,23 @@
         }
       }
 
+      // 状态栏预设存放在独立的 LiyaStatusBarDB，不属于主 db，需在事务外单独处理
+      if (typesToMerge.includes('statusBarPresets')) {
+        const statusBarPresetsData = dataToMerge.statusBarPresets;
+        if (Array.isArray(statusBarPresetsData) && window.__statusBarDB) {
+          try {
+            await window.__statusBarDB.presets.bulkPut(statusBarPresetsData);
+          } catch (error) {
+            console.error('合并状态栏预设失败:', error);
+          }
+        }
+      }
+
       // 处理数据库表
       await db.transaction('rw', db.tables, async () => {
         for (const type of typesToMerge) {
-          // 跳过 localStorage，它已经在上面处理了
-          if (type === 'localStorage') continue;
+          // 跳过 localStorage 和 statusBarPresets，它们已经在上面单独处理了
+          if (type === 'localStorage' || type === 'statusBarPresets') continue;
           
           const data = dataToMerge[type];
           if (!data) continue;
@@ -1016,8 +1103,29 @@
         if (Array.isArray(backupData.mcpConnections)) await db.mcpConnections.bulkPut(sanitizeMcpConnectionsForBackup(backupData.mcpConnections));
         if (Array.isArray(backupData.mcpActivities)) await db.mcpActivities.bulkPut(backupData.mcpActivities);
         if (backupData.mcpSettings) await db.mcpSettings.put(backupData.mcpSettings);
+        if (Array.isArray(backupData.forumBoards)) await db.forumBoards.bulkPut(backupData.forumBoards);
+        if (Array.isArray(backupData.forumPosts)) await db.forumPosts.bulkPut(backupData.forumPosts);
+        if (Array.isArray(backupData.forumComments)) await db.forumComments.bulkPut(backupData.forumComments);
+        if (Array.isArray(backupData.forumNpcs)) await db.forumNpcs.bulkPut(backupData.forumNpcs);
+        if (Array.isArray(backupData.forumAlts)) await db.forumAlts.bulkPut(backupData.forumAlts);
+        if (Array.isArray(backupData.forumDMs)) await db.forumDMs.bulkPut(backupData.forumDMs);
+        if (Array.isArray(backupData.forumDMThreads)) await db.forumDMThreads.bulkPut(backupData.forumDMThreads);
+        if (Array.isArray(backupData.forumHotTopics)) await db.forumHotTopics.bulkPut(backupData.forumHotTopics);
+        if (Array.isArray(backupData.forumAvatarPool)) await db.forumAvatarPool.bulkPut(backupData.forumAvatarPool);
+        if (Array.isArray(backupData.forumAskBoxQuestions)) await db.forumAskBoxQuestions.bulkPut(backupData.forumAskBoxQuestions);
+        if (Array.isArray(backupData.forumFollows)) await db.forumFollows.bulkPut(backupData.forumFollows);
+        if (Array.isArray(backupData.forumBlocks)) await db.forumBlocks.bulkPut(backupData.forumBlocks);
       });
-      
+
+      // 状态栏预设存放在独立的 LiyaStatusBarDB，不属于主 db，事务外单独恢复
+      if (Array.isArray(backupData.statusBarPresets) && window.__statusBarDB) {
+        try {
+          await window.__statusBarDB.presets.bulkPut(backupData.statusBarPresets);
+        } catch (error) {
+          console.error('恢复状态栏预设失败:', error);
+        }
+      }
+
       // 3. 如果备份中有 localStorage 数据，则恢复
       if (backupData.localStorage) {
         console.log('正在恢复情侣空间 localStorage 数据...');

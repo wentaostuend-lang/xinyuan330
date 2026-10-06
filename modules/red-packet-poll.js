@@ -182,7 +182,7 @@
       const claimedAmount = await handleOpenRedPacket(packet);
 
       if (claimedAmount !== null) {
-        await renderChatInterface(currentChatId, { preserveScroll: true });
+        await renderChatInterface(currentChatId);
         await showCustomAlert("恭喜！", `你领取了 ${getDisplayNameInGroup(freshChat, packet.senderName)} 的红包，金额为 ${claimedAmount.toFixed(2)} 元。`);
       }
 
@@ -532,7 +532,7 @@
 
 
     await db.chats.put(chat);
-    renderChatInterface(state.activeChatId, { preserveScroll: true });
+    renderChatInterface(state.activeChatId);
   }
 
 
@@ -559,7 +559,7 @@
 
 
       await db.chats.put(chat);
-      renderChatInterface(state.activeChatId, { preserveScroll: true });
+      renderChatInterface(state.activeChatId);
     }
   }
 

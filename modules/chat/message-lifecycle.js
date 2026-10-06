@@ -4,7 +4,6 @@
 
 
     if (!messageEl) return;
-    chatMessageReferences.set(messageEl, msg);
 
     const loadMoreBtn = document.getElementById('load-more-btn');
     if (loadMoreBtn) {
@@ -40,7 +39,6 @@
 
     const messageEl = await createMessageElement(msg, chat);
     if (!messageEl) return;
-    chatMessageReferences.set(messageEl, msg);
 
 
     if (msg.role === 'assistant' && !isInitialLoad) {
@@ -165,6 +163,10 @@
     showScreen('chat-interface-screen');
     window.updateListenTogetherIconProxy(state.activeChatId);
 
+    // 从 Liya 移植：进入聊天时检查一次是否需要触发主动回复
+    if (typeof checkAndTriggerProactiveReply === 'function') {
+      checkAndTriggerProactiveReply(chat);
+    }
 
     const isGroup = chat.isGroup || false;
 

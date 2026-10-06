@@ -6,17 +6,55 @@
 //       startBackgroundKeepAlive, stopBackgroundKeepAlive, handleVisibilityChange,
 //       bindBackgroundKeepAliveEvents, loadBackgroundKeepAliveSettings
 
+  // 计算下一次后台活动触发前的等待时间（毫秒）
+  // 模式由 state.globalSettings.backgroundActivityMode 决定：
+  //   'fixed'  → 固定间隔，读取 backgroundActivityInterval（单位：秒），未配置默认 60 秒
+  //   'random' → 随机区间，读取 backgroundActivityIntervalMin / Max（单位：分钟），未配置默认 10~25 分钟
+  // 未设置 mode 时默认按 'random' 处理（保持当前版本的行为）
+  function getNextBackgroundIntervalMs() {
+    const mode = state.globalSettings.backgroundActivityMode || 'random';
+
+    if (mode === 'fixed') {
+      const intervalSeconds = Number(state.globalSettings.backgroundActivityInterval) || 60;
+      return intervalSeconds * 1000;
+    }
+
+    const minMinutes = Number(state.globalSettings.backgroundActivityIntervalMin) || 10;
+    const maxMinutes = Number(state.globalSettings.backgroundActivityIntervalMax) || 25;
+    const lower = Math.min(minMinutes, maxMinutes);
+    const upper = Math.max(minMinutes, maxMinutes);
+    const randomMinutes = lower + Math.random() * (upper - lower);
+    return randomMinutes * 60 * 1000;
+  }
+
   function startBackgroundSimulation() {
     if (simulationIntervalId) return;
-    const intervalSeconds = state.globalSettings.backgroundActivityInterval || 60;
-
-    simulationIntervalId = setInterval(runBackgroundSimulationTick, intervalSeconds * 1000);
+    scheduleNextBackgroundSimulationTick();
     playSilentAudio();
+  }
+
+  // 排定下一次 tick：固定模式下每次间隔相同；随机模式下每次重新随机
+  function scheduleNextBackgroundSimulationTick() {
+    const delayMs = getNextBackgroundIntervalMs();
+    const mode = state.globalSettings.backgroundActivityMode || 'random';
+    console.log(mode === 'fixed'
+      ? `[后台活动] 固定间隔，下一次将在 ${(delayMs / 1000).toFixed(0)} 秒后触发`
+      : `[后台活动] 随机间隔，下一次将在约 ${(delayMs / 60000).toFixed(1)} 分钟后触发`);
+
+    simulationIntervalId = setTimeout(async () => {
+      await runBackgroundSimulationTick();
+      // tick 内部若检测到总开关已关闭，会调用 stopBackgroundSimulation 把 simulationIntervalId 置空
+      if (state.globalSettings.enableBackgroundActivity) {
+        scheduleNextBackgroundSimulationTick();
+      } else {
+        simulationIntervalId = null;
+      }
+    }, delayMs);
   }
 
   function stopBackgroundSimulation() {
     if (simulationIntervalId) {
-      clearInterval(simulationIntervalId);
+      clearTimeout(simulationIntervalId);
       simulationIntervalId = null;
     }
     stopSilentAudio();
@@ -24,6 +62,44 @@
 
 
 
+
+  // 勿扰时间段：开启后，这段时间内不会主动发后台消息（用户主动找TA聊天不受影响）
+  // 设置存在 chat.settings.dndEnabled / dndStart / dndEnd（HH:MM，可以跨天，例如 23:00 ~ 07:00）
+  function isChatInDoNotDisturb(chat, now) {
+    const s = chat && chat.settings;
+    if (!s || !s.dndEnabled) return false;
+    const toMinutes = (str, fallback) => {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(str || fallback);
+      return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    };
+    const start = toMinutes(s.dndStart, '23:00');
+    const end = toMinutes(s.dndEnd, '07:00');
+    if (start === null || end === null || start === end) return false;
+    const d = now || new Date();
+    const cur = d.getHours() * 60 + d.getMinutes();
+    return start < end ? (cur >= start && cur < end) : (cur >= start || cur < end);
+  }
+  window.isChatInDoNotDisturb = isChatInDoNotDisturb;
+
+  // 判断某个角色/群聊是否到了它自己的随机检查间隔（不影响冷却时间的判断，两者独立叠加）
+  // 到点后会重新随机排定下一次检查时间，并持久化保存
+  function isDueForRandomIntervalCheck(chat) {
+    const now = Date.now();
+    if (chat.nextCheckTimestamp && now < chat.nextCheckTimestamp) {
+      return false; // 还没到这个角色自己的随机检查时间
+    }
+    const intervalMin = Number(chat.settings.randomIntervalMin) || 10;
+    const intervalMax = Number(chat.settings.randomIntervalMax) || 25;
+    const lower = Math.min(intervalMin, intervalMax);
+    const upper = Math.max(intervalMin, intervalMax);
+    const randomMinutes = lower + Math.random() * (upper - lower);
+    chat.nextCheckTimestamp = now + randomMinutes * 60 * 1000;
+    // 持久化保存，避免刷新页面后随机排期丢失（不阻塞主流程，失败也不影响本次判断）
+    if (typeof db !== 'undefined' && db.chats) {
+      db.chats.put(chat).catch(() => {});
+    }
+    return true;
+  }
 
   async function runBackgroundSimulationTick() {
     console.log("模拟器心跳 Tick...");
@@ -34,6 +110,7 @@
 
 
     const allSingleChats = Object.values(state.chats).filter(chat => !chat.isGroup);
+    runForumNpcTick(); // 论坛网友回复/发帖，不依赖具体某个chat，每次心跳独立跑一次
     allSingleChats.forEach(chat => {
       if (chat.relationship?.status === 'blocked_by_user') {
         const blockedTimestamp = chat.relationship.blockedTimestamp;
@@ -49,13 +126,28 @@
           console.log(`角色 "${chat.name}" 的后台活动已被时间感知暂停设置暂停。`);
           return;
         }
+        if (isChatInDoNotDisturb(chat)) {
+          console.log(`角色 "${chat.name}" 处于勿扰时间段，本次跳过。`);
+          return;
+        }
         if (chat.settings.enableBackgroundActivity === false) {
           console.log(`角色 "${chat.name}" 的独立后台活动开关已关闭，本次跳过。`);
+          return;
+        }
+        // 每个角色有自己的随机检查间隔，没到点就先不评估这次心跳
+        if (!isDueForRandomIntervalCheck(chat)) {
           return;
         }
         if (Math.random() < 0.20) {
           console.log(`角色 "${chat.name}" 被唤醒，准备独立行动...`);
           triggerInactiveAiAction(chat.id);
+        }
+        // 论坛：独立小概率触发角色自己发帖(不依赖triggerInactiveAiAction，自成一路)
+        const forumPostAllowed = (chat.settings.enableForumPost !== null && chat.settings.enableForumPost !== undefined)
+          ? chat.settings.enableForumPost
+          : (state.globalSettings.enableForumPost !== false);
+        if (forumPostAllowed && Math.random() < 0.06) {
+          triggerCharForumPost(chat.id).catch(e => console.warn('[论坛] 角色后台发帖失败', e));
         }
         // 检查是否可以帮助用户清空购物车
         checkAndClearShoppingCart(chat.id);
@@ -73,8 +165,16 @@
         console.log(`群聊 "${chat.name}" 的后台活动已被时间感知暂停设置暂停。`);
         return;
       }
+      if (isChatInDoNotDisturb(chat)) {
+        console.log(`群聊 "${chat.name}" 处于勿扰时间段，本次跳过。`);
+        return;
+      }
       if (chat.settings.enableBackgroundActivity === false) {
         console.log(`群聊 "${chat.name}" 的后台活动开关已关闭，本次跳过。`);
+        return;
+      }
+      // 群聊同样按自己的随机间隔来判断是否该检查
+      if (!isDueForRandomIntervalCheck(chat)) {
         return;
       }
       if (chat.id !== state.activeChatId && Math.random() < 0.10) {
@@ -198,6 +298,284 @@
       console.error("处理NPC后台活动时出错:", error);
     }
   }
+
+  // ============================================================
+  // 论坛：角色后台自己发帖(跟主动回复的forum_post是两条独立入口，
+  // 这个是"哪怕user在正常聊天/根本没触发主动回复"也可能发生的日常动态)
+  // ============================================================
+  async function triggerCharForumPost(chatId) {
+    const chat = state.chats[chatId];
+    if (!chat) return;
+    const boards = await db.forumBoards.orderBy('order').toArray();
+    if (boards.length === 0) return;
+    const charAlt = await db.forumAlts.where({ ownerType: 'char', ownerId: chatId }).first();
+
+    const useBackgroundApi = state.apiConfig.backgroundProxyUrl && state.apiConfig.backgroundApiKey && state.apiConfig.backgroundModel;
+    const { proxyUrl, apiKey, model } = useBackgroundApi
+      ? { proxyUrl: state.apiConfig.backgroundProxyUrl, apiKey: state.apiConfig.backgroundApiKey, model: state.apiConfig.backgroundModel }
+      : state.apiConfig;
+    if (!proxyUrl || !apiKey || !model) return;
+
+    // 读记忆+最近聊天记录，让发帖内容有代入感，不是纯编
+    const memoryBlock = typeof getMemoryContextForPrompt === 'function'
+      ? `# 长期记忆(参考这些，发帖内容要跟角色实际经历的事贴合)\n${getMemoryContextForPrompt(chat)}\n`
+      : '';
+    const recentChatMsgs = (chat.history || [])
+      .filter(m => !m.isHidden && typeof m.content === 'string' && m.content)
+      .slice(-15)
+      .map(m => `${m.role === 'user' ? (state.qzoneSettings?.nickname || '用户') : chat.name}: ${m.content}`)
+      .join('\n');
+    const recentChatBlock = recentChatMsgs ? `# 最近和用户的聊天记录(帖子内容可以从这里取材，比如吐槽最近聊到的事、延续某个话题)\n${recentChatMsgs}\n` : '';
+    const myRecentPosts = (await db.forumPosts.where('authorId').equals(chatId).toArray())
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 5)
+      .map(p => `- ${(p.content || '').substring(0, 50)}`)
+      .join('\n');
+    const recentPostsBlock = myRecentPosts ? `# 你最近发过的帖子(别写得跟这些重复)\n${myRecentPosts}\n` : '';
+
+    const boardNames = boards.map(b => b.name).join('/');
+    const systemPrompt = `
+# 你的任务
+你是角色"${chat.name}"，人设如下：
+${chat.settings.aiPersona}
+
+${memoryBlock}${recentChatBlock}${recentPostsBlock}
+现在你想去论坛发一条帖子，可能是日常分享、突然想到的问题、想吐槽的小事，也可能因为跟用户的相处有感而发——结合上面的记忆和聊天记录，写点真的跟你(角色)当下处境相关的内容，不要凭空乱编跟角色毫无关系的东西。
+
+# 要求
+1. 板块从这些里选一个：${boardNames}
+2. 只输出JSON对象，不要有其他文字：{"boardName": "板块名", "content": "帖子内容"${charAlt ? `, "asAlt": true或false(true表示用小号"${charAlt.altName}"匿名发)` : `, "createAlt": "小号名字"(可选，如果你还没有小号但这次想匿名发，取一个符合人设的名字，系统会自动帮你创建这个小号并用它发布，以后就是你固定的马甲了)`}, "widget": {...}(可选)}
+${typeof window.FORUM_WIDGET_PROMPT_HINT === 'string' ? window.FORUM_WIDGET_PROMPT_HINT : ''}`;
+
+    try {
+      const messagesForApi = [{ role: 'user', content: '请生成这条帖子' }];
+      const isGemini = proxyUrl.includes('generativelanguage');
+      const geminiConfig = toGeminiRequestData(model, apiKey, systemPrompt, messagesForApi);
+      const response = isGemini
+        ? await fetch(geminiConfig.url, geminiConfig.data)
+        : await fetch(`${proxyUrl}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+              model,
+              messages: [{ role: 'system', content: systemPrompt }, ...messagesForApi],
+              temperature: state.globalSettings.apiTemperature || 0.9,
+            }),
+          });
+      if (!response.ok) throw new Error(`API错误: ${response.statusText}`);
+      const data = await response.json();
+      const raw = (isGemini
+        ? data.candidates[0].content.parts[0].text
+        : data.choices[0].message.content
+      ).replace(/```json\s*|```\s*$/g, '').trim();
+      const jsonMatch = raw.match(/(\{[\s\S]*\})/);
+      if (!jsonMatch) return;
+      const result = JSON.parse(jsonMatch[0]);
+      if (!result.content) return;
+
+      const matchedBoard = boards.find(b => b.name === result.boardName) || boards[0];
+      let useAlt = result.asAlt === true && charAlt;
+      let finalAltId = useAlt ? charAlt.id : null;
+      let finalAltName = useAlt ? charAlt.altName : null;
+      let finalAltAvatar = useAlt ? (charAlt.altAvatar || '') : '';
+
+      if (!charAlt && result.createAlt) {
+        // AI自己取名创建了个新小号，落库后以后这个角色就有固定马甲了，管理界面也能看到
+        const newAltName = String(result.createAlt).trim();
+        if (newAltName) {
+          finalAltId = await db.forumAlts.add({ ownerType: 'char', ownerId: chatId, altName: newAltName, altAvatar: '' });
+          finalAltName = newAltName;
+          useAlt = true;
+        }
+      }
+
+      const charWidget = (typeof window.buildForumWidgetFromAIOutput === 'function' && result.widget)
+        ? window.buildForumWidgetFromAIOutput(result.widget)
+        : null;
+      await db.forumPosts.add({
+        boardId: matchedBoard.id,
+        authorType: 'char',
+        authorId: chat.id,
+        content: result.content,
+        timestamp: Date.now(),
+        likes: [],
+        commentCount: 0,
+        ...(useAlt ? { authorAltId: finalAltId, authorDisplayName: finalAltName, authorAvatar: finalAltAvatar } : {}),
+        ...(charWidget ? { widget: charWidget } : {}),
+      });
+      console.log(`[论坛] 角色 "${chat.name}" 后台发布了一条帖子${useAlt ? '(小号)' : ''}`);
+
+      // 塞一条隐藏系统消息进聊天记录，让char"记得"自己发过这条帖子——
+      // 不在聊天界面显示气泡，但会被当作上下文喂给AI，之后user提起这件事时角色能自然接上
+      chat.history.push({
+        role: 'system',
+        content: `[系统提示：你刚才${useAlt ? `用小号"${finalAltName}"` : ''}在论坛"${matchedBoard.name}"发了一条帖子，内容是："${result.content}"。如果用户后面聊起论坛/这条帖子相关的事，你可以自然地回应，不用刻意隐瞒(除非是用小号发的，那就不要主动暴露是你发的)。]`,
+        timestamp: Date.now(),
+        isHidden: true,
+      });
+      await db.chats.put(chat);
+
+      if (document.getElementById('forum-screen')?.classList.contains('active') && typeof renderForumFeed === 'function') {
+        await renderForumFeed();
+      }
+    } catch (e) {
+      console.warn(`[论坛] 角色 "${chat.name}" 后台发帖失败`, e);
+    }
+  }
+  window.triggerCharForumPost = triggerCharForumPost;
+
+  // ============================================================
+  // 论坛：网友(forumNpcs)回复/发帖，完全照抄generateNpcActions的模式
+  // ============================================================
+  async function runForumNpcTick() {
+    try {
+      // 热搜自动刷新：超过6小时没刷新过，且论坛里有一定数量帖子，就顺手自动刷一次
+      try {
+        const latestTopic = await db.forumHotTopics.orderBy('generatedAt').reverse().first();
+        const hoursSinceRefresh = latestTopic ? (Date.now() - latestTopic.generatedAt) / 3600000 : Infinity;
+        const totalPosts = await db.forumPosts.count();
+        if (hoursSinceRefresh >= 6 && totalPosts >= 3 && typeof generateForumHotTopics === 'function') {
+          await generateForumHotTopics(false); // false=自动触发，优先走后台活动API
+        }
+      } catch (e) {
+        console.warn('[论坛] 自动刷新热搜失败', e);
+      }
+
+      const allForumNpcs = await db.forumNpcs.toArray();
+      if (allForumNpcs.length === 0) return;
+      const boards = await db.forumBoards.orderBy('order').toArray();
+      const recentPosts = await db.forumPosts.orderBy('timestamp').reverse().limit(10).toArray();
+
+      for (const npc of allForumNpcs) {
+        if (npc.enableBackgroundActivity === false) continue;
+        const cooldownMinutes = npc.actionCooldownMinutes || 15;
+        if (npc.lastActionTimestamp && (Date.now() - npc.lastActionTimestamp) / 60000 < cooldownMinutes) continue;
+        if (Math.random() > 0.3) continue;
+
+        const tasks = recentPosts.filter(p => p.authorId !== `forumnpc_${npc.id}`);
+        if (tasks.length === 0 && Math.random() > 0.2) continue;
+
+        const actions = await generateForumNpcActions(npc, tasks, boards);
+        if (!actions || actions.length === 0) continue;
+
+        for (const action of actions) {
+          if (action.type === 'forum_comment' && action.postId) {
+            await db.forumComments.add({
+              postId: action.postId,
+              authorType: 'npc',
+              authorId: `forumnpc_${npc.id}`,
+              authorDisplayName: npc.name,
+              authorAvatar: npc.avatar || '',
+              content: action.commentText,
+              replyToName: action.replyTo || null,
+              timestamp: Date.now(),
+            });
+            const post = await db.forumPosts.get(action.postId);
+            if (post) {
+              post.commentCount = (post.commentCount || 0) + 1;
+              await db.forumPosts.put(post);
+            }
+            // 网友评论了别人的帖子，帖主(char或另一个网友)也可能回复
+            if (typeof window.maybeTriggerPostAuthorReply === 'function') {
+              window.maybeTriggerPostAuthorReply(action.postId, action.commentText, npc.name)
+                .catch(e => console.warn('[论坛] 帖主回复网友评论失败', e));
+            }
+          } else if (action.type === 'forum_post' && action.content) {
+            const board = boards.find(b => b.name === action.boardName) || boards[0];
+            if (board) {
+              const npcWidget = (typeof window.buildForumWidgetFromAIOutput === 'function' && action.widget)
+                ? window.buildForumWidgetFromAIOutput(action.widget)
+                : null;
+              await db.forumPosts.add({
+                boardId: board.id,
+                authorType: 'npc',
+                authorId: `forumnpc_${npc.id}`,
+                authorDisplayName: npc.name,
+                authorAvatar: npc.avatar || '',
+                content: action.content,
+                timestamp: Date.now(),
+                likes: [],
+                commentCount: 0,
+                ...(npcWidget ? { widget: npcWidget } : {}),
+              });
+            }
+          }
+        }
+        await db.forumNpcs.update(npc.id, { lastActionTimestamp: Date.now() });
+      }
+      if (document.getElementById('forum-screen')?.classList.contains('active') && typeof renderForumFeed === 'function') {
+        await renderForumFeed();
+      }
+    } catch (e) {
+      console.error('[论坛] 网友后台活动出错', e);
+    }
+  }
+  window.runForumNpcTick = runForumNpcTick;
+
+  async function generateForumNpcActions(npc, tasks, boards) {
+    const useBackgroundApi = state.apiConfig.backgroundProxyUrl && state.apiConfig.backgroundApiKey && state.apiConfig.backgroundModel;
+    const { proxyUrl, apiKey, model } = useBackgroundApi
+      ? { proxyUrl: state.apiConfig.backgroundProxyUrl, apiKey: state.apiConfig.backgroundApiKey, model: state.apiConfig.backgroundModel }
+      : state.apiConfig;
+    if (!proxyUrl || !apiKey || !model) return null;
+
+    const tasksString = tasks.map(post => {
+      let authorName = '未知';
+      if (post.authorType === 'user') authorName = state.qzoneSettings?.nickname || '用户';
+      else if (post.authorType === 'char') authorName = state.chats[post.authorId]?.name || '未知角色';
+      else if (post.authorType === 'npc') authorName = post.authorDisplayName || '网友';
+      return `- 帖子ID:${post.id} 作者:${authorName} 内容:${(post.content || '').substring(0, 100)}`;
+    }).join('\n');
+
+    const systemPrompt = `
+# 你的任务
+你是论坛网友"${npc.name}"，人设：${npc.persona}
+参与论坛互动，可以【发新帖】或【评论帖子】。
+
+# 待处理帖子列表
+${tasksString || '(暂无)'}
+
+# 规则
+1. 优先评论列表里合适的帖子，而不是总发新帖。
+2. 板块（发新帖时用）：${boards.map(b => b.name).join('/')}
+3. 【重要】说话方式要像真人刷论坛随手打字，不是写文章：
+   - 评论大部分应该很短，一句话甚至几个字就够了(比如"哈哈哈笑死""说得对""蹲一个"这种)，不要每条都写成完整通顺的一大段话
+   - 不用每句话都有主谓宾、有头有尾，可以说半句、带错别字谐音、省略主语，跟真实刷手机打字的状态一样
+   - 别每条评论都在"认真回应楼主观点"，很多时候网友就是随便附和一句、玩个梗、或者跟别的评论互怼，不需要真的针对帖子内容展开论述
+   - 不要用书面语/公文腔("我认为""值得关注""确实如此"这类)，要用口语、网络用语
+4. 只输出JSON数组：[{"type":"forum_comment","postId":123,"commentText":"..."}] 或 [{"type":"forum_post","boardName":"...","content":"...","widget":{...}(可选，只有发新帖时能加)}]，可以为空数组。
+${typeof window.FORUM_WIDGET_PROMPT_HINT === 'string' ? window.FORUM_WIDGET_PROMPT_HINT : ''}`;
+
+    try {
+      const messagesForApi = [{ role: 'user', content: '请开始你的行动' }];
+      const isGemini = proxyUrl.includes('generativelanguage');
+      const geminiConfig = toGeminiRequestData(model, apiKey, systemPrompt, messagesForApi);
+      const response = isGemini
+        ? await fetch(geminiConfig.url, geminiConfig.data)
+        : await fetch(`${proxyUrl}/v1/chat/completions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({
+              model,
+              messages: [{ role: 'system', content: systemPrompt }, ...messagesForApi],
+              temperature: state.globalSettings.apiTemperature || 0.9,
+            }),
+          });
+      if (!response.ok) throw new Error(`API错误: ${response.statusText}`);
+      const data = await response.json();
+      const raw = (isGemini
+        ? data.candidates[0].content.parts[0].text
+        : data.choices[0].message.content
+      ).replace(/```json\s*|```\s*$/g, '').trim();
+      const jsonMatch = raw.match(/(\[[\s\S]*\])/);
+      if (!jsonMatch) return null;
+      return JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      console.error(`[论坛] 网友"${npc.name}"生成行动失败`, e);
+      return null;
+    }
+  }
+  window.generateForumNpcActions = generateForumNpcActions;
 
   async function generateNpcActions(npc, tasks) {
     // 优先使用后台API，如果未配置则使用主API
@@ -1010,6 +1388,9 @@ ${tasksString}
   }
 
   // ========== 全局暴露 ==========
+  window.triggerCharForumPost = triggerCharForumPost;
+  window.runForumNpcTick = runForumNpcTick;
+  window.generateForumNpcActions = generateForumNpcActions;
   window.simulateBackgroundActivity = simulateBackgroundActivity;
   window.startBackgroundSimulation = startBackgroundSimulation;
   window.stopBackgroundSimulation = stopBackgroundSimulation;

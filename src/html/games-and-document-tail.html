@@ -188,7 +188,7 @@
 </div>
 
   <!-- 全屏编辑器弹窗 -->
-  <div id="fullscreen-editor-modal" class="modal" style="z-index: 10201;">
+  <div id="fullscreen-editor-modal" class="modal" style="z-index: 10005;">
     <div class="modal-content" style="height: 90%; width: 90%; max-width: 800px; display: flex; flex-direction: column; background: var(--bg-primary, #fff);">
       <div class="modal-header">
         <span id="fullscreen-editor-title">全屏编辑</span>
@@ -202,6 +202,18 @@
       </div>
     </div>
   </div>
+
+<div id="generation-overlay" class="modal">
+  <div class="loading-content">
+    <div class="cat-paw">
+      <div class="pad main"></div>
+      <div class="pad toe t1"></div>
+      <div class="pad toe t2"></div>
+      <div class="pad toe t3"></div>
+    </div>
+    <p id="generation-text">少女祈祷中...</p>
+  </div>
+</div>
 
   <script>
     let currentFullscreenEditorTarget = '';

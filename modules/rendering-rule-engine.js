@@ -4,8 +4,6 @@
   const MAX_OUTPUT = 1000000;
   const MAX_MATCHES = 10000;
   const compiled = new Map();
-  let compiledBytes = 0;
-  const MAX_COMPILED_BYTES = 2 * 1024 * 1024;
   const escapeRegex = text => String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const escapeHtml = text => String(text ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const htmlPattern = /<\/?[a-z][^>]*>/i;
@@ -115,7 +113,7 @@
 
   function compileRule(rule) {
     const key = fingerprint(rule);
-    if (compiled.has(key)) return compiled.get(key).result;
+    if (compiled.has(key)) return compiled.get(key);
     const options = rule.options || {};
     const mode = options.matchMode || 'regex';
     const action = options.action || 'replace';
@@ -167,16 +165,8 @@
     const candidateNodes = candidates?.map(item => parseTemplate(item.text, 0, warnings));
     const usesRandom = !!candidates || /\{\{\s*(random|pick)\s*:/i.test(template + (options.elseTemplate || ''));
     const result = { regex, nodes, alternative, options, action, mapping, candidates, candidateNodes, usesRandom, warnings: [...new Set(warnings)], source };
-    // 新编译缓存同时限制配置键与表达式/模板字符容量，避免大型规则仅按条数累积。
-    const bytes = 2 * (key.length + source.length + template.length + String(options.elseTemplate || '').length);
-    if (bytes <= MAX_COMPILED_BYTES) {
-      compiled.set(key, { result, bytes }); compiledBytes += bytes;
-      while (compiled.size > 300 || compiledBytes > MAX_COMPILED_BYTES) {
-        const oldest = compiled.keys().next().value;
-        compiledBytes -= compiled.get(oldest).bytes;
-        compiled.delete(oldest);
-      }
-    }
+    compiled.set(key, result);
+    if (compiled.size > 300) compiled.delete(compiled.keys().next().value);
     return result;
   }
 

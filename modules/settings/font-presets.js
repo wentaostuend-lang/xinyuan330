@@ -47,6 +47,9 @@
     const name = await showCustomPrompt('保存字体预设', '请输入预设名称（保存来源、字号和范围）');
     if (!name || !name.trim()) return;
 
+    try { await loadUserFont(value); }
+    catch (error) { fontNotice(error.message, 'error'); return; }
+
     try {
     const existingPreset = await db.appearancePresets.where({
       name: name.trim(),

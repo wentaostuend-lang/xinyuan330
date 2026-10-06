@@ -38,6 +38,10 @@
   <link rel="stylesheet" href="css/mail/mail-app.css?v=0.0.52-ios-layout-rollback">
   <link rel="stylesheet" href="css/chat/rendering-and-images.css?v=20260930-rules">
   <link rel="stylesheet" href="css/social/green-river-comments.css?v=0.0.36">
+  <link rel="stylesheet" href="css/apps/kk-checkin.css?v=liya1">
+  <link rel="stylesheet" href="css/social/forum.css?v=liya1">
+  <link rel="stylesheet" href="css/chat/group-titles.css?v=liya1">
+  <link rel="stylesheet" href="css/chat/batch-avatar.css?v=liya1">
   <link rel="stylesheet" href="css/social/character-bond.css?v=0.0.42">
   <link rel="stylesheet" href="css/social/reddit.css?v=0.0.36">
   <link rel="stylesheet" href="css/components/toast.css?v=0.0.36">
@@ -110,7 +114,7 @@
   <script src="modules/utils.js?v=20261001-normal-memory" defer></script>
   <script src="modules/translations.js?v=0.0.36" defer></script>
   <!-- 第二层：UI 通用组件 -->
-  <script src="modules/ui-modals.js?v=20261003-memory-editor" defer></script>
+  <script src="modules/ui-modals.js?v=0.0.36" defer></script>
   <script src="modules/ui-loaders.js?v=0.0.41-richtext" defer></script>
   <!-- 第三层：核心聊天功能 -->
   <script src="modules/chat-list.js?v=fonts-20261001" defer></script>
@@ -139,7 +143,7 @@
   <script src="modules/qzone.js?v=0.0.36" defer></script>
   <script src="modules/sticker-manager.js?v=0.0.36" defer></script>
   <script src="modules/memory/token-breakdown.js?v=0.0.36" defer></script>
-  <script src="modules/memory/long-term-memory.js?v=20261003-memory-editor" defer></script>
+  <script src="modules/memory/long-term-memory.js?v=0.0.36" defer></script>
   <script src="modules/memory/vector-memory-view.js?v=20261001-world-time" defer></script>
   <script src="modules/memory/extraction-runner.js?v=20261001-world-time" defer></script>
   <script src="modules/memory/variable-memory-summary.js?v=20261001-normal-memory" defer></script>
@@ -172,7 +176,7 @@
   <script src="modules/settings/sound-presets.js?v=0.0.36" defer></script>
   <script src="modules/settings/appearance-screen.js?v=0.0.36" defer></script>
   <script src="modules/settings/css-presets.js?v=0.0.36" defer></script>
-  <script src="modules/settings/font-presets.js?v=fonts-20261003-url-compat" defer></script>
+  <script src="modules/settings/font-presets.js?v=fonts-20261001" defer></script>
   <script src="modules/settings/appearance-presets.js?v=0.0.36" defer></script>
   <script src="modules/settings/theme-presets.js?v=0.0.36" defer></script>
   <script src="modules/settings/preset-management.js?v=0.0.36" defer></script>
@@ -227,9 +231,9 @@
   <script src="modules/social/douban/management.js?v=0.0.36" defer></script>
   <!-- 第七层：其余功能 -->
   <link rel="stylesheet" href="css/settings/tts-settings.css?v=elevenlabs-20261001">
-  <script src="modules/tts-provider.js?v=20261003-call-tts-translation" defer></script>
+  <script src="modules/tts-provider.js?v=elevenlabs-20261001" defer></script>
   <script src="modules/tts-settings.js?v=elevenlabs-20261001" defer></script>
-  <script src="modules/tts-audio.js?v=20261003-call-tts-translation" defer></script>
+  <script src="modules/tts-audio.js?v=elevenlabs-20261001" defer></script>
   <script src="modules/appearance-theme.js?v=fonts-20261001" defer></script>
   <script src="modules/notification-battery.js?v=0.0.36" defer></script>
   <script src="modules/background-activity.js?v=0.0.36-perf1" defer></script>
@@ -241,8 +245,7 @@
   <script src="modules/character/import/parsers-and-create.js?v=0.0.36" defer></script>
   <script src="modules/character-export.js?v=0.0.36" defer></script>
   <script src="modules/data/cleanup-and-statistics.js?v=0.0.36" defer></script>
-  <script src="modules/data/settings-storage.js" defer></script>
-  <script src="modules/data/custom-fonts.js?v=fonts-20261003-url-compat" defer></script>
+  <script src="modules/data/custom-fonts.js?v=fonts-20261001" defer></script>
   <script src="modules/data/cleanup-wizard.js?v=0.0.36" defer></script>
   <script src="modules/ui/icon-customization.js?v=0.0.36" defer></script>
   <script src="modules/data/chat-media-cleanup.js?v=0.0.36" defer></script>
@@ -295,6 +298,26 @@
   <script src="modules/init-event-bindingsA.js?v=20261002-role-time-preview" defer></script>
   <script src="modules/init-event-bindingsB.js?v=20261002-role-time-zone" defer></script>
   <script src="modules/init-features.js?v=20261002-role-time-zone" defer></script>
+  <!-- 从 Liya 移植的独有功能模块 -->
+  <script src="js/fullscreen-guard.js?v=liya1" defer></script>
+  <script src="modules/chat/smart-sticker-v7.js?v=liya1" defer></script>
+  <script src="modules/worldbook/char-picker.js?v=liya1" defer></script>
+  <script src="modules/chat/banned-words.js?v=liya1" defer></script>
+  <script src="modules/chat/send-translate.js?v=liya1" defer></script>
+  <script src="modules/chat/reminder-manager.js?v=liya1" defer></script>
+  <script src="modules/chat/status-bar.js?v=liya1" defer></script>
+  <script src="modules/chat/status-bar-manager.js?v=liya1" defer></script>
+  <script src="modules/chat/proactive-reply.js?v=liya1" defer></script>
+  <script src="modules/ui/avatar-guard.js?v=liya1" defer></script>
+  <script src="modules/chat/batch-avatar.js?v=liya1" defer></script>
+  <script src="modules/chat/return-to-chat-sync.js?v=liya1" defer></script>
+  <script src="modules/ui/keyboard-fix.js?v=liya1" defer></script>
+  <script src="modules/ui/desktop-pet.js?v=liya1" defer></script>
+  <script src="modules/chat/group-titles.js?v=liya1" defer></script>
+  <script src="modules/data/liya-cleanup-extras.js?v=liya1" defer></script>
+  <script src="modules/apps/kk-checkin.js?v=liya1" defer></script>
+  <script src="modules/apps/theater-app.js?v=liya1" defer></script>
+  <script src="modules/social/forum.js?v=liya1" defer></script>
   <!-- 主入口（最后加载，调用 init） -->
   <script src="modules/init-and-state.js?v=20261001-world-time" defer></script>
   <!-- 第九层：DOMContentLoaded 外部的独立模块 -->
