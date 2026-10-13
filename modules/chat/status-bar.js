@@ -392,6 +392,55 @@
     return true;
   }
 
+  // ---- 正则放到后台线程里跑，超时就放弃这一条 ----
+  // 预检只能识别"固定文字 + (.*?)"这类写法；别的写法（字符集、\s*、可选段等）依然可能灾难性回溯。
+  // JS 没法中断一个正在跑的同步正则，所以放进 Web Worker：超时直接 terminate，
+  // 主线程永远不会被占死，最坏情况也只是丢掉那一条解析不出来的历史记录。
+  let __sbWorker = null;
+  let __sbWorkerBroken = false;
+  let __sbMsgId = 0;
+  function getSbWorker() {
+    if (__sbWorkerBroken) return null;
+    if (__sbWorker) return __sbWorker;
+    try {
+      const code = "self.onmessage=function(e){var d=e.data;try{var re=new RegExp(d.pattern,d.flags);var m=re.exec(d.raw);self.postMessage({id:d.id,ok:true,groups:m?Array.prototype.slice.call(m):null});}catch(err){self.postMessage({id:d.id,ok:false,err:String(err)});}};";
+      __sbWorker = new Worker(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })));
+    } catch (err) {
+      __sbWorkerBroken = true;
+      __sbWorker = null;
+    }
+    return __sbWorker;
+  }
+  function execInWorker(parsed, raw, timeoutMs) {
+    return new Promise((resolve) => {
+      const w = getSbWorker();
+      if (!w) { resolve({ fallback: true }); return; }
+      const id = ++__sbMsgId;
+      let done = false;
+      const finish = (val) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        w.removeEventListener('message', onMsg);
+        w.removeEventListener('error', onErr);
+        resolve(val);
+      };
+      const onMsg = (e) => {
+        if (!e.data || e.data.id !== id) return;
+        finish(e.data.ok ? { groups: e.data.groups } : { error: e.data.err });
+      };
+      const onErr = () => { __sbWorkerBroken = true; __sbWorker = null; finish({ fallback: true }); }; // 比如被 CSP 拦了，退回主线程老办法
+      const timer = setTimeout(() => {
+        try { w.terminate(); } catch (e) {}
+        if (__sbWorker === w) __sbWorker = null;
+        finish({ timeout: true });
+      }, timeoutMs);
+      w.addEventListener('message', onMsg);
+      w.addEventListener('error', onErr);
+      w.postMessage({ id, pattern: parsed.pattern, flags: parsed.flags, raw });
+    });
+  }
+
   function renderOne(matchGroups, replacePattern, chat) {
     // 修复：之前是按 $1、$2...$9、$10、$11 这样顺序逐个用 new RegExp('\\$'+n) 替换，
     // 但 "$1" 是 "$10"/"$11"/"$13"...的前缀，先替换 $1 会把 $10~$19、$1X 这些也提前吃掉一部分
@@ -406,7 +455,7 @@
     return applyVariables(html, chat);
   }
 
-  async function collectStatusBars(chat, preset) {
+  async function collectStatusBars(chat, preset, ctrl) {
     const limit = chat.settings.statusBarHistoryLimit || 20;
     const dismissed = new Set(chat.settings.dismissedStatusBarKeys || []);
     const results = [];
@@ -422,6 +471,18 @@
     const orderedPresets = [preset, ...allPresets.filter(p => p.id !== preset.id)].filter(Boolean);
     const regexCache = new Map();
     const chainCache = new Map();
+    const parsedCache = new Map();
+    const timeoutCount = new Map();
+    const startedAt = performance.now();
+    const BUDGET_MS = 6000;     // 整个收集阶段最多花这么久，超了就用已经解析好的先显示
+    const PER_REGEX_MS = 250;   // 单条正则最多跑这么久（正常匹配只要几毫秒；给后台线程启动留够余量）
+    const MAX_TIMEOUTS_PER_PRESET = 6; // 同一个预设超时这么多次才整个放弃，避免因为个别坏数据丢掉后面正常的历史记录
+    let lastYield = performance.now();
+    let processed = 0;
+    function getParsedFor(p) {
+      if (!parsedCache.has(p.id)) parsedCache.set(p.id, parseRegexLiteral(p.regexPattern));
+      return parsedCache.get(p.id);
+    }
     function getRegexFor(p) {
       if (!regexCache.has(p.id)) regexCache.set(p.id, buildRegex(p.regexPattern));
       return regexCache.get(p.id);
@@ -440,16 +501,35 @@
       if (!raw || typeof raw !== 'string') continue;
       if (dismissed.has(entry.timestamp)) continue;
       if (raw.length > 30000) { console.warn('[状态栏] 第' + i + '条内容过长，跳过', raw.length); continue; }
-      // 让出主线程，避免一整批同步匹配把界面冻死；同时让"加载中"提示能先画出来
-      await new Promise(r => setTimeout(r, 0));
+      if (ctrl && ctrl.cancelled) break;
+      if (performance.now() - startedAt > BUDGET_MS) { console.warn('[状态栏] 收集超过预算时间，先显示已解析出来的', results.length, '条'); break; }
+      // 按时间片让出主线程（不是每条都让，否则 setTimeout 的最小间隔会把几百条历史拖得很慢）
+      processed++;
+      if (performance.now() - lastYield > 30) {
+        if (ctrl && ctrl.onProgress) ctrl.onProgress(processed, results.length);
+        await new Promise(r => setTimeout(r, 0));
+        lastYield = performance.now();
+      }
       for (const p of orderedPresets) {
         const regex = getRegexFor(p);
         if (!regex) continue;
+        if ((timeoutCount.get(p.id) || 0) >= MAX_TIMEOUTS_PER_PRESET) continue; // 这个预设的正则在这批数据上反复超时，不再浪费时间
         const chain = getChainFor(p);
         if (chain && !chainMatches(raw, chain)) continue; // 肯定匹配不上，直接跳过，不让正则去回溯
-        regex.lastIndex = 0;
         bc('regex 预设' + p.id + ' 第' + i + '条 长度' + raw.length);
-        const m = regex.exec(raw);
+        let m = null;
+        const parsed = getParsedFor(p);
+        const res = parsed ? await execInWorker(parsed, raw, PER_REGEX_MS) : { fallback: true };
+        if (res.timeout) {
+          timeoutCount.set(p.id, (timeoutCount.get(p.id) || 0) + 1);
+          console.warn('[状态栏] 预设' + p.id + '的正则在第' + i + '条上超时（疑似回溯爆炸），已跳过这一条');
+          continue;
+        } else if (res.groups) {
+          m = res.groups;
+        } else if (res.fallback) {
+          regex.lastIndex = 0;
+          m = regex.exec(raw);
+        }
         if (m) {
           results.push({
             html: renderOne(m.slice(1), p.replacePattern, chat),
@@ -562,17 +642,20 @@
     const loadingEl = document.createElement('div');
     loadingEl.id = 'sb-viewer-loading';
     loadingEl.style.cssText = 'position:fixed;inset:0;z-index:999998;background:rgba(0,0,0,0.6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;';
-    loadingEl.textContent = '状态栏加载中…';
-    loadingEl.addEventListener('click', () => loadingEl.remove());
+    loadingEl.textContent = '状态栏加载中…（点一下可取消）';
+    const ctrl = { cancelled: false, onProgress: (n) => { loadingEl.textContent = '状态栏加载中… 已处理 ' + n + ' 条（点一下可取消）'; } };
+    loadingEl.addEventListener('click', () => { ctrl.cancelled = true; loadingEl.remove(); });
     document.body.appendChild(loadingEl);
     await new Promise(r => setTimeout(r, 30)); // 让加载提示先画出来
     let entries;
     try {
-      await ensureSbFontReady();
-      entries = await collectStatusBars(chat, preset);
+      // 字体预热最多等 4 秒，超了就跳过（后面有同步转换兜底），不能因为它拖住整个弹窗
+      await Promise.race([ensureSbFontReady(), new Promise(r => setTimeout(r, 4000))]);
+      entries = await collectStatusBars(chat, preset, ctrl);
     } finally {
       loadingEl.remove();
     }
+    if (ctrl.cancelled) return;
     bc('收集完成 ' + entries.length + ' 条');
     let currentIndex = 0; // 0 = 最新
     let buildPagesAround = () => {}; // 由 buildViewer 赋值，翻页时按需构建相邻页
