@@ -24,6 +24,8 @@
 // ============================================================
 
 (function () {
+  // 调试断点：每一步写进 localStorage，卡死大退重开后在控制台看 localStorage.getItem('sbbc') 就知道卡在哪一步
+  function bc(step) { try { localStorage.setItem('sbbc', step + ' @' + Date.now()); } catch (e) {} }
   const sbDB = new Dexie('LiyaStatusBarDB');
   sbDB.version(1).stores({ presets: '++id, name' });
 
@@ -74,8 +76,37 @@
       img{filter:invert(1) hue-rotate(180deg);}`;
   }
 
+  // 自定义字体：本地上传的字体是一整段 data: base64（动辄几MB到十几MB）。之前每渲染一页就把这整段
+  // 复制进那一页的 <style>/@font-face 里，历史记录有20条就复制20份，手机上直接把主线程占死
+  // （表现为点名字后界面卡住、返回/设置/菜单点不动，只有聊天记录还能滑——滑动走合成线程，点击走主线程）。
+  // 现在改成：只转换一次成 blob: 短链接并缓存，所有页面共用这一个短链接。
+  let __sbFontCache = { raw: null, src: '' };
+  function getSbFontSrc() {
+    const raw = (state.globalSettings && (state.globalSettings.fontLocalData || state.globalSettings.fontUrl)) || '';
+    if (raw === __sbFontCache.raw) return __sbFontCache.src;
+    let src = raw;
+    if (/^data:/i.test(raw) && raw.length > 50000) {
+      try {
+        const comma = raw.indexOf(',');
+        const mime = (raw.slice(5, comma).split(';')[0]) || 'font/ttf';
+        const bin = atob(raw.slice(comma + 1));
+        const bytes = new Uint8Array(bin.length);
+        for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+        src = URL.createObjectURL(new Blob([bytes], { type: mime }));
+      } catch (err) {
+        console.warn('[状态栏] 自定义字体转换失败，状态栏改用默认字体（宁可不用也不能把整段塞进每一页）', err);
+        src = '';
+      }
+    }
+    if (__sbFontCache.src && __sbFontCache.src.startsWith('blob:') && __sbFontCache.src !== src) {
+      try { URL.revokeObjectURL(__sbFontCache.src); } catch (e) {}
+    }
+    __sbFontCache = { raw, src };
+    return src;
+  }
+
   function buildSbDefaultStyle(html) {
-    const fontSrc = (state.globalSettings && (state.globalSettings.fontLocalData || state.globalSettings.fontUrl)) || '';
+    const fontSrc = getSbFontSrc();
     const fontFaceRule = fontSrc
       ? `@font-face { font-family: 'sb-custom-font'; src: url('${fontSrc}'); font-display: swap; }`
       : '';
@@ -338,10 +369,14 @@
       const raw = entry && entry.customThoughts && entry.customThoughts.status_bar;
       if (!raw || typeof raw !== 'string') continue;
       if (dismissed.has(entry.timestamp)) continue;
+      if (raw.length > 30000) { console.warn('[状态栏] 第' + i + '条内容过长，跳过', raw.length); continue; }
+      // 让出主线程，避免一整批同步匹配把界面冻死；同时让"加载中"提示能先画出来
+      await new Promise(r => setTimeout(r, 0));
       for (const p of orderedPresets) {
         const regex = getRegexFor(p);
         if (!regex) continue;
         regex.lastIndex = 0;
+        bc('regex 预设' + p.id + ' 第' + i + '条 长度' + raw.length);
         const m = regex.exec(raw);
         if (m) {
           results.push({
@@ -451,8 +486,23 @@
     document.getElementById('sb-select-list')?.remove();
     document.getElementById('sb-select-bottom-bar')?.remove();
 
-    let entries = await collectStatusBars(chat, preset);
+    bc('开始收集');
+    const loadingEl = document.createElement('div');
+    loadingEl.id = 'sb-viewer-loading';
+    loadingEl.style.cssText = 'position:fixed;inset:0;z-index:999998;background:rgba(0,0,0,0.6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;';
+    loadingEl.textContent = '状态栏加载中…';
+    loadingEl.addEventListener('click', () => loadingEl.remove());
+    document.body.appendChild(loadingEl);
+    await new Promise(r => setTimeout(r, 30)); // 让加载提示先画出来
+    let entries;
+    try {
+      entries = await collectStatusBars(chat, preset);
+    } finally {
+      loadingEl.remove();
+    }
+    bc('收集完成 ' + entries.length + ' 条');
     let currentIndex = 0; // 0 = 最新
+    let buildPagesAround = () => {}; // 由 buildViewer 赋值，翻页时按需构建相邻页
 
     const overlay = document.createElement('div');
     overlay.id = 'sb-viewer-overlay';
@@ -480,8 +530,15 @@
       // 需要脚本执行、样式隔离）才走iframe这一整套；纯用行内 style="" 写的简单预设，
       // 直接用回最早那种 innerHTML 的老办法——没有load时机、没有ResizeObserver、没有手势层，
       // 也就不会有这些新引入的边缘问题，跟之前能正常显示的时候一样稳。
-      entries.forEach((e, i) => {
+      // 懒构建：只先建当前页和左右相邻页，其余的翻到附近再建。
+      // 之前是一次性把全部（默认最多20页）都建好，带<script>的预设会同时起20个iframe，手机扛不住。
+      const builtPages = new Set();
+      function buildPage(i) {
+        if (builtPages.has(i) || !entries[i]) return;
+        builtPages.add(i);
+        const e = entries[i];
         try {
+          bc('构建第' + i + '页');
           const container = overlay.querySelector(`.sb-page-inner[data-page-index="${i}"]`);
           if (!container) return;
 
@@ -633,7 +690,9 @@
           // 某一页预设内容有问题导致构建过程直接报错的话，只影响这一页，不要让其他页也跟着显示不出来
           console.error('[状态栏] 第' + (i + 1) + '页构建失败', err);
         }
-      });
+      }
+      buildPagesAround = (c) => { [c, c + 1, c - 1].forEach(buildPage); };
+      buildPagesAround(currentIndex);
 
       const track = document.getElementById('sb-viewer-track');
       track.style.transform = `translateX(${-currentIndex * 100}%)`;
@@ -651,6 +710,7 @@
       const track = document.getElementById('sb-viewer-track');
       if (!track) return;
       track.style.transform = `translateX(${-currentIndex * 100}%)`;
+      buildPagesAround(currentIndex);
       const counterEl = document.getElementById('sb-viewer-counter');
       if (counterEl) counterEl.textContent = `${currentIndex + 1} / ${entries.length}`;
     }
@@ -791,11 +851,14 @@
     window.addEventListener('message', handleSbSwipeMessage);
     const cleanupMessageListener = () => window.removeEventListener('message', handleSbSwipeMessage);
 
+    bc('挂载弹窗');
     document.body.appendChild(overlay);
     buildViewer();
+    bc('完成');
   }
 
   async function handleHeaderClick() {
+    bc('点击标题');
     const g = state.globalSettings.statusBarEnabled;
     if (!g) return; // 全局关闭，点了没反应
     const chat = state.chats[state.activeChatId];
