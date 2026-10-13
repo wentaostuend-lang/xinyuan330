@@ -81,6 +81,16 @@
   // （表现为点名字后界面卡住、返回/设置/菜单点不动，只有聊天记录还能滑——滑动走合成线程，点击走主线程）。
   // 现在改成：只转换一次成 blob: 短链接并缓存，所有页面共用这一个短链接。
   let __sbFontCache = { raw: null, src: '' };
+  async function ensureSbFontReady() {
+    const raw = (state.globalSettings && (state.globalSettings.fontLocalData || state.globalSettings.fontUrl)) || '';
+    if (!/^data:/i.test(raw) || raw.length <= 50000 || __sbFontCache.raw === raw) return;
+    try {
+      const blob = await (await fetch(raw)).blob(); // 浏览器原生解码，比 JS 逐字节转换快得多，也不占主线程
+      const src = URL.createObjectURL(blob);
+      if (__sbFontCache.src && __sbFontCache.src.startsWith('blob:')) { try { URL.revokeObjectURL(__sbFontCache.src); } catch (e) {} }
+      __sbFontCache = { raw, src };
+    } catch (err) { /* 失败就交给下面 getSbFontSrc 的同步转换兜底 */ }
+  }
   function getSbFontSrc() {
     const raw = (state.globalSettings && (state.globalSettings.fontLocalData || state.globalSettings.fontUrl)) || '';
     if (raw === __sbFontCache.raw) return __sbFontCache.src;
@@ -330,6 +340,58 @@
     }
   }
 
+  // ---- 匹配前的"固定文字"快速预检，避免正则灾难性回溯 ----
+  // 33 个 (.*?) 字段的预设，一旦某条历史记录匹配失败（被截断、少了结尾、AI 输出格式有偏差），
+  // 正则引擎会把所有可能的拆分方式试一遍，耗时指数级增长（实测：多出几个分隔符就从 1 秒涨到 40 秒以上），
+  // 表现就是点开状态栏一直转圈。对于"固定文字 + (.*?) 字段"这类正则，能否匹配等价于
+  // "这些固定文字能否按顺序在文本里依次找到"，用 indexOf 就能瞬间判断，不用让正则去回溯。
+  // 遇到任何看不懂的写法（\d、字符集、锚点、重复量词等）一律返回 null，维持原来的直接跑正则，保证不改变行为。
+  function extractLiteralChain(pattern, flags) {
+    if (/[iy]/.test(flags)) return null;
+    const chain = [];
+    let buf = '';
+    const n = pattern.length;
+    const groupForms = [
+      { text: '(.*?)', needDotAll: true }, { text: '(.*)', needDotAll: true },
+      { text: '([\\s\\S]*?)', needDotAll: false }, { text: '([\\s\\S]*)', needDotAll: false }
+    ];
+    for (let k = 0; k < n; k++) {
+      const c = pattern[k];
+      if (c === '\\') {
+        const nx = pattern[k + 1];
+        if (nx === undefined) return null;
+        if ('[](){}|.*+?^$\\/-'.includes(nx)) buf += nx;
+        else if (nx === 'n') buf += '\n';
+        else if (nx === 't') buf += '\t';
+        else if (nx === 'r') buf += '\r';
+        else return null;
+        k++;
+      } else if (c === '(') {
+        const form = groupForms.find(f => pattern.startsWith(f.text, k));
+        if (!form) return null;
+        if (form.needDotAll && !flags.includes('s')) return null;
+        if (buf) { chain.push(buf); buf = ''; }
+        k += form.text.length - 1;
+      } else if ('.*+?^$|[]{}()'.includes(c)) {
+        return null;
+      } else {
+        buf += c;
+      }
+    }
+    if (buf) chain.push(buf);
+    return chain;
+  }
+
+  function chainMatches(raw, chain) {
+    let pos = 0;
+    for (const lit of chain) {
+      const idx = raw.indexOf(lit, pos);
+      if (idx === -1) return false;
+      pos = idx + lit.length;
+    }
+    return true;
+  }
+
   function renderOne(matchGroups, replacePattern, chat) {
     // 修复：之前是按 $1、$2...$9、$10、$11 这样顺序逐个用 new RegExp('\\$'+n) 替换，
     // 但 "$1" 是 "$10"/"$11"/"$13"...的前缀，先替换 $1 会把 $10~$19、$1X 这些也提前吃掉一部分
@@ -359,9 +421,17 @@
     const allPresets = preset ? await sbDB.presets.toArray() : [];
     const orderedPresets = [preset, ...allPresets.filter(p => p.id !== preset.id)].filter(Boolean);
     const regexCache = new Map();
+    const chainCache = new Map();
     function getRegexFor(p) {
       if (!regexCache.has(p.id)) regexCache.set(p.id, buildRegex(p.regexPattern));
       return regexCache.get(p.id);
+    }
+    function getChainFor(p) {
+      if (!chainCache.has(p.id)) {
+        const parsed = parseRegexLiteral(p.regexPattern);
+        chainCache.set(p.id, parsed ? extractLiteralChain(parsed.pattern, parsed.flags) : null);
+      }
+      return chainCache.get(p.id);
     }
 
     for (let i = thoughtsHistory.length - 1; i >= 0 && results.length < limit; i--) {
@@ -375,6 +445,8 @@
       for (const p of orderedPresets) {
         const regex = getRegexFor(p);
         if (!regex) continue;
+        const chain = getChainFor(p);
+        if (chain && !chainMatches(raw, chain)) continue; // 肯定匹配不上，直接跳过，不让正则去回溯
         regex.lastIndex = 0;
         bc('regex 预设' + p.id + ' 第' + i + '条 长度' + raw.length);
         const m = regex.exec(raw);
@@ -496,6 +568,7 @@
     await new Promise(r => setTimeout(r, 30)); // 让加载提示先画出来
     let entries;
     try {
+      await ensureSbFontReady();
       entries = await collectStatusBars(chat, preset);
     } finally {
       loadingEl.remove();
