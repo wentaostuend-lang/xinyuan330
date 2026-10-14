@@ -396,6 +396,16 @@
   // 预检只能识别"固定文字 + (.*?)"这类写法；别的写法（字符集、\s*、可选段等）依然可能灾难性回溯。
   // JS 没法中断一个正在跑的同步正则，所以放进 Web Worker：超时直接 terminate，
   // 主线程永远不会被占死，最坏情况也只是丢掉那一条解析不出来的历史记录。
+  // 匹配结果缓存：同一个正则对同一段文本的结果是确定的，缓存下来，第二次打开几乎是瞬间。
+  // 值：数组=匹配到的各分组；null=没匹配上；'T'=上次超时（坏数据，直接跳过，不再白等）。
+  const __sbMatchCache = new Map(); // 正则字符串 → Map(原文 → 结果)
+  function getMatchCacheFor(p) {
+    const key = String(p.regexPattern);
+    let c = __sbMatchCache.get(key);
+    if (!c) { c = new Map(); __sbMatchCache.set(key, c); }
+    if (c.size > 600) c.clear(); // 防止长期运行占内存
+    return c;
+  }
   let __sbWorker = null;
   let __sbWorkerBroken = false;
   let __sbMsgId = 0;
@@ -411,7 +421,7 @@
     }
     return __sbWorker;
   }
-  function execInWorker(parsed, raw, timeoutMs) {
+  function execInWorkerNow(parsed, raw, timeoutMs) {
     return new Promise((resolve) => {
       const w = getSbWorker();
       if (!w) { resolve({ fallback: true }); return; }
@@ -439,6 +449,32 @@
       w.addEventListener('error', onErr);
       w.postMessage({ id, pattern: parsed.pattern, flags: parsed.flags, raw });
     });
+  }
+
+  // 所有匹配都排队用同一个后台线程：
+  // 1) 点击和后台预热可能同时在跑，一个超时会 terminate 线程，必须保证不会误伤另一个正在跑的正常匹配；
+  // 2) 轮到自己执行时再查一次缓存，预热已经算过的（包括超时的坏数据）就不用重复算、重复白等。
+  const PER_REGEX_MS = 250; // 单条正则最多跑这么久（正常匹配只要几毫秒；给后台线程启动留够余量）
+  let __sbQueue = Promise.resolve();
+  function runMatch(p, raw, regex) {
+    const mc = getMatchCacheFor(p);
+    const job = __sbQueue.then(async () => {
+      if (mc.has(raw)) {
+        const v = mc.get(raw);
+        return { m: (v === 'T' || v === null) ? null : v, timeout: v === 'T', fresh: false };
+      }
+      let parsed = null;
+      try { parsed = parseRegexLiteral(p.regexPattern); } catch (e) {}
+      const res = parsed ? await execInWorkerNow(parsed, raw, PER_REGEX_MS) : { fallback: true };
+      if (res.timeout) { mc.set(raw, 'T'); return { m: null, timeout: true, fresh: true }; }
+      let m = null;
+      if (res.groups) m = res.groups;
+      else if (res.fallback) { regex.lastIndex = 0; const x = regex.exec(raw); m = x ? Array.from(x) : null; }
+      if (!res.error) mc.set(raw, m || null);
+      return { m, timeout: false, fresh: true };
+    });
+    __sbQueue = job.catch(() => {});
+    return job;
   }
 
   function renderOne(matchGroups, replacePattern, chat) {
@@ -475,7 +511,6 @@
     const timeoutCount = new Map();
     const startedAt = performance.now();
     const BUDGET_MS = 6000;     // 整个收集阶段最多花这么久，超了就用已经解析好的先显示
-    const PER_REGEX_MS = 250;   // 单条正则最多跑这么久（正常匹配只要几毫秒；给后台线程启动留够余量）
     const MAX_TIMEOUTS_PER_PRESET = 6; // 同一个预设超时这么多次才整个放弃，避免因为个别坏数据丢掉后面正常的历史记录
     let lastYield = performance.now();
     let processed = 0;
@@ -517,19 +552,15 @@
         const chain = getChainFor(p);
         if (chain && !chainMatches(raw, chain)) continue; // 肯定匹配不上，直接跳过，不让正则去回溯
         bc('regex 预设' + p.id + ' 第' + i + '条 长度' + raw.length);
-        let m = null;
-        const parsed = getParsedFor(p);
-        const res = parsed ? await execInWorker(parsed, raw, PER_REGEX_MS) : { fallback: true };
-        if (res.timeout) {
-          timeoutCount.set(p.id, (timeoutCount.get(p.id) || 0) + 1);
-          console.warn('[状态栏] 预设' + p.id + '的正则在第' + i + '条上超时（疑似回溯爆炸），已跳过这一条');
+        const r = await runMatch(p, raw, regex);
+        if (r.timeout) {
+          if (r.fresh) {
+            timeoutCount.set(p.id, (timeoutCount.get(p.id) || 0) + 1);
+            console.warn('[状态栏] 预设' + p.id + '的正则在第' + i + '条上超时（疑似回溯爆炸），已跳过这一条');
+          }
           continue;
-        } else if (res.groups) {
-          m = res.groups;
-        } else if (res.fallback) {
-          regex.lastIndex = 0;
-          m = regex.exec(raw);
         }
+        const m = r.m;
         if (m) {
           results.push({
             html: renderOne(m.slice(1), p.replacePattern, chat),
@@ -558,6 +589,7 @@
         flex: 1; display: flex; height: 100%;
         transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
         touch-action: pan-y;
+        will-change: transform;
       }
       .sb-page {
         flex: 0 0 100%; width: 100%; height: 100%;
@@ -639,23 +671,16 @@
     document.getElementById('sb-select-bottom-bar')?.remove();
 
     bc('开始收集');
-    const loadingEl = document.createElement('div');
-    loadingEl.id = 'sb-viewer-loading';
-    loadingEl.style.cssText = 'position:fixed;inset:0;z-index:999998;background:rgba(0,0,0,0.6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;';
-    loadingEl.textContent = '状态栏加载中…（点一下可取消）';
-    const ctrl = { cancelled: false, onProgress: (n) => { loadingEl.textContent = '状态栏加载中… 已处理 ' + n + ' 条（点一下可取消）'; } };
-    loadingEl.addEventListener('click', () => { ctrl.cancelled = true; loadingEl.remove(); });
-    document.body.appendChild(loadingEl);
-    await new Promise(r => setTimeout(r, 30)); // 让加载提示先画出来
-    let entries;
-    try {
-      // 字体预热最多等 4 秒，超了就跳过（后面有同步转换兜底），不能因为它拖住整个弹窗
-      await Promise.race([ensureSbFontReady(), new Promise(r => setTimeout(r, 4000))]);
-      entries = await collectStatusBars(chat, preset, ctrl);
-    } finally {
-      loadingEl.remove();
-    }
-    if (ctrl.cancelled) return;
+    // 不再在屏幕上盖"加载中"提示，进度只输出到控制台（eruda 里能看到）
+    const loadStart = performance.now();
+    console.log('[状态栏] 开始加载…');
+    const ctrl = { cancelled: false, onProgress: (n, found) => { console.log('[状态栏] 加载中… 已处理 ' + n + ' 条，已解析出 ' + found + ' 条'); } };
+    // 字体预热和匹配收集同时进行，谁也不等谁；字体最多等 4 秒，超了就跳过（后面有同步转换兜底）
+    const fontP = Promise.race([ensureSbFontReady(), new Promise(r => setTimeout(r, 4000))]);
+    const entries = await collectStatusBars(chat, preset, ctrl);
+    await fontP;
+    console.log('[状态栏] 收集完成：' + entries.length + ' 条，用时 ' + Math.round(performance.now() - loadStart) + 'ms');
+
     bc('收集完成 ' + entries.length + ' 条');
     let currentIndex = 0; // 0 = 最新
     let buildPagesAround = () => {}; // 由 buildViewer 赋值，翻页时按需构建相邻页
@@ -1032,6 +1057,24 @@
     titleEl.addEventListener('click', handleHeaderClick);
   }
 
+  // 进入聊天界面后，趁空闲提前把后台线程拉起、字体转好、历史记录的匹配算好（结果进缓存），
+  // 这样点名字的时候基本是现成的。换角色再进聊天界面也会重新预热当前角色。
+  async function prewarmStatusBar() {
+    try {
+      if (!state.globalSettings || !state.globalSettings.statusBarEnabled) return;
+      const chat = state.chats[state.activeChatId];
+      if (!chat || !chat.settings.enableStatusBar || !chat.settings.statusBarPresetId) return;
+      const preset = await sbDB.presets.get(chat.settings.statusBarPresetId);
+      if (!preset) return;
+      getSbWorker();
+      await Promise.all([ensureSbFontReady(), collectStatusBars(chat, preset, {})]);
+    } catch (e) { /* 预热失败不影响正常使用 */ }
+  }
+  function schedulePrewarm() {
+    if (window.requestIdleCallback) requestIdleCallback(prewarmStatusBar, { timeout: 3000 });
+    else setTimeout(prewarmStatusBar, 800);
+  }
+
   // ---------------- 全局开关：改成默认开启，且开关本体挪到"状态栏"App自己界面里管理，
   // 不再依赖注入进API设置页那种做法（之前那种方式一直没能稳定生效）
 
@@ -1111,7 +1154,7 @@
         window.showScreen = function (screenId) {
           originalShowScreen(screenId);
           if (screenId === 'chat-settings-screen') loadChatSettingsPanel();
-          if (screenId === 'chat-interface-screen') setTimeout(bindHeaderClick, 50);
+          if (screenId === 'chat-interface-screen') { setTimeout(bindHeaderClick, 50); schedulePrewarm(); }
           if (screenId === 'status-bar-app-screen' && typeof window.__sbRenderPresetList === 'function') window.__sbRenderPresetList();
         };
       }
